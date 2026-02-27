@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons";
+type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -36,6 +36,10 @@ interface CouponForm {
   code: string; description: string; discount_type: string; discount_value: string;
   min_order_amount: string; max_uses: string; is_active: boolean; expires_at: string;
 }
+interface ComboForm {
+  name: string; slug: string; description: string; combo_price: string; original_price: string;
+  images: string; is_active: boolean; is_featured: boolean; items: { product_id: string; quantity: string }[];
+}
 
 const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
@@ -43,6 +47,7 @@ const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_u
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 const emptyPage: PageForm = { title: "", slug: "", content: "", is_published: true };
 const emptyCoupon: CouponForm = { code: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "" };
+const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }] };
 
 const AdminDashboard = () => {
   const { isAdmin, loading } = useAdminAuth();
@@ -75,6 +80,11 @@ const AdminDashboard = () => {
   const [couponDialog, setCouponDialog] = useState(false);
   const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
   const [couponForm, setCouponForm] = useState<CouponForm>(emptyCoupon);
+
+  const [comboDialog, setComboDialog] = useState(false);
+  const [editingComboId, setEditingComboId] = useState<string | null>(null);
+  const [comboForm, setComboForm] = useState<ComboForm>(emptyCombo);
+  const [comboImagePreviews, setComboImagePreviews] = useState<string[]>([]);
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     const ext = file.name.split(".").pop();
@@ -150,6 +160,38 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: allProfiles } = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+      if (error) throw error; return data;
+    },
+  });
+
+  const { data: allReviews } = useQuery({
+    queryKey: ["admin-reviews"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("reviews").select("*, products(name, slug)").order("created_at", { ascending: false });
+      if (error) throw error; return data;
+    },
+  });
+
+  const { data: comboPacks } = useQuery({
+    queryKey: ["admin-combos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("combo_packs").select("*, combo_pack_items(*, products(name, price))").order("created_at", { ascending: false });
+      if (error) throw error; return data;
+    },
+  });
+
+  const { data: userRoles } = useQuery({
+    queryKey: ["admin-user-roles"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("user_roles").select("*");
+      if (error) throw error; return data;
+    },
+  });
+
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
   const tabs = [
@@ -158,8 +200,11 @@ const AdminDashboard = () => {
     { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: orders?.length || 0 },
     { id: "banners" as Tab, label: "Banners", icon: Image, count: banners?.length || 0 },
     { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
+    { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
     { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
     { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+    { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
+    { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
     { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
@@ -219,6 +264,22 @@ const AdminDashboard = () => {
     setUploading(true);
     const url = await uploadFile(files[0], "banners");
     if (url) setBannerForm((prev) => ({ ...prev, image_url: url }));
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const handleComboImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const newUrls: string[] = [];
+    for (const file of Array.from(files)) {
+      const url = await uploadFile(file, "combos");
+      if (url) newUrls.push(url);
+    }
+    const allUrls = [...comboImagePreviews, ...newUrls];
+    setComboImagePreviews(allUrls);
+    setComboForm((prev) => ({ ...prev, images: allUrls.join(", ") }));
     setUploading(false);
     e.target.value = "";
   };
@@ -441,14 +502,77 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
+  // ── Review moderation ──
+  const deleteReview = async (id: string) => {
+    const { error } = await supabase.from("reviews").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Review deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-reviews"] });
+  };
+
+  // ── Combo CRUD ──
+  const openAddCombo = () => { setEditingComboId(null); setComboForm(emptyCombo); setComboImagePreviews([]); setComboDialog(true); };
+  const openEditCombo = (c: any) => {
+    setEditingComboId(c.id);
+    const imgs = c.images || [];
+    setComboImagePreviews(imgs);
+    setComboForm({
+      name: c.name, slug: c.slug, description: c.description || "",
+      combo_price: String(c.combo_price), original_price: String(c.original_price),
+      images: imgs.join(", "), is_active: c.is_active ?? true, is_featured: c.is_featured ?? false,
+      items: (c.combo_pack_items || []).map((item: any) => ({ product_id: item.product_id, quantity: String(item.quantity) })),
+    });
+    if (comboForm.items.length === 0) setComboForm(prev => ({ ...prev, items: [{ product_id: "", quantity: "1" }] }));
+    setComboDialog(true);
+  };
+  const saveCombo = async () => {
+    const payload = {
+      name: comboForm.name,
+      slug: comboForm.slug || comboForm.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+      description: comboForm.description || null,
+      combo_price: Number(comboForm.combo_price) || 0,
+      original_price: Number(comboForm.original_price) || 0,
+      images: comboForm.images ? comboForm.images.split(",").map(s => s.trim()).filter(Boolean) : [],
+      is_active: comboForm.is_active,
+      is_featured: comboForm.is_featured,
+    };
+    if (editingComboId) {
+      const { error } = await supabase.from("combo_packs").update(payload).eq("id", editingComboId);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      // Delete old items and re-insert
+      await supabase.from("combo_pack_items").delete().eq("combo_id", editingComboId);
+      const validItems = comboForm.items.filter(i => i.product_id);
+      if (validItems.length > 0) {
+        await supabase.from("combo_pack_items").insert(validItems.map(i => ({ combo_id: editingComboId, product_id: i.product_id, quantity: Number(i.quantity) || 1 })));
+      }
+      toast({ title: "Combo pack updated" });
+    } else {
+      const { data, error } = await supabase.from("combo_packs").insert(payload).select("id").single();
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      const validItems = comboForm.items.filter(i => i.product_id);
+      if (validItems.length > 0) {
+        await supabase.from("combo_pack_items").insert(validItems.map(i => ({ combo_id: data.id, product_id: i.product_id, quantity: Number(i.quantity) || 1 })));
+      }
+      toast({ title: "Combo pack created" });
+    }
+    setComboDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-combos"] });
+    queryClient.invalidateQueries({ queryKey: ["combo-packs"] });
+  };
+  const deleteCombo = async (id: string) => {
+    const { error } = await supabase.from("combo_packs").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Combo pack deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-combos"] });
+    queryClient.invalidateQueries({ queryKey: ["combo-packs"] });
+  };
+
   // ── Reports data ──
   const reportData = useMemo(() => {
     if (!orders) return null;
     const totalSales = orders.length;
     const totalRevenue = orders.filter(o => o.payment_status === "paid").reduce((sum, o) => sum + Number(o.total), 0);
     const pendingRevenue = orders.filter(o => o.payment_status === "pending").reduce((sum, o) => sum + Number(o.total), 0);
-
-    // Monthly revenue
     const monthlyMap = new Map<string, number>();
     orders.filter(o => o.payment_status === "paid").forEach(o => {
       const d = new Date(o.created_at!);
@@ -456,8 +580,6 @@ const AdminDashboard = () => {
       monthlyMap.set(key, (monthlyMap.get(key) || 0) + Number(o.total));
     });
     const monthlyRevenue = Array.from(monthlyMap.entries()).sort().slice(-6).map(([month, total]) => ({ month, total }));
-
-    // Best sellers
     const productSales = new Map<string, { name: string; qty: number; revenue: number }>();
     orders.forEach(o => {
       (o.order_items as any[])?.forEach((item: any) => {
@@ -469,19 +591,10 @@ const AdminDashboard = () => {
       });
     });
     const bestSellers = Array.from(productSales.values()).sort((a, b) => b.qty - a.qty).slice(0, 10);
-
-    // Payment method breakdown
     const paymentMethods = new Map<string, number>();
-    orders.forEach(o => {
-      paymentMethods.set(o.payment_method, (paymentMethods.get(o.payment_method) || 0) + 1);
-    });
-
-    // Status breakdown
+    orders.forEach(o => { paymentMethods.set(o.payment_method, (paymentMethods.get(o.payment_method) || 0) + 1); });
     const statusMap = new Map<string, number>();
-    orders.forEach(o => {
-      statusMap.set(o.status, (statusMap.get(o.status) || 0) + 1);
-    });
-
+    orders.forEach(o => { statusMap.set(o.status, (statusMap.get(o.status) || 0) + 1); });
     return { totalSales, totalRevenue, pendingRevenue, monthlyRevenue, bestSellers, paymentMethods: Array.from(paymentMethods.entries()), statusBreakdown: Array.from(statusMap.entries()) };
   }, [orders]);
 
@@ -494,6 +607,12 @@ const AdminDashboard = () => {
   }
 
   if (!isAdmin) return null;
+
+  // Helper to get user role
+  const getUserRole = (userId: string) => {
+    const role = userRoles?.find(r => r.user_id === userId);
+    return role?.role || "user";
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -574,8 +693,8 @@ const AdminDashboard = () => {
                           <td className="px-4 py-3 text-muted-foreground">{p.sku || "—"}</td>
                           <td className="px-4 py-3 font-medium text-foreground">Rs. {p.price.toLocaleString()}</td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-medium ${(p.stock_quantity || 0) > 10 ? "text-secondary" : "text-destructive"}`}>
-                              {p.stock_quantity || 0}
+                            <span className={`text-xs font-medium ${(p.stock_quantity || 0) > 10 ? "text-secondary" : (p.stock_quantity || 0) > 0 ? "text-accent-foreground" : "text-destructive"}`}>
+                              {p.stock_quantity || 0}{(p.stock_quantity || 0) <= 5 && (p.stock_quantity || 0) > 0 ? " ⚠️" : ""}
                             </span>
                           </td>
                           <td className="px-4 py-3">
@@ -661,7 +780,7 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-3">
                               <Select value={o.status} onValueChange={(v) => updateOrderStatus(o.id, v)}>
-                                <SelectTrigger className="h-7 text-xs w-[120px]"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
                                     <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
@@ -671,9 +790,9 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-3">
                               <Select value={o.payment_status} onValueChange={(v) => updatePaymentStatus(o.id, v)}>
-                                <SelectTrigger className="h-7 text-xs w-[110px]"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {["pending", "paid", "failed", "refunded"].map((s) => (
+                                  {["pending", "paid", "failed"].map((s) => (
                                     <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
                                   ))}
                                 </SelectContent>
@@ -681,12 +800,8 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-3">
                               {(o as any).receipt_url ? (
-                                <a href={(o as any).receipt_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-secondary hover:underline">
-                                  <Eye className="w-3.5 h-3.5" /> View
-                                </a>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
+                                <a href={(o as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary underline flex items-center gap-1"><Eye className="w-3 h-3" /> View</a>
+                              ) : <span className="text-xs text-muted-foreground">—</span>}
                             </td>
                           </tr>
                         ))}
@@ -804,6 +919,52 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Combo Packs Tab ═══ */}
+          {tab === "combos" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Combo Packs</h2>
+                <Button onClick={openAddCombo} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Combo</Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {comboPacks?.map((c: any) => {
+                  const savings = c.original_price - c.combo_price;
+                  return (
+                    <div key={c.id} className="bg-card rounded-xl border border-border overflow-hidden">
+                      <img src={c.images?.[0] || "/placeholder.svg"} alt={c.name} className="w-full h-40 object-cover" />
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{c.name}</h3>
+                            <p className="text-sm text-muted-foreground mt-0.5">
+                              Rs. {Number(c.combo_price).toLocaleString()}
+                              {savings > 0 && <span className="text-secondary ml-2">(Save Rs. {savings.toLocaleString()})</span>}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">{c.combo_pack_items?.length || 0} items</p>
+                          </div>
+                          <div className="flex gap-1">
+                            <button onClick={() => openEditCombo(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => deleteCombo(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${c.is_active ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.is_active ? "Active" : "Inactive"}</span>
+                          {c.is_featured && <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent-foreground">Featured</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {(!comboPacks || comboPacks.length === 0) && (
+                  <div className="col-span-3 text-center py-16 text-muted-foreground">
+                    <Layers className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No combo packs yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* ═══ Pages Tab ═══ */}
           {tab === "pages" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -833,116 +994,6 @@ const AdminDashboard = () => {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          )}
-
-          {/* ═══ Reports Tab ═══ */}
-          {tab === "reports" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Reports & Analytics</h2>
-              {reportData ? (
-                <div className="space-y-6">
-                  {/* Summary Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
-                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalSales}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Total Revenue (Paid)</p>
-                      <p className="text-2xl font-bold font-display text-secondary">Rs. {reportData.totalRevenue.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Pending Revenue</p>
-                      <p className="text-2xl font-bold font-display text-accent">Rs. {reportData.pendingRevenue.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Avg. Order Value</p>
-                      <p className="text-2xl font-bold font-display text-foreground">
-                        Rs. {reportData.totalSales > 0 ? Math.round(reportData.totalRevenue / reportData.totalSales).toLocaleString() : 0}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Monthly Revenue */}
-                  {reportData.monthlyRevenue.length > 0 && (
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <h3 className="font-semibold text-foreground mb-4">Monthly Revenue</h3>
-                      <div className="space-y-3">
-                        {reportData.monthlyRevenue.map((m) => {
-                          const maxRevenue = Math.max(...reportData.monthlyRevenue.map(r => r.total));
-                          const pct = maxRevenue > 0 ? (m.total / maxRevenue) * 100 : 0;
-                          return (
-                            <div key={m.month} className="flex items-center gap-3">
-                              <span className="text-sm text-muted-foreground w-20">{m.month}</span>
-                              <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
-                                <div className="h-full bg-secondary rounded-full transition-all" style={{ width: `${pct}%` }} />
-                              </div>
-                              <span className="text-sm font-medium text-foreground w-32 text-right">Rs. {m.total.toLocaleString()}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Best Sellers */}
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <h3 className="font-semibold text-foreground mb-4">Best Selling Products</h3>
-                      {reportData.bestSellers.length > 0 ? (
-                        <div className="space-y-3">
-                          {reportData.bestSellers.map((p, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-muted-foreground w-5">#{i + 1}</span>
-                                <span className="text-sm text-foreground line-clamp-1">{p.name}</span>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <span className="text-xs text-muted-foreground">{p.qty} sold</span>
-                                <span className="text-sm font-medium text-foreground">Rs. {p.revenue.toLocaleString()}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground text-sm">No sales data yet</p>
-                      )}
-                    </div>
-
-                    {/* Payment & Status Breakdown */}
-                    <div className="space-y-6">
-                      <div className="bg-card rounded-xl border border-border p-5">
-                        <h3 className="font-semibold text-foreground mb-4">Payment Methods</h3>
-                        <div className="space-y-2">
-                          {reportData.paymentMethods.map(([method, count]) => (
-                            <div key={method} className="flex items-center justify-between">
-                              <span className="text-sm capitalize text-muted-foreground">{method === "stripe" ? "Card (Stripe)" : "Bank Transfer"}</span>
-                              <span className="text-sm font-bold text-foreground">{count} orders</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="bg-card rounded-xl border border-border p-5">
-                        <h3 className="font-semibold text-foreground mb-4">Order Status Breakdown</h3>
-                        <div className="space-y-2">
-                          {reportData.statusBreakdown.map(([status, count]) => (
-                            <div key={status} className="flex items-center justify-between">
-                              <span className="text-sm capitalize text-muted-foreground">{status}</span>
-                              <span className="text-sm font-bold text-foreground">{count}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-16 text-muted-foreground">
-                  <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                  <p>Loading report data...</p>
-                </div>
-              )}
             </motion.div>
           )}
 
@@ -1003,6 +1054,104 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Users Tab ═══ */}
+          {tab === "users" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Users</h2>
+              <div className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">City</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Joined</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Orders</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allProfiles?.map((p) => {
+                        const role = getUserRole(p.user_id);
+                        const userOrders = orders?.filter(o => o.user_id === p.user_id) || [];
+                        return (
+                          <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-sm">
+                                  {(p.full_name || "U")[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-foreground">{p.full_name || "—"}</p>
+                                  <p className="text-xs text-muted-foreground">{p.user_id.slice(0, 8)}...</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{p.phone || "—"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{p.city || "—"}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${role === "admin" ? "bg-destructive/10 text-destructive" : role === "moderator" ? "bg-accent/10 text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
+                                {role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{p.created_at ? new Date(p.created_at).toLocaleDateString() : "—"}</td>
+                            <td className="px-4 py-3 text-foreground font-medium">{userOrders.length}</td>
+                          </tr>
+                        );
+                      })}
+                      {(!allProfiles || allProfiles.length === 0) && (
+                        <tr><td colSpan={6} className="text-center py-16 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No users yet</p></td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ Reviews Tab ═══ */}
+          {tab === "reviews" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Reviews Moderation</h2>
+              <div className="space-y-3">
+                {allReviews?.map((r: any) => (
+                  <div key={r.id} className="bg-card rounded-xl border border-border p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Link to={`/product/${r.products?.slug}`} className="font-semibold text-foreground hover:text-secondary transition-colors">
+                            {r.products?.name || "Unknown Product"}
+                          </Link>
+                          <div className="flex items-center">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`w-3 h-3 ${i < r.rating ? "text-accent fill-accent" : "text-border"}`} />
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-1">User: {r.user_id.slice(0, 8)}... • {new Date(r.created_at!).toLocaleDateString()}</p>
+                        {r.comment ? (
+                          <p className="text-sm text-foreground">{r.comment}</p>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">No comment</p>
+                        )}
+                      </div>
+                      <button onClick={() => deleteReview(r.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0" title="Delete review">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {(!allReviews || allReviews.length === 0) && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No reviews yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* ═══ Contact Messages Tab ═══ */}
           {tab === "contacts" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1037,6 +1186,109 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* ═══ Reports Tab ═══ */}
+          {tab === "reports" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Reports & Analytics</h2>
+              {reportData ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
+                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalSales}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Revenue (Paid)</p>
+                      <p className="text-2xl font-bold font-display text-secondary">Rs. {reportData.totalRevenue.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Pending Revenue</p>
+                      <p className="text-2xl font-bold font-display text-accent">Rs. {reportData.pendingRevenue.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Avg. Order Value</p>
+                      <p className="text-2xl font-bold font-display text-foreground">
+                        Rs. {reportData.totalSales > 0 ? Math.round(reportData.totalRevenue / reportData.totalSales).toLocaleString() : 0}
+                      </p>
+                    </div>
+                  </div>
+                  {reportData.monthlyRevenue.length > 0 && (
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <h3 className="font-semibold text-foreground mb-4">Monthly Revenue</h3>
+                      <div className="space-y-3">
+                        {reportData.monthlyRevenue.map((m) => {
+                          const maxRevenue = Math.max(...reportData.monthlyRevenue.map(r => r.total));
+                          const pct = maxRevenue > 0 ? (m.total / maxRevenue) * 100 : 0;
+                          return (
+                            <div key={m.month} className="flex items-center gap-3">
+                              <span className="text-sm text-muted-foreground w-20">{m.month}</span>
+                              <div className="flex-1 h-6 bg-muted rounded-full overflow-hidden">
+                                <div className="h-full bg-secondary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-sm font-medium text-foreground w-32 text-right">Rs. {m.total.toLocaleString()}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <h3 className="font-semibold text-foreground mb-4">Best Selling Products</h3>
+                      {reportData.bestSellers.length > 0 ? (
+                        <div className="space-y-3">
+                          {reportData.bestSellers.map((p, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-muted-foreground w-5">#{i + 1}</span>
+                                <span className="text-sm text-foreground line-clamp-1">{p.name}</span>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <span className="text-xs text-muted-foreground">{p.qty} sold</span>
+                                <span className="text-sm font-medium text-foreground">Rs. {p.revenue.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground text-sm">No sales data yet</p>
+                      )}
+                    </div>
+                    <div className="space-y-6">
+                      <div className="bg-card rounded-xl border border-border p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Payment Methods</h3>
+                        <div className="space-y-2">
+                          {reportData.paymentMethods.map(([method, count]) => (
+                            <div key={method} className="flex items-center justify-between">
+                              <span className="text-sm capitalize text-muted-foreground">{method === "stripe" ? "Card (Stripe)" : "Bank Transfer"}</span>
+                              <span className="text-sm font-bold text-foreground">{count} orders</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="bg-card rounded-xl border border-border p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Order Status Breakdown</h3>
+                        <div className="space-y-2">
+                          {reportData.statusBreakdown.map(([status, count]) => (
+                            <div key={status} className="flex items-center justify-between">
+                              <span className="text-sm capitalize text-muted-foreground">{status}</span>
+                              <span className="text-sm font-bold text-foreground">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading report data...</p>
+                </div>
+              )}
             </motion.div>
           )}
         </main>
@@ -1231,6 +1483,73 @@ const AdminDashboard = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setCouponDialog(false)}>Cancel</Button>
               <Button onClick={saveCoupon} disabled={!couponForm.code || !couponForm.discount_value}>Save Coupon</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Combo Dialog ═══ */}
+      <Dialog open={comboDialog} onOpenChange={setComboDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingComboId ? "Edit Combo Pack" : "Add Combo Pack"}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Name *</Label><Input value={comboForm.name} onChange={(e) => setComboForm({ ...comboForm, name: e.target.value })} placeholder="Arduino Starter Kit" /></div>
+            <div><Label>Slug</Label><Input value={comboForm.slug} onChange={(e) => setComboForm({ ...comboForm, slug: e.target.value })} placeholder="auto-generated" /></div>
+            <div><Label>Description</Label><Textarea value={comboForm.description} onChange={(e) => setComboForm({ ...comboForm, description: e.target.value })} rows={2} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Combo Price (Rs.) *</Label><Input type="number" value={comboForm.combo_price} onChange={(e) => setComboForm({ ...comboForm, combo_price: e.target.value })} /></div>
+              <div><Label>Original Price (Rs.)</Label><Input type="number" value={comboForm.original_price} onChange={(e) => setComboForm({ ...comboForm, original_price: e.target.value })} /></div>
+            </div>
+            <div>
+              <Label>Images</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {comboImagePreviews.map((url, i) => (
+                  <div key={i} className="relative group w-16 h-16">
+                    <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                    <button type="button" onClick={() => {
+                      const updated = comboImagePreviews.filter((_, j) => j !== i);
+                      setComboImagePreviews(updated);
+                      setComboForm(prev => ({ ...prev, images: updated.join(", ") }));
+                    }} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
+                <Upload className="w-4 h-4" />{uploading ? "Uploading..." : "Upload images"}
+                <input type="file" accept="image/*" multiple onChange={handleComboImageUpload} className="hidden" disabled={uploading} />
+              </label>
+            </div>
+            <div>
+              <Label className="mb-2 block">Bundled Products</Label>
+              {comboForm.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-2 mb-2">
+                  <Select value={item.product_id} onValueChange={(v) => {
+                    const updated = [...comboForm.items];
+                    updated[i] = { ...updated[i], product_id: v };
+                    setComboForm({ ...comboForm, items: updated });
+                  }}>
+                    <SelectTrigger className="flex-1"><SelectValue placeholder="Select product" /></SelectTrigger>
+                    <SelectContent className="max-h-60">{products?.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
+                  </Select>
+                  <Input type="number" value={item.quantity} onChange={(e) => {
+                    const updated = [...comboForm.items];
+                    updated[i] = { ...updated[i], quantity: e.target.value };
+                    setComboForm({ ...comboForm, items: updated });
+                  }} className="w-20" placeholder="Qty" />
+                  {comboForm.items.length > 1 && (
+                    <button onClick={() => setComboForm({ ...comboForm, items: comboForm.items.filter((_, j) => j !== i) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                  )}
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => setComboForm({ ...comboForm, items: [...comboForm.items, { product_id: "", quantity: "1" }] })} className="gap-1 mt-1"><Plus className="w-3.5 h-3.5" /> Add Product</Button>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2"><Switch checked={comboForm.is_active} onCheckedChange={(v) => setComboForm({ ...comboForm, is_active: v })} /><Label>Active</Label></div>
+              <div className="flex items-center gap-2"><Switch checked={comboForm.is_featured} onCheckedChange={(v) => setComboForm({ ...comboForm, is_featured: v })} /><Label>Featured</Label></div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setComboDialog(false)}>Cancel</Button>
+              <Button onClick={saveCombo} disabled={!comboForm.name || !comboForm.combo_price}>Save Combo</Button>
             </div>
           </div>
         </DialogContent>

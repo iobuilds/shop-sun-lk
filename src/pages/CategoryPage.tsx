@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
+import SEOHead from "@/components/SEOHead";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ShoppingCart, Star, Heart, ChevronRight, SlidersHorizontal, X, ChevronDown } from "lucide-react";
@@ -116,6 +117,12 @@ const CategoryPage = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title={`${category?.name || "Category"} | TechLK`}
+        description={category?.description || `Browse ${category?.name || "products"} at TechLK Sri Lanka`}
+        keywords={`${category?.name || ""}, electronics, Sri Lanka, TechLK`}
+        canonical={`${window.location.origin}/category/${slug}`}
+      />
       <Navbar />
       <main className="pt-[136px] md:pt-[160px]">
         <div className="container mx-auto px-4 py-8">

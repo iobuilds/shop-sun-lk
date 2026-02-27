@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SEOHead from "@/components/SEOHead";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -110,6 +111,33 @@ const ProductDetail = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOHead
+        title={`${product.name} | TechLK`}
+        description={product.description?.slice(0, 160) || `Buy ${product.name} at TechLK Sri Lanka`}
+        keywords={`${product.name}, ${category?.name || "electronics"}, buy online, Sri Lanka, TechLK`}
+        canonical={`${window.location.origin}/product/${product.slug}`}
+        ogImage={images[0] !== "/placeholder.svg" ? images[0] : undefined}
+        ogType="product"
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.name,
+          description: product.description,
+          image: images[0],
+          sku: product.sku,
+          offers: {
+            "@type": "Offer",
+            price: product.price,
+            priceCurrency: "LKR",
+            availability: (product.stock_quantity || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          },
+          aggregateRating: product.review_count ? {
+            "@type": "AggregateRating",
+            ratingValue: product.rating,
+            reviewCount: product.review_count,
+          } : undefined,
+        }}
+      />
       <Navbar />
       <main className="pt-[136px] md:pt-[160px]">
         <div className="container mx-auto px-4 py-8">
