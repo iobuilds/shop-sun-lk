@@ -30,7 +30,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError || !user?.email) throw new Error("Not authenticated");
 
-    const { items, shipping_address, payment_method } = await req.json();
+    const { items, shipping_address, payment_method, coupon_code } = await req.json();
 
     if (!items || items.length === 0) throw new Error("Cart is empty");
 
@@ -67,8 +67,36 @@ serve(async (req) => {
       };
     });
 
+    // Validate and apply coupon
+    let discount_amount = 0;
+    let validated_coupon_code: string | null = null;
+    if (coupon_code) {
+      const { data: coupon, error: couponError } = await supabaseAdmin
+        .from("coupons")
+        .select("*")
+        .eq("code", coupon_code.toUpperCase().trim())
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (couponError) throw couponError;
+      if (!coupon) throw new Error("Invalid coupon code");
+      if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) throw new Error("Coupon expired");
+      if (coupon.max_uses && coupon.used_count >= coupon.max_uses) throw new Error("Coupon usage limit reached");
+      if (coupon.min_order_amount && subtotal < coupon.min_order_amount) throw new Error(`Minimum order Rs. ${coupon.min_order_amount} required`);
+
+      if (coupon.discount_type === "percentage") {
+        discount_amount = Math.round(subtotal * (coupon.discount_value / 100));
+      } else {
+        discount_amount = Math.min(coupon.discount_value, subtotal);
+      }
+      validated_coupon_code = coupon.code;
+
+      // Increment used_count
+      await supabaseAdmin.from("coupons").update({ used_count: coupon.used_count + 1 }).eq("id", coupon.id);
+    }
+
     const shipping_fee = subtotal >= 5000 ? 0 : 350;
-    const total = subtotal + shipping_fee;
+    const total = Math.max(0, subtotal - discount_amount + shipping_fee);
 
     if (payment_method === "bank_transfer") {
       // Create order directly for bank transfer
@@ -79,6 +107,8 @@ serve(async (req) => {
           subtotal,
           shipping_fee,
           total,
+          discount_amount,
+          coupon_code: validated_coupon_code,
           payment_method: "bank_transfer",
           payment_status: "pending",
           status: "pending",
@@ -97,6 +127,13 @@ serve(async (req) => {
         .from("order_items")
         .insert(itemsWithOrder);
       if (itemsError) throw itemsError;
+
+      // Fire notification (non-blocking)
+      fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-order-notification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+        body: JSON.stringify({ type: "new_order", order_id: order.id, user_email: user.email }),
+      }).catch(() => {});
 
       return new Response(
         JSON.stringify({ type: "bank_transfer", order_id: order.id }),
@@ -124,6 +161,8 @@ serve(async (req) => {
         subtotal,
         shipping_fee,
         total,
+        discount_amount,
+        coupon_code: validated_coupon_code,
         payment_method: "stripe",
         payment_status: "pending",
         status: "pending",
@@ -171,10 +210,23 @@ serve(async (req) => {
       });
     }
 
+    // Apply discount as Stripe coupon if applicable
+    let discounts: any[] = [];
+    if (discount_amount > 0) {
+      const coupon = await stripe.coupons.create({
+        amount_off: discount_amount * 100,
+        currency: "lkr",
+        duration: "once",
+        name: `Coupon: ${validated_coupon_code}`,
+      });
+      discounts = [{ coupon: coupon.id }];
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
       line_items: lineItems,
+      discounts,
       mode: "payment",
       success_url: `${req.headers.get("origin")}/order-success?order_id=${order.id}`,
       cancel_url: `${req.headers.get("origin")}/cart`,
@@ -186,6 +238,13 @@ serve(async (req) => {
       .from("orders")
       .update({ notes: `stripe_session:${session.id}` })
       .eq("id", order.id);
+
+    // Fire notification (non-blocking)
+    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-order-notification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+      body: JSON.stringify({ type: "new_order", order_id: order.id, user_email: user.email }),
+    }).catch(() => {});
 
     return new Response(
       JSON.stringify({ type: "stripe", url: session.url, order_id: order.id }),

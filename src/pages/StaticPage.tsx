@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import ContactForm from "@/components/ContactForm";
 
 const StaticPage = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -43,7 +44,6 @@ const StaticPage = () => {
     );
   }
 
-  // Simple markdown-like rendering: **bold**, \n to <br/>, - lists
   const renderContent = (content: string) => {
     return content.split("\n\n").map((block, i) => {
       if (block.startsWith("- ")) {
@@ -92,6 +92,12 @@ const StaticPage = () => {
           <div className="max-w-3xl mx-auto">
             <h1 className="text-3xl font-bold font-display text-foreground mb-8">{page.title}</h1>
             <div className="space-y-4">{renderContent(page.content)}</div>
+            {slug === "contact-us" && (
+              <div className="mt-12 bg-card rounded-xl border border-border p-6">
+                <h2 className="text-xl font-bold font-display text-foreground mb-6">Send Us a Message</h2>
+                <ContactForm />
+              </div>
+            )}
           </div>
         </div>
       </main>

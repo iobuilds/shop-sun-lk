@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports";
+type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -32,12 +32,17 @@ interface DealForm {
 interface PageForm {
   title: string; slug: string; content: string; is_published: boolean;
 }
+interface CouponForm {
+  code: string; description: string; discount_type: string; discount_value: string;
+  min_order_amount: string; max_uses: string; is_active: boolean; expires_at: string;
+}
 
 const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 const emptyPage: PageForm = { title: "", slug: "", content: "", is_published: true };
+const emptyCoupon: CouponForm = { code: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "" };
 
 const AdminDashboard = () => {
   const { isAdmin, loading } = useAdminAuth();
@@ -66,6 +71,10 @@ const AdminDashboard = () => {
   const [pageDialog, setPageDialog] = useState(false);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [pageForm, setPageForm] = useState<PageForm>(emptyPage);
+
+  const [couponDialog, setCouponDialog] = useState(false);
+  const [editingCouponId, setEditingCouponId] = useState<string | null>(null);
+  const [couponForm, setCouponForm] = useState<CouponForm>(emptyCoupon);
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     const ext = file.name.split(".").pop();
@@ -125,6 +134,24 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: contactMessages } = useQuery({
+    queryKey: ["admin-contacts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("contact_messages").select("*").order("created_at", { ascending: false });
+      if (error) throw error; return data;
+    },
+  });
+
+  const { data: coupons } = useQuery({
+    queryKey: ["admin-coupons"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("coupons").select("*").order("created_at", { ascending: false });
+      if (error) throw error; return data;
+    },
+  });
+
+  const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
+
   const tabs = [
     { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
     { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
@@ -132,6 +159,8 @@ const AdminDashboard = () => {
     { id: "banners" as Tab, label: "Banners", icon: Image, count: banners?.length || 0 },
     { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
     { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
+    { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+    { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
 
@@ -346,6 +375,56 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Page deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-pages"] });
+  };
+
+  // ── Coupon CRUD ──
+  const openAddCoupon = () => { setEditingCouponId(null); setCouponForm(emptyCoupon); setCouponDialog(true); };
+  const openEditCoupon = (c: any) => {
+    setEditingCouponId(c.id);
+    setCouponForm({ code: c.code, description: c.description || "", discount_type: c.discount_type, discount_value: String(c.discount_value), min_order_amount: c.min_order_amount ? String(c.min_order_amount) : "", max_uses: c.max_uses ? String(c.max_uses) : "", is_active: c.is_active ?? true, expires_at: c.expires_at ? new Date(c.expires_at).toISOString().slice(0, 16) : "" });
+    setCouponDialog(true);
+  };
+  const saveCoupon = async () => {
+    const payload = {
+      code: couponForm.code.toUpperCase().trim(),
+      description: couponForm.description || null,
+      discount_type: couponForm.discount_type,
+      discount_value: Number(couponForm.discount_value) || 0,
+      min_order_amount: couponForm.min_order_amount ? Number(couponForm.min_order_amount) : 0,
+      max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : null,
+      is_active: couponForm.is_active,
+      expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : null,
+    };
+    if (editingCouponId) {
+      const { error } = await supabase.from("coupons").update(payload).eq("id", editingCouponId);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Coupon updated" });
+    } else {
+      const { error } = await supabase.from("coupons").insert(payload);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Coupon created" });
+    }
+    setCouponDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+  };
+  const deleteCoupon = async (id: string) => {
+    const { error } = await supabase.from("coupons").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Coupon deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+  };
+
+  // ── Contact messages ──
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase.from("contact_messages").update({ is_read: true }).eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
+  };
+  const deleteContact = async (id: string) => {
+    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Message deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
   };
 
   // ── Order status ──
@@ -866,6 +945,100 @@ const AdminDashboard = () => {
               )}
             </motion.div>
           )}
+
+          {/* ═══ Coupons Tab ═══ */}
+          {tab === "coupons" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Coupons</h2>
+                <Button onClick={openAddCoupon} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Coupon</Button>
+              </div>
+              <div className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Code</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Discount</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Min Order</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Usage</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Expires</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coupons?.map((c: any) => {
+                        const isExpired = c.expires_at && new Date(c.expires_at) < new Date();
+                        return (
+                          <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                            <td className="px-4 py-3 font-mono font-bold text-foreground">{c.code}</td>
+                            <td className="px-4 py-3 text-foreground">
+                              {c.discount_type === "percentage" ? `${c.discount_value}%` : `Rs. ${Number(c.discount_value).toLocaleString()}`}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground">{c.min_order_amount ? `Rs. ${Number(c.min_order_amount).toLocaleString()}` : "—"}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{c.used_count}{c.max_uses ? ` / ${c.max_uses}` : ""}</td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Never"}</td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.is_active && !isExpired ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>
+                                {isExpired ? "Expired" : c.is_active ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditCoupon(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => deleteCoupon(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {(!coupons || coupons.length === 0) && (
+                        <tr><td colSpan={7} className="text-center py-16 text-muted-foreground"><Ticket className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No coupons yet</p></td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ Contact Messages Tab ═══ */}
+          {tab === "contacts" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Contact Messages</h2>
+              <div className="space-y-4">
+                {contactMessages?.map((m: any) => (
+                  <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-foreground">{m.subject}</h3>
+                          {!m.is_read && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">New</span>}
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-2">From: {m.name} ({m.email})</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">{m.message}</p>
+                        <p className="text-xs text-muted-foreground mt-2">{new Date(m.created_at).toLocaleString()}</p>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        {!m.is_read && (
+                          <button onClick={() => markAsRead(m.id)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Mark as read"><Check className="w-3.5 h-3.5" /></button>
+                        )}
+                        <a href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Reply"><Mail className="w-3.5 h-3.5" /></a>
+                        <button onClick={() => deleteContact(m.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {(!contactMessages || contactMessages.length === 0) && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No messages yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
         </main>
       </div>
 
@@ -1024,6 +1197,40 @@ const AdminDashboard = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setPageDialog(false)}>Cancel</Button>
               <Button onClick={savePage} disabled={!pageForm.title}>Save Page</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Coupon Dialog ═══ */}
+      <Dialog open={couponDialog} onOpenChange={setCouponDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>{editingCouponId ? "Edit Coupon" : "Add Coupon"}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Code *</Label><Input value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} placeholder="SAVE20" /></div>
+            <div><Label>Description</Label><Input value={couponForm.description} onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })} placeholder="20% off your order" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Type</Label>
+                <Select value={couponForm.discount_type} onValueChange={(v) => setCouponForm({ ...couponForm, discount_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                    <SelectItem value="fixed">Fixed Amount (Rs.)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>{couponForm.discount_type === "percentage" ? "Discount %" : "Amount (Rs.)"}</Label><Input type="number" value={couponForm.discount_value} onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Min Order (Rs.)</Label><Input type="number" value={couponForm.min_order_amount} onChange={(e) => setCouponForm({ ...couponForm, min_order_amount: e.target.value })} placeholder="0" /></div>
+              <div><Label>Max Uses</Label><Input type="number" value={couponForm.max_uses} onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })} placeholder="Unlimited" /></div>
+            </div>
+            <div><Label>Expires At</Label><Input type="datetime-local" value={couponForm.expires_at} onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })} /></div>
+            <div className="flex items-center gap-2"><Switch checked={couponForm.is_active} onCheckedChange={(v) => setCouponForm({ ...couponForm, is_active: v })} /><Label>Active</Label></div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCouponDialog(false)}>Cancel</Button>
+              <Button onClick={saveCoupon} disabled={!couponForm.code || !couponForm.discount_value}>Save Coupon</Button>
             </div>
           </div>
         </DialogContent>
