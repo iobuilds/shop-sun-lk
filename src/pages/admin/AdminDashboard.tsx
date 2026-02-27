@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners";
+type Tab = "products" | "categories" | "orders" | "banners" | "deals";
 
 interface ProductForm {
   name: string;
@@ -39,8 +39,28 @@ interface CategoryForm {
   is_active: boolean;
 }
 
+interface BannerForm {
+  title: string;
+  subtitle: string;
+  image_url: string;
+  link_url: string;
+  sort_order: string;
+  is_active: boolean;
+}
+
+interface DealForm {
+  product_id: string;
+  discount_percent: string;
+  deal_price: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+}
+
 const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
+const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
+const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 
 const AdminDashboard = () => {
   const { isAdmin, loading } = useAdminAuth();
@@ -49,15 +69,26 @@ const AdminDashboard = () => {
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
 
-  // Dialogs
+  // Product dialogs
   const [productDialog, setProductDialog] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProduct);
   const [productImagePreviews, setProductImagePreviews] = useState<string[]>([]);
 
+  // Category dialogs
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm>(emptyCategory);
+
+  // Banner dialogs
+  const [bannerDialog, setBannerDialog] = useState(false);
+  const [editingBannerId, setEditingBannerId] = useState<string | null>(null);
+  const [bannerForm, setBannerForm] = useState<BannerForm>(emptyBanner);
+
+  // Deal dialogs
+  const [dealDialog, setDealDialog] = useState(false);
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [dealForm, setDealForm] = useState<DealForm>(emptyDeal);
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     const ext = file.name.split(".").pop();
@@ -68,6 +99,7 @@ const AdminDashboard = () => {
     return data.publicUrl;
   };
 
+  // ── Queries ──
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
     queryFn: async () => {
@@ -104,18 +136,28 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: deals } = useQuery({
+    queryKey: ["admin-deals"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("daily_deals").select("*, products(name, images, price)").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const tabs = [
     { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
     { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
     { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: orders?.length || 0 },
     { id: "banners" as Tab, label: "Banners", icon: Image, count: banners?.length || 0 },
+    { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
   ];
 
   const filteredProducts = products?.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Product CRUD
+  // ── Product CRUD ──
   const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setProductDialog(true); };
   const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
@@ -162,6 +204,16 @@ const AdminDashboard = () => {
     e.target.value = "";
   };
 
+  const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const url = await uploadFile(files[0], "banners");
+    if (url) setBannerForm((prev) => ({ ...prev, image_url: url }));
+    setUploading(false);
+    e.target.value = "";
+  };
+
   const saveProduct = async () => {
     const payload = {
       name: productForm.name,
@@ -199,7 +251,7 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
   };
 
-  // Category CRUD
+  // ── Category CRUD ──
   const openAddCategory = () => { setEditingCategoryId(null); setCategoryForm(emptyCategory); setCategoryDialog(true); };
   const openEditCategory = (c: any) => {
     setEditingCategoryId(c.id);
@@ -240,6 +292,111 @@ const AdminDashboard = () => {
     toast({ title: "Category deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-categories"] });
     queryClient.invalidateQueries({ queryKey: ["nav-categories"] });
+  };
+
+  // ── Banner CRUD ──
+  const openAddBanner = () => { setEditingBannerId(null); setBannerForm(emptyBanner); setBannerDialog(true); };
+  const openEditBanner = (b: any) => {
+    setEditingBannerId(b.id);
+    setBannerForm({
+      title: b.title, subtitle: b.subtitle || "", image_url: b.image_url,
+      link_url: b.link_url || "", sort_order: String(b.sort_order || 0), is_active: b.is_active ?? true,
+    });
+    setBannerDialog(true);
+  };
+
+  const saveBanner = async () => {
+    const payload = {
+      title: bannerForm.title,
+      subtitle: bannerForm.subtitle || null,
+      image_url: bannerForm.image_url,
+      link_url: bannerForm.link_url || null,
+      sort_order: Number(bannerForm.sort_order) || 0,
+      is_active: bannerForm.is_active,
+    };
+
+    if (editingBannerId) {
+      const { error } = await supabase.from("banners").update(payload).eq("id", editingBannerId);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Banner updated" });
+    } else {
+      const { error } = await supabase.from("banners").insert(payload);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Banner created" });
+    }
+    setBannerDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
+    queryClient.invalidateQueries({ queryKey: ["active-banners"] });
+  };
+
+  const deleteBanner = async (id: string) => {
+    const { error } = await supabase.from("banners").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Banner deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-banners"] });
+    queryClient.invalidateQueries({ queryKey: ["active-banners"] });
+  };
+
+  // ── Deal CRUD ──
+  const openAddDeal = () => { setEditingDealId(null); setDealForm(emptyDeal); setDealDialog(true); };
+  const openEditDeal = (d: any) => {
+    setEditingDealId(d.id);
+    setDealForm({
+      product_id: d.product_id,
+      discount_percent: String(d.discount_percent),
+      deal_price: d.deal_price ? String(d.deal_price) : "",
+      starts_at: d.starts_at ? new Date(d.starts_at).toISOString().slice(0, 16) : "",
+      ends_at: d.ends_at ? new Date(d.ends_at).toISOString().slice(0, 16) : "",
+      is_active: d.is_active ?? true,
+    });
+    setDealDialog(true);
+  };
+
+  const saveDeal = async () => {
+    const payload = {
+      product_id: dealForm.product_id,
+      discount_percent: Number(dealForm.discount_percent) || 0,
+      deal_price: dealForm.deal_price ? Number(dealForm.deal_price) : null,
+      starts_at: dealForm.starts_at ? new Date(dealForm.starts_at).toISOString() : new Date().toISOString(),
+      ends_at: new Date(dealForm.ends_at).toISOString(),
+      is_active: dealForm.is_active,
+    };
+
+    if (editingDealId) {
+      const { error } = await supabase.from("daily_deals").update(payload).eq("id", editingDealId);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Deal updated" });
+    } else {
+      const { error } = await supabase.from("daily_deals").insert(payload);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      toast({ title: "Deal created" });
+    }
+    setDealDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-deals"] });
+    queryClient.invalidateQueries({ queryKey: ["daily-deals"] });
+  };
+
+  const deleteDeal = async (id: string) => {
+    const { error } = await supabase.from("daily_deals").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Deal deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-deals"] });
+    queryClient.invalidateQueries({ queryKey: ["daily-deals"] });
+  };
+
+  // ── Order status update ──
+  const updateOrderStatus = async (orderId: string, status: string) => {
+    const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `Order status changed to ${status}` });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
+  const updatePaymentStatus = async (orderId: string, payment_status: string) => {
+    const { error } = await supabase.from("orders").update({ payment_status }).eq("id", orderId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: `Payment status changed to ${payment_status}` });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
   if (loading) {
@@ -295,7 +452,7 @@ const AdminDashboard = () => {
             ))}
           </div>
 
-          {/* Products Tab */}
+          {/* ═══ Products Tab ═══ */}
           {tab === "products" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
@@ -359,7 +516,7 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {/* Categories Tab */}
+          {/* ═══ Categories Tab ═══ */}
           {tab === "categories" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
@@ -396,7 +553,7 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {/* Orders Tab */}
+          {/* ═══ Orders Tab ═══ */}
           {tab === "orders" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Orders</h2>
@@ -411,6 +568,7 @@ const AdminDashboard = () => {
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Total</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Payment</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -420,16 +578,31 @@ const AdminDashboard = () => {
                             <td className="px-4 py-3 text-muted-foreground">{new Date(o.created_at!).toLocaleDateString()}</td>
                             <td className="px-4 py-3 font-medium text-foreground">Rs. {o.total.toLocaleString()}</td>
                             <td className="px-4 py-3">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                                o.status === "completed" ? "bg-secondary/10 text-secondary" :
-                                o.status === "pending" ? "bg-accent/10 text-accent-foreground" :
-                                "bg-muted text-muted-foreground"
-                              }`}>{o.status}</span>
+                              <Select value={o.status} onValueChange={(v) => updateOrderStatus(o.id, v)}>
+                                <SelectTrigger className="h-7 text-xs w-[120px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
+                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`text-xs capitalize ${o.payment_status === "paid" ? "text-secondary" : "text-muted-foreground"}`}>
-                                {o.payment_status}
-                              </span>
+                              <Select value={o.payment_status} onValueChange={(v) => updatePaymentStatus(o.id, v)}>
+                                <SelectTrigger className="h-7 text-xs w-[110px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {["pending", "paid", "failed", "refunded"].map((s) => (
+                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs text-muted-foreground">{(o as any).order_items?.length || 0} items</span>
                             </td>
                           </tr>
                         ))}
@@ -446,17 +619,33 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {/* Banners Tab */}
+          {/* ═══ Banners Tab ═══ */}
           {tab === "banners" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Banners</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Banners</h2>
+                <Button onClick={openAddBanner} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Banner</Button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {banners?.map((b) => (
                   <div key={b.id} className="bg-card rounded-xl border border-border overflow-hidden">
                     <img src={b.image_url} alt={b.title} className="w-full h-40 object-cover" />
                     <div className="p-4">
-                      <h3 className="font-semibold text-foreground">{b.title}</h3>
-                      {b.subtitle && <p className="text-sm text-muted-foreground">{b.subtitle}</p>}
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h3 className="font-semibold text-foreground">{b.title}</h3>
+                          {b.subtitle && <p className="text-sm text-muted-foreground">{b.subtitle}</p>}
+                          {b.link_url && <p className="text-xs text-secondary mt-1 truncate max-w-[200px]">{b.link_url}</p>}
+                        </div>
+                        <div className="flex gap-1">
+                          <button onClick={() => openEditBanner(b)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => deleteBanner(b.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2 mt-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${b.is_active ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>
                           {b.is_active ? "Active" : "Inactive"}
@@ -469,16 +658,89 @@ const AdminDashboard = () => {
                 {(!banners || banners.length === 0) && (
                   <div className="col-span-2 text-center py-16 text-muted-foreground">
                     <Image className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No banners yet</p>
+                    <p>No banners yet. Add your first banner to get started.</p>
                   </div>
                 )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ Daily Deals Tab ═══ */}
+          {tab === "deals" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Daily Deals</h2>
+                <Button onClick={openAddDeal} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Deal</Button>
+              </div>
+              <div className="bg-card rounded-xl border border-border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Product</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Discount</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Deal Price</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ends At</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deals?.map((d) => {
+                        const product = d.products as any;
+                        const isExpired = new Date(d.ends_at) < new Date();
+                        return (
+                          <tr key={d.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${isExpired ? "opacity-50" : ""}`}>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-3">
+                                <img src={product?.images?.[0] || "/placeholder.svg"} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                                <span className="font-medium text-foreground line-clamp-1">{product?.name || "Unknown"}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-destructive font-bold">-{d.discount_percent}%</td>
+                            <td className="px-4 py-3 font-medium text-foreground">
+                              {d.deal_price ? `Rs. ${Number(d.deal_price).toLocaleString()}` : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-muted-foreground text-xs">
+                              {new Date(d.ends_at).toLocaleString()}
+                              {isExpired && <span className="ml-1 text-destructive font-semibold">(Expired)</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${d.is_active && !isExpired ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>
+                                {isExpired ? "Expired" : d.is_active ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openEditDeal(d)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button onClick={() => deleteDeal(d.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {(!deals || deals.length === 0) && (
+                        <tr>
+                          <td colSpan={6} className="text-center py-16 text-muted-foreground">
+                            <Tag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                            <p>No daily deals yet</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
         </main>
       </div>
 
-      {/* Product Dialog */}
+      {/* ═══ Product Dialog ═══ */}
       <Dialog open={productDialog} onOpenChange={setProductDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -570,7 +832,7 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Category Dialog */}
+      {/* ═══ Category Dialog ═══ */}
       <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -620,6 +882,111 @@ const AdminDashboard = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setCategoryDialog(false)}>Cancel</Button>
               <Button onClick={saveCategory} disabled={!categoryForm.name}>Save Category</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Banner Dialog ═══ */}
+      <Dialog open={bannerDialog} onOpenChange={setBannerDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingBannerId ? "Edit Banner" : "Add Banner"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Title *</Label>
+              <Input value={bannerForm.title} onChange={(e) => setBannerForm({ ...bannerForm, title: e.target.value })} placeholder="Banner title" />
+            </div>
+            <div>
+              <Label>Subtitle</Label>
+              <Input value={bannerForm.subtitle} onChange={(e) => setBannerForm({ ...bannerForm, subtitle: e.target.value })} placeholder="Banner subtitle" />
+            </div>
+            <div>
+              <Label>Redirect Link</Label>
+              <Input value={bannerForm.link_url} onChange={(e) => setBannerForm({ ...bannerForm, link_url: e.target.value })} placeholder="/category/arduino-boards" />
+            </div>
+            <div>
+              <Label>Banner Image *</Label>
+              {bannerForm.image_url && (
+                <div className="relative group mb-2">
+                  <img src={bannerForm.image_url} alt="" className="w-full h-32 rounded-lg object-cover border border-border" />
+                  <button
+                    type="button"
+                    onClick={() => setBannerForm({ ...bannerForm, image_url: "" })}
+                    className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
+                <Upload className="w-4 h-4" />
+                {uploading ? "Uploading..." : "Upload banner image"}
+                <input type="file" accept="image/*" onChange={handleBannerImageUpload} className="hidden" disabled={uploading} />
+              </label>
+            </div>
+            <div>
+              <Label>Sort Order</Label>
+              <Input type="number" value={bannerForm.sort_order} onChange={(e) => setBannerForm({ ...bannerForm, sort_order: e.target.value })} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={bannerForm.is_active} onCheckedChange={(v) => setBannerForm({ ...bannerForm, is_active: v })} />
+              <Label>Active</Label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBannerDialog(false)}>Cancel</Button>
+              <Button onClick={saveBanner} disabled={!bannerForm.title || !bannerForm.image_url}>Save Banner</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Deal Dialog ═══ */}
+      <Dialog open={dealDialog} onOpenChange={setDealDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingDealId ? "Edit Deal" : "Add Deal"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Product *</Label>
+              <Select value={dealForm.product_id} onValueChange={(v) => setDealForm({ ...dealForm, product_id: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a product" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {products?.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Discount %</Label>
+                <Input type="number" value={dealForm.discount_percent} onChange={(e) => setDealForm({ ...dealForm, discount_percent: e.target.value })} placeholder="e.g. 20" />
+              </div>
+              <div>
+                <Label>Deal Price (Rs.)</Label>
+                <Input type="number" value={dealForm.deal_price} onChange={(e) => setDealForm({ ...dealForm, deal_price: e.target.value })} placeholder="Special price" />
+              </div>
+            </div>
+            <div>
+              <Label>Starts At</Label>
+              <Input type="datetime-local" value={dealForm.starts_at} onChange={(e) => setDealForm({ ...dealForm, starts_at: e.target.value })} />
+            </div>
+            <div>
+              <Label>Ends At *</Label>
+              <Input type="datetime-local" value={dealForm.ends_at} onChange={(e) => setDealForm({ ...dealForm, ends_at: e.target.value })} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch checked={dealForm.is_active} onCheckedChange={(v) => setDealForm({ ...dealForm, is_active: v })} />
+              <Label>Active</Label>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDealDialog(false)}>Cancel</Button>
+              <Button onClick={saveDeal} disabled={!dealForm.product_id || !dealForm.ends_at}>Save Deal</Button>
             </div>
           </div>
         </DialogContent>
