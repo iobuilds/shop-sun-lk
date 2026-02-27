@@ -29,6 +29,8 @@ const CategoryPage = () => {
   const [minRating, setMinRating] = useState(0);
   const [inStockOnly, setInStockOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(12);
+  const PRODUCTS_PER_PAGE = 12;
 
   const { data: category, isLoading: catLoading } = useQuery({
     queryKey: ["category", slug],
@@ -85,10 +87,18 @@ const CategoryPage = () => {
       case "price-high": result.sort((a, b) => b.price - a.price); break;
       case "rating": result.sort((a, b) => (b.rating || 0) - (a.rating || 0)); break;
       case "name": result.sort((a, b) => a.name.localeCompare(b.name)); break;
-      default: break; // newest is default from DB
+      default: break;
     }
     return result;
   }, [products, sortBy, priceRange, minRating, inStockOnly]);
+
+  // Reset pagination when filters/sort change
+  useMemo(() => {
+    setVisibleCount(PRODUCTS_PER_PAGE);
+  }, [sortBy, priceRange, minRating, inStockOnly]);
+
+  const visibleProducts = filtered.slice(0, visibleCount);
+  const hasMore = visibleCount < filtered.length;
 
   const activeFilterCount = [
     priceRange[0] > 0 || priceRange[1] < maxPrice,
@@ -295,86 +305,103 @@ const CategoryPage = () => {
                   ))}
                 </div>
               ) : filtered.length > 0 ? (
-                <div className={`grid grid-cols-2 sm:grid-cols-3 ${showFilters ? "lg:grid-cols-3" : "lg:grid-cols-4"} gap-4`}>
-                  {filtered.map((product, i) => (
-                    <motion.div
-                      key={product.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03, duration: 0.3 }}
-                    >
-                      <Link
-                        to={`/product/${product.slug}`}
-                        className="group bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block"
+                <>
+                  <div className={`grid grid-cols-2 sm:grid-cols-3 ${showFilters ? "lg:grid-cols-3" : "lg:grid-cols-4"} gap-4`}>
+                    {visibleProducts.map((product, i) => (
+                      <motion.div
+                        key={product.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: Math.min(i, 11) * 0.03, duration: 0.3 }}
                       >
-                        <div className="relative overflow-hidden">
-                          <img
-                            src={product.images?.[0] || "/placeholder.svg"}
-                            alt={product.name}
-                            className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
-                            loading="lazy"
-                          />
-                          {product.is_featured && (
-                            <span className="absolute top-2 left-2 bg-secondary text-secondary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
-                              Featured
-                            </span>
-                          )}
-                          <button
-                            onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
-                            className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 ${
-                              isInWishlist(product.id) ? "text-destructive" : "text-muted-foreground hover:text-destructive"
-                            }`}
-                          >
-                            <Heart className={`w-4 h-4 ${isInWishlist(product.id) ? "fill-current" : ""}`} />
-                          </button>
-                          {product.discount_price && product.discount_price > product.price && (
-                            <span className="absolute bottom-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
-                              Save Rs. {(product.discount_price - product.price).toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                        <div className="p-3">
-                          <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1.5 min-h-[2.5rem] group-hover:text-secondary transition-colors">
-                            {product.name}
-                          </h3>
-                          <div className="flex items-center gap-1 mb-2">
-                            <div className="flex items-center">
-                              {[...Array(5)].map((_, j) => (
-                                <Star key={j} className={`w-3 h-3 ${j < Math.floor(product.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />
-                              ))}
-                            </div>
-                            <span className="text-[10px] text-muted-foreground">({product.review_count || 0})</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="text-base font-bold text-foreground">Rs. {product.price.toLocaleString()}</span>
-                              {product.discount_price && (
-                                <span className="block text-[11px] text-muted-foreground line-through">
-                                  Rs. {product.discount_price.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
+                        <Link
+                          to={`/product/${product.slug}`}
+                          className="group bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block"
+                        >
+                          <div className="relative overflow-hidden">
+                            <img
+                              src={product.images?.[0] || "/placeholder.svg"}
+                              alt={product.name}
+                              className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
+                              loading="lazy"
+                            />
+                            {product.is_featured && (
+                              <span className="absolute top-2 left-2 bg-secondary text-secondary-foreground text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider">
+                                Featured
+                              </span>
+                            )}
                             <button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                addItem({
-                                  id: product.id,
-                                  name: product.name,
-                                  price: product.price,
-                                  image: product.images?.[0] || "/placeholder.svg",
-                                  slug: product.slug,
-                                });
-                              }}
-                              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
+                              onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
+                              className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 ${
+                                isInWishlist(product.id) ? "text-destructive" : "text-muted-foreground hover:text-destructive"
+                              }`}
                             >
-                              <ShoppingCart className="w-4 h-4" />
+                              <Heart className={`w-4 h-4 ${isInWishlist(product.id) ? "fill-current" : ""}`} />
                             </button>
+                            {product.discount_price && product.discount_price > product.price && (
+                              <span className="absolute bottom-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
+                                Save Rs. {(product.discount_price - product.price).toLocaleString()}
+                              </span>
+                            )}
                           </div>
-                        </div>
-                      </Link>
-                    </motion.div>
-                  ))}
-                </div>
+                          <div className="p-3">
+                            <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1.5 min-h-[2.5rem] group-hover:text-secondary transition-colors">
+                              {product.name}
+                            </h3>
+                            <div className="flex items-center gap-1 mb-2">
+                              <div className="flex items-center">
+                                {[...Array(5)].map((_, j) => (
+                                  <Star key={j} className={`w-3 h-3 ${j < Math.floor(product.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />
+                                ))}
+                              </div>
+                              <span className="text-[10px] text-muted-foreground">({product.review_count || 0})</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-base font-bold text-foreground">Rs. {product.price.toLocaleString()}</span>
+                                {product.discount_price && (
+                                  <span className="block text-[11px] text-muted-foreground line-through">
+                                    Rs. {product.discount_price.toLocaleString()}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  addItem({
+                                    id: product.id,
+                                    name: product.name,
+                                    price: product.price,
+                                    image: product.images?.[0] || "/placeholder.svg",
+                                    slug: product.slug,
+                                  });
+                                }}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
+                              >
+                                <ShoppingCart className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        </Link>
+                      </motion.div>
+                    ))}
+                  </div>
+                  {/* Load More / Progress */}
+                  <div className="mt-8 text-center space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {visibleProducts.length} of {filtered.length} products
+                    </p>
+                    {hasMore && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setVisibleCount((c) => c + PRODUCTS_PER_PAGE)}
+                        className="px-8"
+                      >
+                        Load More
+                      </Button>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="text-center py-16">
                   <p className="text-muted-foreground">No products match your filters.</p>
