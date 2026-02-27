@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { toast } from "sonner";
@@ -21,6 +21,11 @@ const Checkout = () => {
   const [submitting, setSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("stripe");
 
+  // Coupon state
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; description?: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+
   const [form, setForm] = useState({
     full_name: "",
     phone: "",
@@ -30,8 +35,9 @@ const Checkout = () => {
     postal_code: "",
   });
 
+  const discount = appliedCoupon?.discount || 0;
   const shipping = subtotal >= 5000 ? 0 : 350;
-  const total = subtotal + shipping;
+  const total = Math.max(0, subtotal - discount + shipping);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,7 +47,6 @@ const Checkout = () => {
     });
   }, [navigate]);
 
-  // Load profile address
   useEffect(() => {
     if (!session?.user?.id) return;
     supabase
@@ -62,6 +67,29 @@ const Checkout = () => {
         }
       });
   }, [session?.user?.id]);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-coupon", {
+        body: { code: couponCode, subtotal },
+      });
+      if (error) throw error;
+      if (!data.valid) throw new Error(data.error);
+      setAppliedCoupon({ code: data.code, discount: data.discount, description: data.description });
+      toast.success(`Coupon applied! You save Rs. ${data.discount.toLocaleString()}`);
+    } catch (err: any) {
+      toast.error(err.message || "Invalid coupon");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+  };
 
   if (loading) {
     return (
@@ -90,6 +118,7 @@ const Checkout = () => {
           items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
           shipping_address: form,
           payment_method: paymentMethod,
+          coupon_code: appliedCoupon?.code || null,
         },
       });
 
@@ -122,7 +151,6 @@ const Checkout = () => {
 
           <form onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Shipping & Payment */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Shipping Info */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-card rounded-xl border border-border p-6">
@@ -131,32 +159,14 @@ const Checkout = () => {
                   </h2>
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label>Full Name *</Label>
-                        <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="John Doe" required />
-                      </div>
-                      <div>
-                        <Label>Phone *</Label>
-                        <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+94 7X XXX XXXX" required />
-                      </div>
+                      <div><Label>Full Name *</Label><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="John Doe" required /></div>
+                      <div><Label>Phone *</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+94 7X XXX XXXX" required /></div>
                     </div>
-                    <div>
-                      <Label>Address Line 1 *</Label>
-                      <Input value={form.address_line1} onChange={(e) => setForm({ ...form, address_line1: e.target.value })} placeholder="Street address" required />
-                    </div>
-                    <div>
-                      <Label>Address Line 2</Label>
-                      <Input value={form.address_line2} onChange={(e) => setForm({ ...form, address_line2: e.target.value })} placeholder="Apartment, suite, etc." />
-                    </div>
+                    <div><Label>Address Line 1 *</Label><Input value={form.address_line1} onChange={(e) => setForm({ ...form, address_line1: e.target.value })} placeholder="Street address" required /></div>
+                    <div><Label>Address Line 2</Label><Input value={form.address_line2} onChange={(e) => setForm({ ...form, address_line2: e.target.value })} placeholder="Apartment, suite, etc." /></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>City *</Label>
-                        <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Colombo" required />
-                      </div>
-                      <div>
-                        <Label>Postal Code</Label>
-                        <Input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} placeholder="00100" />
-                      </div>
+                      <div><Label>City *</Label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Colombo" required /></div>
+                      <div><Label>Postal Code</Label><Input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} placeholder="00100" /></div>
                     </div>
                   </div>
                 </motion.div>
@@ -204,11 +214,46 @@ const Checkout = () => {
                     ))}
                   </div>
 
+                  {/* Coupon Code */}
+                  <div className="border-t border-border pt-3">
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between bg-secondary/5 border border-secondary/20 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Tag className="w-4 h-4 text-secondary" />
+                          <span className="text-sm font-medium text-secondary">{appliedCoupon.code}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-secondary">-Rs. {appliedCoupon.discount.toLocaleString()}</span>
+                          <button type="button" onClick={removeCoupon} className="p-0.5 hover:bg-secondary/10 rounded"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                          placeholder="Coupon code"
+                          className="text-sm"
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyCoupon())}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={applyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                          {validatingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-border pt-3 space-y-2 text-sm">
                     <div className="flex justify-between text-muted-foreground">
                       <span>Subtotal</span>
                       <span>Rs. {subtotal.toLocaleString()}</span>
                     </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-secondary">
+                        <span>Discount</span>
+                        <span>-Rs. {discount.toLocaleString()}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-muted-foreground">
                       <span>Shipping</span>
                       <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping}`}</span>
