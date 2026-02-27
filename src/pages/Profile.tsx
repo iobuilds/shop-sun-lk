@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, ChevronRight } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 
 type ProfileTab = "details" | "orders" | "address";
@@ -21,6 +21,7 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<ProfileTab>("details");
   const [saving, setSaving] = useState(false);
+  const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -106,6 +107,31 @@ const Profile = () => {
     } else {
       toast.success("Profile updated!");
       queryClient.invalidateQueries({ queryKey: ["profile"] });
+    }
+  };
+
+  const handleReceiptUpload = async (orderId: string, file: File) => {
+    setUploadingReceipt(orderId);
+    try {
+      const ext = file.name.split(".").pop();
+      const fileName = `receipts/${orderId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ receipt_url: urlData.publicUrl })
+        .eq("id", orderId);
+      if (updateError) throw updateError;
+
+      toast.success("Receipt uploaded successfully!");
+      queryClient.invalidateQueries({ queryKey: ["user-orders"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to upload receipt");
+    } finally {
+      setUploadingReceipt(null);
     }
   };
 
@@ -239,7 +265,7 @@ const Profile = () => {
                             </div>
                             <div className="flex items-center gap-3">
                               <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
-                                order.status === "completed" ? "bg-secondary/10 text-secondary" :
+                                order.status === "completed" || order.status === "delivered" ? "bg-secondary/10 text-secondary" :
                                 order.status === "pending" ? "bg-accent text-accent-foreground" :
                                 order.status === "cancelled" ? "bg-destructive/10 text-destructive" :
                                 "bg-muted text-muted-foreground"
@@ -270,6 +296,48 @@ const Profile = () => {
                               </div>
                             ))}
                           </div>
+
+                          {/* Receipt Upload for Bank Transfer Orders */}
+                          {order.payment_method === "bank_transfer" && (
+                            <div className="mt-4 pt-4 border-t border-border">
+                              {(order as any).receipt_url ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-4 h-4 text-secondary" />
+                                  <span className="text-sm text-secondary font-medium">Receipt uploaded</span>
+                                  <a
+                                    href={(order as any).receipt_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-muted-foreground underline hover:text-foreground ml-auto"
+                                  >
+                                    View receipt
+                                  </a>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3">
+                                  <Clock className="w-4 h-4 text-accent" />
+                                  <span className="text-sm text-muted-foreground">Upload payment receipt</span>
+                                  <label className="ml-auto">
+                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium cursor-pointer hover:opacity-90 transition-opacity">
+                                      <Upload className="w-3.5 h-3.5" />
+                                      {uploadingReceipt === order.id ? "Uploading..." : "Upload"}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      accept="image/*,.pdf"
+                                      className="hidden"
+                                      disabled={uploadingReceipt === order.id}
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleReceiptUpload(order.id, file);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
