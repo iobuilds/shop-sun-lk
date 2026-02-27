@@ -187,6 +187,7 @@ export type Database = {
           notes: string | null
           payment_method: string
           payment_status: string
+          receipt_url: string | null
           shipping_address: Json | null
           shipping_fee: number
           status: string
@@ -201,6 +202,7 @@ export type Database = {
           notes?: string | null
           payment_method?: string
           payment_status?: string
+          receipt_url?: string | null
           shipping_address?: Json | null
           shipping_fee?: number
           status?: string
@@ -215,6 +217,7 @@ export type Database = {
           notes?: string | null
           payment_method?: string
           payment_status?: string
+          receipt_url?: string | null
           shipping_address?: Json | null
           shipping_fee?: number
           status?: string
@@ -222,6 +225,36 @@ export type Database = {
           total?: number
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      pages: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_published: boolean | null
+          slug: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          slug: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_published?: boolean | null
+          slug?: string
+          title?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

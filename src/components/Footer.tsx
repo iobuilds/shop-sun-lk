@@ -29,11 +29,10 @@ const Footer = () => (
         <div>
           <h4 className="font-semibold font-display mb-4">Quick Links</h4>
           <ul className="space-y-2.5 text-sm text-primary-foreground/60">
-            {["About Us", "Contact Us", "Track Order", "Daily Deals", "Combo Packs"].map((link) => (
-              <li key={link}>
-                <Link to="#" className="hover:text-primary-foreground transition-colors">{link}</Link>
-              </li>
-            ))}
+            <li><Link to="/page/about-us" className="hover:text-primary-foreground transition-colors">About Us</Link></li>
+            <li><Link to="/page/contact" className="hover:text-primary-foreground transition-colors">Contact Us</Link></li>
+            <li><Link to="/profile" className="hover:text-primary-foreground transition-colors">Track Order</Link></li>
+            <li><Link to="/" className="hover:text-primary-foreground transition-colors">Daily Deals</Link></li>
           </ul>
         </div>
 
@@ -41,11 +40,9 @@ const Footer = () => (
         <div>
           <h4 className="font-semibold font-display mb-4">Policies</h4>
           <ul className="space-y-2.5 text-sm text-primary-foreground/60">
-            {["Privacy Policy", "Refund Policy", "Delivery Policy", "Terms & Conditions"].map((link) => (
-              <li key={link}>
-                <Link to="#" className="hover:text-primary-foreground transition-colors">{link}</Link>
-              </li>
-            ))}
+            <li><Link to="/page/privacy-policy" className="hover:text-primary-foreground transition-colors">Privacy Policy</Link></li>
+            <li><Link to="/page/refund-policy" className="hover:text-primary-foreground transition-colors">Refund Policy</Link></li>
+            <li><Link to="/page/terms" className="hover:text-primary-foreground transition-colors">Terms & Conditions</Link></li>
           </ul>
         </div>
 
