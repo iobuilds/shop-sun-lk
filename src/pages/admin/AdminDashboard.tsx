@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos";
+type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -192,6 +192,22 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: seoSettings } = useQuery({
+    queryKey: ["admin-seo"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "seo").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || { store_name: "", tagline: "", meta_description: "", meta_keywords: "", og_image: "", google_analytics_id: "", facebook_pixel_id: "" };
+    },
+  });
+
+  const [seoForm, setSeoForm] = useState<any>(null);
+  useEffect(() => {
+    if (seoSettings && !seoForm) {
+      setSeoForm(seoSettings);
+    }
+  }, [seoSettings]);
+
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
   const tabs = [
@@ -206,6 +222,7 @@ const AdminDashboard = () => {
     { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
     { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
     { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
+    { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
 
@@ -508,6 +525,22 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Review deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-reviews"] });
+  };
+
+  // ── SEO Settings ──
+  const saveSeoSettings = async () => {
+    if (!seoForm) return;
+    const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "seo").maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("site_settings" as any).update({ value: seoForm, updated_at: new Date().toISOString() } as any).eq("key", "seo");
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    } else {
+      const { error } = await supabase.from("site_settings" as any).insert({ key: "seo", value: seoForm } as any);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    }
+    toast({ title: "SEO settings saved" });
+    queryClient.invalidateQueries({ queryKey: ["admin-seo"] });
+  };
   };
 
   // ── Combo CRUD ──
@@ -1186,6 +1219,54 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* ═══ SEO Settings Tab ═══ */}
+          {tab === "seo" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">SEO Settings</h2>
+                <Button onClick={saveSeoSettings} size="sm" className="gap-1.5" disabled={!seoForm}><Save className="w-4 h-4" /> Save Settings</Button>
+              </div>
+              {seoForm ? (
+                <div className="space-y-6">
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Store Information</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><Label>Store Name</Label><Input value={seoForm.store_name || ""} onChange={(e) => setSeoForm({ ...seoForm, store_name: e.target.value })} placeholder="TechLK" /></div>
+                      <div><Label>Tagline</Label><Input value={seoForm.tagline || ""} onChange={(e) => setSeoForm({ ...seoForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
+                    </div>
+                    <div><Label>Meta Description</Label><Textarea value={seoForm.meta_description || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_description: e.target.value })} rows={3} placeholder="Brief description for search engines (max 160 chars)" /></div>
+                    <p className="text-xs text-muted-foreground">{(seoForm.meta_description || "").length}/160 characters</p>
+                    <div><Label>Meta Keywords</Label><Input value={seoForm.meta_keywords || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_keywords: e.target.value })} placeholder="electronics, arduino, sensors, Sri Lanka" /></div>
+                    <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://example.com/og-image.jpg" /></div>
+                  </div>
+
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Analytics & Tracking</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><Label>Google Analytics ID</Label><Input value={seoForm.google_analytics_id || ""} onChange={(e) => setSeoForm({ ...seoForm, google_analytics_id: e.target.value })} placeholder="G-XXXXXXXXXX" /></div>
+                      <div><Label>Facebook Pixel ID</Label><Input value={seoForm.facebook_pixel_id || ""} onChange={(e) => setSeoForm({ ...seoForm, facebook_pixel_id: e.target.value })} placeholder="123456789" /></div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Add your tracking IDs to enable analytics on the storefront.</p>
+                  </div>
+
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">SEO Preview</h3>
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
+                      <p className="text-secondary text-lg font-medium truncate">{seoForm.store_name || "Store Name"} — {seoForm.tagline || "Tagline"}</p>
+                      <p className="text-xs text-secondary">https://shop-sun-lk.lovable.app</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{seoForm.meta_description || "Add a meta description to improve search visibility."}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading SEO settings...</p>
+                </div>
+              )}
             </motion.div>
           )}
 
