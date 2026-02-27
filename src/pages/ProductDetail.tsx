@@ -9,6 +9,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Json } from "@/integrations/supabase/types";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/hooks/useWishlist";
 
 const ProductDetail = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -16,6 +17,7 @@ const ProductDetail = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
   const { addItem } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
@@ -198,7 +200,7 @@ const ProductDetail = () => {
                 >
                   <ShoppingCart className="w-4 h-4" /> Add to Cart
                 </Button>
-                <Button variant="outline" size="lg"><Heart className="w-4 h-4" /></Button>
+                <Button variant="outline" size="lg" onClick={() => toggleWishlist(product.id)} className={isInWishlist(product.id) ? "text-destructive border-destructive/30" : ""}><Heart className={`w-4 h-4 ${isInWishlist(product.id) ? "fill-current" : ""}`} /></Button>
                 <Button variant="outline" size="lg"><Share2 className="w-4 h-4" /></Button>
               </div>
 
