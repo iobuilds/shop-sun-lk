@@ -1,38 +1,88 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-const productImages = [
-  "https://images.unsplash.com/photo-1518770660439-4636190af475?w=600&h=600&fit=crop",
-  "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=600&h=600&fit=crop",
-  "https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=600&h=600&fit=crop",
-  "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=600&h=600&fit=crop",
-];
-
-const specs = [
-  { label: "Processor", value: "ARM Cortex-A72 1.8GHz" },
-  { label: "RAM", value: "8GB LPDDR4" },
-  { label: "Connectivity", value: "WiFi, Bluetooth 5.0, Ethernet" },
-  { label: "USB", value: "2x USB 3.0, 2x USB 2.0" },
-  { label: "GPIO", value: "40-pin header" },
-  { label: "Display", value: "Dual micro-HDMI (4K)" },
-  { label: "Storage", value: "MicroSD card slot" },
-  { label: "Power", value: "USB-C (5V/3A)" },
-];
-
-const reviews = [
-  { name: "Kasun P.", rating: 5, date: "2 days ago", comment: "Excellent board! Fast shipping and well packaged. Works perfectly for my IoT project." },
-  { name: "Dilini F.", rating: 4, date: "1 week ago", comment: "Great product, a bit warm under heavy load but overall fantastic performance." },
-  { name: "Ravindu S.", rating: 5, date: "2 weeks ago", comment: "Best Pi I've owned. The 8GB RAM makes a huge difference for multitasking." },
-];
+import type { Json } from "@/integrations/supabase/types";
 
 const ProductDetail = () => {
+  const { slug } = useParams<{ slug: string }>();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+
+  const { data: product, isLoading } = useQuery({
+    queryKey: ["product", slug],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*, categories(name, slug)")
+        .eq("slug", slug!)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!slug,
+  });
+
+  const { data: reviews } = useQuery({
+    queryKey: ["reviews", product?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("product_id", product!.id)
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!product?.id,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="pt-[136px] md:pt-[160px]">
+          <div className="container mx-auto px-4 py-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="aspect-square bg-muted rounded-xl animate-pulse" />
+              <div className="space-y-4">
+                <div className="h-4 bg-muted rounded w-20" />
+                <div className="h-8 bg-muted rounded w-3/4" />
+                <div className="h-10 bg-muted rounded w-1/3" />
+                <div className="h-20 bg-muted rounded" />
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="pt-[136px] md:pt-[160px] flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold font-display text-foreground mb-2">Product Not Found</h1>
+            <p className="text-muted-foreground">The product you're looking for doesn't exist.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const images = product.images?.length ? product.images : ["/placeholder.svg"];
+  const specs = product.specifications as Record<string, string> | null;
+  const category = product.categories as any;
+  const discount = product.discount_price ? Math.round(((product.discount_price - product.price) / product.discount_price) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -43,63 +93,74 @@ const ProductDetail = () => {
           <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
             <a href="/" className="hover:text-secondary transition-colors">Home</a>
             <span>/</span>
-            <a href="/category/arduino-boards" className="hover:text-secondary transition-colors">Arduino & Boards</a>
-            <span>/</span>
-            <span className="text-foreground">Raspberry Pi 4 Model B 8GB</span>
+            {category && (
+              <>
+                <a href={`/category/${category.slug}`} className="hover:text-secondary transition-colors">{category.name}</a>
+                <span>/</span>
+              </>
+            )}
+            <span className="text-foreground">{product.name}</span>
           </nav>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
             {/* Image gallery */}
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
               <div className="relative overflow-hidden rounded-xl bg-muted aspect-square">
-                <img
-                  src={productImages[selectedImage]}
-                  alt="Product"
-                  className="w-full h-full object-cover"
-                />
-                <button onClick={() => setSelectedImage((s) => (s - 1 + productImages.length) % productImages.length)} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button onClick={() => setSelectedImage((s) => (s + 1) % productImages.length)} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+                <img src={images[selectedImage]} alt={product.name} className="w-full h-full object-cover" />
+                {images.length > 1 && (
+                  <>
+                    <button onClick={() => setSelectedImage((s) => (s - 1 + images.length) % images.length)} className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setSelectedImage((s) => (s + 1) % images.length)} className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center hover:bg-card transition-colors">
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
+                )}
               </div>
-              <div className="flex gap-3">
-                {productImages.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedImage(i)}
-                    className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${i === selectedImage ? "border-secondary" : "border-border hover:border-secondary/50"}`}
-                  >
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+              {images.length > 1 && (
+                <div className="flex gap-3">
+                  {images.map((img, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSelectedImage(i)}
+                      className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${i === selectedImage ? "border-secondary" : "border-border hover:border-secondary/50"}`}
+                    >
+                      <img src={img} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
 
             {/* Product info */}
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-5">
               <div>
-                <span className="text-xs font-semibold text-secondary uppercase tracking-wider">In Stock</span>
-                <h1 className="text-2xl sm:text-3xl font-bold font-display text-foreground mt-1">Raspberry Pi 4 Model B 8GB</h1>
-                <p className="text-sm text-muted-foreground mt-1">SKU: RPI4-8GB-001</p>
+                <span className={`text-xs font-semibold uppercase tracking-wider ${(product.stock_quantity || 0) > 0 ? "text-secondary" : "text-destructive"}`}>
+                  {(product.stock_quantity || 0) > 0 ? "In Stock" : "Out of Stock"}
+                </span>
+                <h1 className="text-2xl sm:text-3xl font-bold font-display text-foreground mt-1">{product.name}</h1>
+                {product.sku && <p className="text-sm text-muted-foreground mt-1">SKU: {product.sku}</p>}
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < 5 ? "text-accent fill-accent" : "text-border"}`} />)}</div>
-                <span className="text-sm text-muted-foreground">(124 reviews)</span>
+                <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className={`w-4 h-4 ${i < Math.floor(product.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />)}</div>
+                <span className="text-sm text-muted-foreground">({product.review_count || 0} reviews)</span>
               </div>
 
               <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-bold text-foreground">Rs. 18,500</span>
-                <span className="text-lg text-muted-foreground line-through">Rs. 22,000</span>
-                <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded">-16%</span>
+                <span className="text-3xl font-bold text-foreground">Rs. {product.price.toLocaleString()}</span>
+                {product.discount_price && (
+                  <>
+                    <span className="text-lg text-muted-foreground line-through">Rs. {product.discount_price.toLocaleString()}</span>
+                    <span className="bg-destructive/10 text-destructive text-xs font-bold px-2 py-0.5 rounded">-{discount}%</span>
+                  </>
+                )}
               </div>
 
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                The Raspberry Pi 4 Model B with 8GB RAM is the most powerful Pi yet. Perfect for desktop computing, media centers, 
-                IoT projects, and more. Features dual 4K HDMI output, USB 3.0, and Gigabit Ethernet.
-              </p>
+              {product.description && (
+                <p className="text-muted-foreground text-sm leading-relaxed">{product.description}</p>
+              )}
 
               {/* Quantity */}
               <div className="flex items-center gap-4">
@@ -117,15 +178,11 @@ const ProductDetail = () => {
 
               {/* Actions */}
               <div className="flex gap-3">
-                <Button variant="default" size="lg" className="flex-1 gap-2">
+                <Button variant="default" size="lg" className="flex-1 gap-2" disabled={(product.stock_quantity || 0) === 0}>
                   <ShoppingCart className="w-4 h-4" /> Add to Cart
                 </Button>
-                <Button variant="outline" size="lg" className="gap-2">
-                  <Heart className="w-4 h-4" />
-                </Button>
-                <Button variant="outline" size="lg" className="gap-2">
-                  <Share2 className="w-4 h-4" />
-                </Button>
+                <Button variant="outline" size="lg"><Heart className="w-4 h-4" /></Button>
+                <Button variant="outline" size="lg"><Share2 className="w-4 h-4" /></Button>
               </div>
 
               {/* Benefits */}
@@ -162,19 +219,18 @@ const ProductDetail = () => {
             </div>
           </div>
 
-          {activeTab === "description" && (
+          {activeTab === "description" && product.description && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="prose prose-sm max-w-none text-muted-foreground">
-              <p>The Raspberry Pi 4 Model B 8GB represents a significant step forward, offering a level of performance comparable to entry-level x86 PC systems.</p>
-              <p>Key features include a high-performance 64-bit quad-core processor, dual-display support via dual micro-HDMI ports at resolutions up to 4K, hardware video decode at up to 4Kp60, up to 8GB RAM, dual-band 2.4/5.0GHz wireless LAN, Bluetooth 5.0, Gigabit Ethernet, USB 3.0, and PoE capability via a separate PoE HAT.</p>
+              <p>{product.description}</p>
             </motion.div>
           )}
 
-          {activeTab === "specs" && (
+          {activeTab === "specs" && specs && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl">
-              {specs.map((s, i) => (
-                <div key={s.label} className={`flex justify-between py-3 text-sm ${i < specs.length - 1 ? "border-b border-border" : ""}`}>
-                  <span className="font-medium text-foreground">{s.label}</span>
-                  <span className="text-muted-foreground">{s.value}</span>
+              {Object.entries(specs).map(([key, value], i, arr) => (
+                <div key={key} className={`flex justify-between py-3 text-sm ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
+                  <span className="font-medium text-foreground">{key}</span>
+                  <span className="text-muted-foreground">{value}</span>
                 </div>
               ))}
             </motion.div>
@@ -182,21 +238,23 @@ const ProductDetail = () => {
 
           {activeTab === "reviews" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 max-w-2xl">
-              {reviews.map((r) => (
-                <div key={r.name} className="bg-card rounded-xl border border-border p-5">
+              {reviews && reviews.length > 0 ? reviews.map((r) => (
+                <div key={r.id} className="bg-card rounded-xl border border-border p-5">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-sm">{r.name[0]}</div>
+                      <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-sm">U</div>
                       <div>
-                        <p className="text-sm font-semibold text-foreground">{r.name}</p>
-                        <p className="text-xs text-muted-foreground">{r.date}</p>
+                        <p className="text-sm font-semibold text-foreground">Customer</p>
+                        <p className="text-xs text-muted-foreground">{new Date(r.created_at!).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="flex">{[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < r.rating ? "text-accent fill-accent" : "text-border"}`} />)}</div>
                   </div>
-                  <p className="text-sm text-muted-foreground">{r.comment}</p>
+                  {r.comment && <p className="text-sm text-muted-foreground">{r.comment}</p>}
                 </div>
-              ))}
+              )) : (
+                <p className="text-muted-foreground text-sm">No reviews yet. Be the first to review this product!</p>
+              )}
             </motion.div>
           )}
         </div>
