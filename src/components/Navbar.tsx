@@ -13,10 +13,17 @@ const Navbar = () => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
+  const [session, setSession] = useState<any>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { totalItems } = useCart();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Dynamic categories from DB
   const { data: categories } = useQuery({
@@ -182,7 +189,7 @@ const Navbar = () => {
             <Link to="/wishlist" className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors relative">
               <Heart className="w-5 h-5" />
             </Link>
-            <Link to="/auth" className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
+            <Link to={session ? "/profile" : "/auth"} className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
               <User className="w-5 h-5" />
             </Link>
             <Link to="/cart" className="relative p-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -287,7 +294,7 @@ const Navbar = () => {
                 🔥 Daily Deals
               </Link>
               <div className="border-t border-border mt-2 pt-2 flex flex-col gap-1">
-                <Link to="/auth" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
+                <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
                 </Link>
                 <Link to="/wishlist" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
