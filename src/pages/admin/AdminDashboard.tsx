@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,15 +47,26 @@ const AdminDashboard = () => {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("products");
   const [search, setSearch] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   // Dialogs
   const [productDialog, setProductDialog] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProduct);
+  const [productImagePreviews, setProductImagePreviews] = useState<string[]>([]);
 
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm>(emptyCategory);
+
+  const uploadFile = async (file: File, folder: string): Promise<string | null> => {
+    const ext = file.name.split(".").pop();
+    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("images").upload(fileName, file);
+    if (error) { toast({ title: "Upload failed", description: error.message, variant: "destructive" }); return null; }
+    const { data } = supabase.storage.from("images").getPublicUrl(fileName);
+    return data.publicUrl;
+  };
 
   const { data: products } = useQuery({
     queryKey: ["admin-products"],
@@ -105,16 +116,50 @@ const AdminDashboard = () => {
   );
 
   // Product CRUD
-  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductDialog(true); };
+  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setProductDialog(true); };
   const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
+    const imgs = p.images || [];
+    setProductImagePreviews(imgs);
     setProductForm({
       name: p.name, slug: p.slug, description: p.description || "", price: String(p.price),
       discount_price: p.discount_price ? String(p.discount_price) : "", sku: p.sku || "",
       stock_quantity: String(p.stock_quantity || 0), category_id: p.category_id || "",
-      images: (p.images || []).join(", "), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false,
+      images: imgs.join(", "), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false,
     });
     setProductDialog(true);
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const newUrls: string[] = [];
+    for (const file of Array.from(files)) {
+      const url = await uploadFile(file, "products");
+      if (url) newUrls.push(url);
+    }
+    const allUrls = [...productImagePreviews, ...newUrls];
+    setProductImagePreviews(allUrls);
+    setProductForm((prev) => ({ ...prev, images: allUrls.join(", ") }));
+    setUploading(false);
+    e.target.value = "";
+  };
+
+  const removeProductImage = (index: number) => {
+    const updated = productImagePreviews.filter((_, i) => i !== index);
+    setProductImagePreviews(updated);
+    setProductForm((prev) => ({ ...prev, images: updated.join(", ") }));
+  };
+
+  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    const url = await uploadFile(files[0], "categories");
+    if (url) setCategoryForm((prev) => ({ ...prev, image_url: url }));
+    setUploading(false);
+    e.target.value = "";
   };
 
   const saveProduct = async () => {
@@ -486,8 +531,26 @@ const AdminDashboard = () => {
               <Textarea value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} rows={3} />
             </div>
             <div>
-              <Label>Image URLs (comma separated)</Label>
-              <Textarea value={productForm.images} onChange={(e) => setProductForm({ ...productForm, images: e.target.value })} rows={2} placeholder="https://example.com/img1.jpg, https://example.com/img2.jpg" />
+              <Label>Images</Label>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {productImagePreviews.map((url, i) => (
+                  <div key={i} className="relative group w-16 h-16">
+                    <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                    <button
+                      type="button"
+                      onClick={() => removeProductImage(i)}
+                      className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
+                <Upload className="w-4 h-4" />
+                {uploading ? "Uploading..." : "Upload images"}
+                <input type="file" accept="image/*" multiple onChange={handleProductImageUpload} className="hidden" disabled={uploading} />
+              </label>
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
@@ -527,8 +590,24 @@ const AdminDashboard = () => {
               <Textarea value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} rows={2} />
             </div>
             <div>
-              <Label>Image URL</Label>
-              <Input value={categoryForm.image_url} onChange={(e) => setCategoryForm({ ...categoryForm, image_url: e.target.value })} placeholder="https://example.com/category.jpg" />
+              <Label>Image</Label>
+              {categoryForm.image_url && (
+                <div className="relative group w-20 h-20 mb-2">
+                  <img src={categoryForm.image_url} alt="" className="w-20 h-20 rounded-lg object-cover border border-border" />
+                  <button
+                    type="button"
+                    onClick={() => setCategoryForm({ ...categoryForm, image_url: "" })}
+                    className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
+                <Upload className="w-4 h-4" />
+                {uploading ? "Uploading..." : "Upload image"}
+                <input type="file" accept="image/*" onChange={handleCategoryImageUpload} className="hidden" disabled={uploading} />
+              </label>
             </div>
             <div>
               <Label>Sort Order</Label>
