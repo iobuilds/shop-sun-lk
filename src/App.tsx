@@ -13,6 +13,7 @@ import CategoryPage from "./pages/CategoryPage";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import SearchPage from "./pages/SearchPage";
 import Profile from "./pages/Profile";
+import Wishlist from "./pages/Wishlist";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/wishlist" element={<Wishlist />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

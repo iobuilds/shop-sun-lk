@@ -5,11 +5,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
 import { useCart } from "@/contexts/CartContext";
+import { useWishlist } from "@/hooks/useWishlist";
 
 type Product = Tables<"products">;
 
 const ProductCard = ({ product, index }: { product: Product; index: number }) => {
   const { addItem } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
   const saved = product.discount_price ? product.discount_price - product.price : 0;
 
   return (
@@ -36,10 +38,12 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
             </span>
           )}
           <button
-            onClick={(e) => e.preventDefault()}
-            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm text-muted-foreground hover:text-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300"
+            onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
+            className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 ${
+              isInWishlist(product.id) ? "text-destructive" : "text-muted-foreground hover:text-destructive"
+            }`}
           >
-            <Heart className="w-4 h-4" />
+            <Heart className={`w-4 h-4 ${isInWishlist(product.id) ? "fill-current" : ""}`} />
           </button>
           {saved > 0 && (
             <span className="absolute bottom-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
