@@ -4,7 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2 } from "lucide-react";
+import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2, Video, FileDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -17,7 +17,7 @@ const ProductDetail = () => {
   const { slug } = useParams<{ slug: string }>();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+  const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews" | "documents">("description");
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
 
@@ -108,6 +108,9 @@ const ProductDetail = () => {
   const specs = product.specifications as Record<string, string> | null;
   const category = product.categories as any;
   const discount = product.discount_price ? Math.round(((product.discount_price - product.price) / product.discount_price) * 100) : 0;
+  const videoUrl = (product as any).video_url as string | null;
+  const datasheetUrl = (product as any).datasheet_url as string | null;
+  const hasDocuments = !!videoUrl || !!datasheetUrl;
 
   return (
     <div className="min-h-screen bg-background">
@@ -272,7 +275,7 @@ const ProductDetail = () => {
           {/* Tabs */}
           <div className="border-b border-border mb-6">
             <div className="flex gap-6">
-              {(["description", "specs", "reviews"] as const).map((tab) => (
+              {(["description", "specs", ...(hasDocuments ? ["documents" as const] : []), "reviews"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -280,7 +283,7 @@ const ProductDetail = () => {
                     activeTab === tab ? "border-secondary text-secondary" : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  {tab === "specs" ? "Specifications" : tab}
+                  {tab === "specs" ? "Specifications" : tab === "documents" ? "වීඩියෝ / ලේඛන" : tab}
                 </button>
               ))}
             </div>
@@ -300,6 +303,50 @@ const ProductDetail = () => {
                   <span className="text-muted-foreground">{value}</span>
                 </div>
               ))}
+            </motion.div>
+          )}
+
+          {activeTab === "documents" && hasDocuments && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl space-y-6">
+              {videoUrl && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <Video className="w-4 h-4 text-secondary" /> නිෂ්පාදන වීඩියෝ / Product Video
+                  </h3>
+                  <div className="aspect-video rounded-xl overflow-hidden bg-muted border border-border">
+                    {videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be") ? (
+                      <iframe
+                        src={videoUrl.replace("watch?v=", "embed/").replace("youtu.be/", "youtube.com/embed/")}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        title="Product video"
+                      />
+                    ) : (
+                      <video src={videoUrl} controls className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                </div>
+              )}
+              {datasheetUrl && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <FileDown className="w-4 h-4 text-secondary" /> Datasheet / තාක්ෂණික ලේඛනය
+                  </h3>
+                  <a
+                    href={datasheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-3 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-sm font-medium text-foreground"
+                  >
+                    <FileDown className="w-5 h-5 text-secondary" />
+                    <div>
+                      <p>Datasheet බාගන්න / Download Datasheet</p>
+                      <p className="text-xs text-muted-foreground">PDF ලේඛනය බලන්න</p>
+                    </div>
+                  </a>
+                </div>
+              )}
             </motion.div>
           )}
 

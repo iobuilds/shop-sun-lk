@@ -419,8 +419,10 @@ export type Database = {
       }
       products: {
         Row: {
+          attachments: Json | null
           category_id: string | null
           created_at: string | null
+          datasheet_url: string | null
           description: string | null
           discount_price: number | null
           id: string
@@ -436,10 +438,13 @@ export type Database = {
           specifications: Json | null
           stock_quantity: number | null
           updated_at: string | null
+          video_url: string | null
         }
         Insert: {
+          attachments?: Json | null
           category_id?: string | null
           created_at?: string | null
+          datasheet_url?: string | null
           description?: string | null
           discount_price?: number | null
           id?: string
@@ -455,10 +460,13 @@ export type Database = {
           specifications?: Json | null
           stock_quantity?: number | null
           updated_at?: string | null
+          video_url?: string | null
         }
         Update: {
+          attachments?: Json | null
           category_id?: string | null
           created_at?: string | null
+          datasheet_url?: string | null
           description?: string | null
           discount_price?: number | null
           id?: string
@@ -474,6 +482,7 @@ export type Database = {
           specifications?: Json | null
           stock_quantity?: number | null
           updated_at?: string | null
+          video_url?: string | null
         }
         Relationships: [
           {
