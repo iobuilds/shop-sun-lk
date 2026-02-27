@@ -49,6 +49,23 @@ const ProductDetail = () => {
     enabled: !!product?.id,
   });
 
+  const { data: relatedProducts } = useQuery({
+    queryKey: ["related-products", product?.category_id, product?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("category_id", product!.category_id!)
+        .neq("id", product!.id)
+        .eq("is_active", true)
+        .order("rating", { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!product?.id && !!product?.category_id,
+  });
+
   const recentlyViewed = useRecentlyViewed(product || undefined);
 
   if (isLoading) {
@@ -280,6 +297,64 @@ const ProductDetail = () => {
             </motion.div>
           )}
         </div>
+
+        {/* Related Products */}
+        {relatedProducts && relatedProducts.length > 0 && (
+          <div className="container mx-auto px-4 py-10 border-t border-border">
+            <h2 className="text-xl font-bold font-display text-foreground mb-5">You May Also Like</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {relatedProducts.map((rp, i) => (
+                <motion.div
+                  key={rp.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                >
+                  <Link
+                    to={`/product/${rp.slug}`}
+                    className="group bg-card rounded-xl border border-border overflow-hidden block hover:shadow-md transition-shadow"
+                  >
+                    <div className="relative overflow-hidden">
+                      <img
+                        src={rp.images?.[0] || "/placeholder.svg"}
+                        alt={rp.name}
+                        className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                      />
+                      <button
+                        onClick={(e) => { e.preventDefault(); toggleWishlist(rp.id); }}
+                        className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 ${
+                          isInWishlist(rp.id) ? "text-destructive" : "text-muted-foreground hover:text-destructive"
+                        }`}
+                      >
+                        <Heart className={`w-4 h-4 ${isInWishlist(rp.id) ? "fill-current" : ""}`} />
+                      </button>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1 min-h-[2.5rem] group-hover:text-secondary transition-colors">
+                        {rp.name}
+                      </h3>
+                      <div className="flex items-center gap-1 mb-1">
+                        <div className="flex">
+                          {[...Array(5)].map((_, j) => (
+                            <Star key={j} className={`w-3 h-3 ${j < Math.floor(rp.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">({rp.review_count || 0})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-foreground">Rs. {rp.price.toLocaleString()}</span>
+                        {rp.discount_price && (
+                          <span className="text-[11px] text-muted-foreground line-through">Rs. {rp.discount_price.toLocaleString()}</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recently Viewed */}
         {recentlyViewed.length > 0 && (
