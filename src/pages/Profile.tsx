@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download } from "lucide-react";
+import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
 type ProfileTab = "details" | "orders" | "address";
@@ -264,6 +265,21 @@ const Profile = () => {
                               <p className="text-xs text-muted-foreground">{new Date(order.created_at!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
                             </div>
                             <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => generateInvoice({
+                                  ...order,
+                                  order_items: (order.order_items as any[])?.map((item: any) => ({
+                                    quantity: item.quantity,
+                                    unit_price: item.unit_price,
+                                    total_price: item.total_price,
+                                    products: item.products,
+                                  })) || [],
+                                })}
+                                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                title="Download Invoice"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
                               <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
                                 order.status === "completed" || order.status === "delivered" ? "bg-secondary/10 text-secondary" :
                                 order.status === "pending" ? "bg-accent text-accent-foreground" :

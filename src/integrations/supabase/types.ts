@@ -94,6 +94,87 @@ export type Database = {
           },
         ]
       }
+      combo_pack_items: {
+        Row: {
+          combo_id: string
+          created_at: string | null
+          id: string
+          product_id: string
+          quantity: number
+        }
+        Insert: {
+          combo_id: string
+          created_at?: string | null
+          id?: string
+          product_id: string
+          quantity?: number
+        }
+        Update: {
+          combo_id?: string
+          created_at?: string | null
+          id?: string
+          product_id?: string
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combo_pack_items_combo_id_fkey"
+            columns: ["combo_id"]
+            isOneToOne: false
+            referencedRelation: "combo_packs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_pack_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combo_packs: {
+        Row: {
+          combo_price: number
+          created_at: string | null
+          description: string | null
+          id: string
+          images: string[] | null
+          is_active: boolean
+          is_featured: boolean | null
+          name: string
+          original_price: number
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          combo_price?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_active?: boolean
+          is_featured?: boolean | null
+          name: string
+          original_price?: number
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          combo_price?: number
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_active?: boolean
+          is_featured?: boolean | null
+          name?: string
+          original_price?: number
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       contact_messages: {
         Row: {
           created_at: string
