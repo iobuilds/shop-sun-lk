@@ -8,12 +8,14 @@ import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Json } from "@/integrations/supabase/types";
+import { useCart } from "@/contexts/CartContext";
 
 const ProductDetail = () => {
   const { slug } = useParams<{ slug: string }>();
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews">("description");
+  const { addItem } = useCart();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
@@ -178,7 +180,22 @@ const ProductDetail = () => {
 
               {/* Actions */}
               <div className="flex gap-3">
-                <Button variant="default" size="lg" className="flex-1 gap-2" disabled={(product.stock_quantity || 0) === 0}>
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="flex-1 gap-2"
+                  disabled={(product.stock_quantity || 0) === 0}
+                  onClick={() => {
+                    addItem({
+                      id: product.id,
+                      name: product.name,
+                      price: product.price,
+                      image: images[0],
+                      slug: product.slug,
+                    }, quantity);
+                    setQuantity(1);
+                  }}
+                >
                   <ShoppingCart className="w-4 h-4" /> Add to Cart
                 </Button>
                 <Button variant="outline" size="lg"><Heart className="w-4 h-4" /></Button>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { useCart } from "@/contexts/CartContext";
 
 const categories = [
   { name: "Arduino & Boards", href: "/category/arduino-boards" },
@@ -17,6 +18,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const { totalItems } = useCart();
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 20);
@@ -86,9 +88,11 @@ const Navbar = () => {
             </Link>
             <Link to="/cart" className="relative p-2 text-muted-foreground hover:text-foreground transition-colors">
               <ShoppingCart className="w-5 h-5" />
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
-                3
-              </span>
+              {totalItems > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
+                  {totalItems > 99 ? "99+" : totalItems}
+                </span>
+              )}
             </Link>
             <button
               className="md:hidden p-2 text-muted-foreground hover:text-foreground transition-colors"
