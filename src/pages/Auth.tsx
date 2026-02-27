@@ -31,10 +31,19 @@ const Auth = () => {
         toast.success("Password reset email sent! Check your inbox.");
         setForgotPassword(false);
       } else if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        
+        // Check if user is admin
+        const { data: roleData } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", signInData.user.id)
+          .eq("role", "admin")
+          .maybeSingle();
+        
         toast.success("Welcome back!");
-        navigate("/");
+        navigate(roleData ? "/admin" : "/");
       } else {
         const { error } = await supabase.auth.signUp({
           email,
