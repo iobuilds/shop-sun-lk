@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import Footer from "@/components/Footer";
 import type { Json } from "@/integrations/supabase/types";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/hooks/useWishlist";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 
 const ProductDetail = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -47,6 +48,8 @@ const ProductDetail = () => {
     },
     enabled: !!product?.id,
   });
+
+  const recentlyViewed = useRecentlyViewed(product || undefined);
 
   if (isLoading) {
     return (
@@ -277,6 +280,53 @@ const ProductDetail = () => {
             </motion.div>
           )}
         </div>
+
+        {/* Recently Viewed */}
+        {recentlyViewed.length > 0 && (
+          <div className="container mx-auto px-4 py-10">
+            <h2 className="text-xl font-bold font-display text-foreground mb-5">Recently Viewed</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {recentlyViewed.slice(0, 5).map((p, i) => (
+                <motion.div
+                  key={p.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                >
+                  <Link
+                    to={`/product/${p.slug}`}
+                    className="group bg-card rounded-xl border border-border overflow-hidden block hover:shadow-md transition-shadow"
+                  >
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                    <div className="p-3">
+                      <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1 min-h-[2.5rem] group-hover:text-secondary transition-colors">
+                        {p.name}
+                      </h3>
+                      <div className="flex items-center gap-1 mb-1">
+                        <div className="flex">
+                          {[...Array(5)].map((_, j) => (
+                            <Star key={j} className={`w-3 h-3 ${j < Math.floor(p.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">({p.review_count || 0})</span>
+                      </div>
+                      <span className="text-sm font-bold text-foreground">Rs. {p.price.toLocaleString()}</span>
+                      {p.discount_price && (
+                        <span className="ml-2 text-[11px] text-muted-foreground line-through">Rs. {p.discount_price.toLocaleString()}</span>
+                      )}
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <Footer />
       </main>
     </div>
