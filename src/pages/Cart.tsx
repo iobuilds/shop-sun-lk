@@ -104,8 +104,8 @@ const Cart = () => {
                     <Button variant="outline" size="sm">Apply</Button>
                   </div>
 
-                  <Button className="w-full gap-2" size="lg">
-                    Proceed to Checkout <ArrowRight className="w-4 h-4" />
+                  <Button className="w-full gap-2" size="lg" asChild>
+                    <Link to="/checkout">Proceed to Checkout <ArrowRight className="w-4 h-4" /></Link>
                   </Button>
 
                   <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
