@@ -4,6 +4,10 @@ import TrustBanner from "@/components/TrustBanner";
 import DailyDeals from "@/components/DailyDeals";
 import CategoryGrid from "@/components/CategoryGrid";
 import FeaturedProducts from "@/components/FeaturedProducts";
+import PromoBanners from "@/components/PromoBanners";
+import NewArrivals from "@/components/NewArrivals";
+import Testimonials from "@/components/Testimonials";
+import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 
 const Index = () => {
@@ -11,12 +15,16 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="pt-[136px] md:pt-[160px]">
-        <div className="container mx-auto px-4 space-y-10 py-6">
+        <div className="container mx-auto px-4 space-y-12 py-6">
           <HeroBanner />
           <TrustBanner />
           <DailyDeals />
+          <PromoBanners />
           <CategoryGrid />
           <FeaturedProducts />
+          <NewArrivals />
+          <Testimonials />
+          <Newsletter />
         </div>
         <Footer />
       </main>
