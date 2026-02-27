@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,38 +5,13 @@ import { Minus, Plus, X, ShoppingCart, ArrowRight, Truck, Shield } from "lucide-
 import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-interface CartItem {
-  id: number;
-  name: string;
-  price: number;
-  quantity: number;
-  image: string;
-}
-
-const initialCart: CartItem[] = [
-  { id: 1, name: "Raspberry Pi 4 Model B 8GB", price: 18500, quantity: 1, image: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=200&h=200&fit=crop" },
-  { id: 2, name: "ESP32 Development Board", price: 1850, quantity: 2, image: "https://images.unsplash.com/photo-1531297484001-80022131f5a1?w=200&h=200&fit=crop" },
-  { id: 3, name: "Jumper Wire Kit 120pcs", price: 650, quantity: 1, image: "https://images.unsplash.com/photo-1461749280684-dccba630e2f6?w=200&h=200&fit=crop" },
-];
+import { useCart } from "@/contexts/CartContext";
+import { useState } from "react";
 
 const Cart = () => {
-  const [items, setItems] = useState(initialCart);
+  const { items, updateQuantity, removeItem, subtotal } = useCart();
   const [coupon, setCoupon] = useState("");
 
-  const updateQty = (id: number, delta: number) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
-      )
-    );
-  };
-
-  const removeItem = (id: number) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shipping = subtotal >= 5000 ? 0 : 350;
   const total = subtotal + shipping;
 
@@ -60,7 +34,6 @@ const Cart = () => {
             </motion.div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Cart items */}
               <div className="lg:col-span-2 space-y-3">
                 {items.map((item, i) => (
                   <motion.div
@@ -70,11 +43,15 @@ const Cart = () => {
                     transition={{ delay: i * 0.05 }}
                     className="bg-card rounded-xl border border-border p-4 flex gap-4"
                   >
-                    <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+                    <Link to={`/product/${item.slug}`}>
+                      <img src={item.image} alt={item.name} className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
+                    </Link>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h3 className="text-sm font-semibold text-foreground line-clamp-1">{item.name}</h3>
+                          <Link to={`/product/${item.slug}`}>
+                            <h3 className="text-sm font-semibold text-foreground line-clamp-1 hover:text-secondary transition-colors">{item.name}</h3>
+                          </Link>
                           <p className="text-xs text-muted-foreground mt-0.5">In Stock</p>
                         </div>
                         <button onClick={() => removeItem(item.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
@@ -83,11 +60,11 @@ const Cart = () => {
                       </div>
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center border border-border rounded-lg">
-                          <button onClick={() => updateQty(item.id, -1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-l-lg">
+                          <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-l-lg">
                             <Minus className="w-3 h-3" />
                           </button>
                           <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                          <button onClick={() => updateQty(item.id, 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-r-lg">
+                          <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center hover:bg-muted rounded-r-lg">
                             <Plus className="w-3 h-3" />
                           </button>
                         </div>
@@ -98,11 +75,9 @@ const Cart = () => {
                 ))}
               </div>
 
-              {/* Order summary */}
               <div>
                 <div className="bg-card rounded-xl border border-border p-6 sticky top-44 space-y-4">
                   <h2 className="text-lg font-bold font-display text-foreground">Order Summary</h2>
-
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between text-muted-foreground">
                       <span>Subtotal</span>
@@ -110,7 +85,7 @@ const Cart = () => {
                     </div>
                     <div className="flex justify-between text-muted-foreground">
                       <span>Shipping</span>
-                      <span>{shipping === 0 ? <span className="text-success font-medium">Free</span> : `Rs. ${shipping}`}</span>
+                      <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping}`}</span>
                     </div>
                     <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground text-base">
                       <span>Total</span>
@@ -124,14 +99,8 @@ const Cart = () => {
                     </p>
                   )}
 
-                  {/* Coupon */}
                   <div className="flex gap-2">
-                    <Input
-                      placeholder="Coupon code"
-                      value={coupon}
-                      onChange={(e) => setCoupon(e.target.value)}
-                      className="text-sm"
-                    />
+                    <Input placeholder="Coupon code" value={coupon} onChange={(e) => setCoupon(e.target.value)} className="text-sm" />
                     <Button variant="outline" size="sm">Apply</Button>
                   </div>
 

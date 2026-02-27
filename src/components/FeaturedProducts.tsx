@@ -4,10 +4,12 @@ import { ShoppingCart, Star, Heart } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
+import { useCart } from "@/contexts/CartContext";
 
 type Product = Tables<"products">;
 
 const ProductCard = ({ product, index }: { product: Product; index: number }) => {
+  const { addItem } = useCart();
   const saved = product.discount_price ? product.discount_price - product.price : 0;
 
   return (
@@ -70,7 +72,16 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
               )}
             </div>
             <button
-              onClick={(e) => e.preventDefault()}
+              onClick={(e) => {
+                e.preventDefault();
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  price: product.price,
+                  image: product.images?.[0] || "/placeholder.svg",
+                  slug: product.slug,
+                });
+              }}
               className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
             >
               <ShoppingCart className="w-4 h-4" />
