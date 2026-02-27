@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,11 +14,12 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo";
+type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
   sku: string; stock_quantity: string; category_id: string; images: string; is_active: boolean; is_featured: boolean;
+  video_url: string; datasheet_url: string;
 }
 interface CategoryForm {
   name: string; slug: string; description: string; image_url: string; sort_order: string; is_active: boolean;
@@ -41,7 +42,7 @@ interface ComboForm {
   images: string; is_active: boolean; is_featured: boolean; items: { product_id: string; quantity: string }[];
 }
 
-const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false };
+const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "" };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
@@ -201,12 +202,23 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: bankSettings } = useQuery({
+    queryKey: ["admin-bank"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "bank_details").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || { bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" };
+    },
+  });
+
   const [seoForm, setSeoForm] = useState<any>(null);
+  const [bankForm, setBankForm] = useState<any>(null);
   useEffect(() => {
-    if (seoSettings && !seoForm) {
-      setSeoForm(seoSettings);
-    }
+    if (seoSettings && !seoForm) setSeoForm(seoSettings);
   }, [seoSettings]);
+  useEffect(() => {
+    if (bankSettings && !bankForm) setBankForm(bankSettings);
+  }, [bankSettings]);
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
@@ -223,6 +235,7 @@ const AdminDashboard = () => {
     { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
     { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
     { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+    { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
 
@@ -239,6 +252,7 @@ const AdminDashboard = () => {
       discount_price: p.discount_price ? String(p.discount_price) : "", sku: p.sku || "",
       stock_quantity: String(p.stock_quantity || 0), category_id: p.category_id || "",
       images: imgs.join(", "), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false,
+      video_url: (p as any).video_url || "", datasheet_url: (p as any).datasheet_url || "",
     });
     setProductDialog(true);
   };
@@ -302,7 +316,7 @@ const AdminDashboard = () => {
   };
 
   const saveProduct = async () => {
-    const payload = {
+    const payload: any = {
       name: productForm.name,
       slug: productForm.slug || productForm.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
       description: productForm.description || null,
@@ -314,6 +328,8 @@ const AdminDashboard = () => {
       images: productForm.images ? productForm.images.split(",").map((s) => s.trim()).filter(Boolean) : [],
       is_active: productForm.is_active,
       is_featured: productForm.is_featured,
+      video_url: productForm.video_url || null,
+      datasheet_url: productForm.datasheet_url || null,
     };
     if (editingProductId) {
       const { error } = await supabase.from("products").update(payload).eq("id", editingProductId);
@@ -540,7 +556,23 @@ const AdminDashboard = () => {
     }
     toast({ title: "SEO settings saved" });
     queryClient.invalidateQueries({ queryKey: ["admin-seo"] });
+    queryClient.invalidateQueries({ queryKey: ["site-seo-settings"] });
   };
+
+  // ── Bank Details Settings ──
+  const saveBankSettings = async () => {
+    if (!bankForm) return;
+    const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "bank_details").maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("site_settings" as any).update({ value: bankForm, updated_at: new Date().toISOString() } as any).eq("key", "bank_details");
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    } else {
+      const { error } = await supabase.from("site_settings" as any).insert({ key: "bank_details", value: bankForm } as any);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    }
+    toast({ title: "Bank details saved" });
+    queryClient.invalidateQueries({ queryKey: ["admin-bank"] });
+    queryClient.invalidateQueries({ queryKey: ["site-bank-details"] });
   };
 
   // ── Combo CRUD ──
@@ -1270,6 +1302,50 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Bank Details Tab ═══ */}
+          {tab === "bank" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Bank Details</h2>
+                <Button onClick={saveBankSettings} size="sm" className="gap-1.5" disabled={!bankForm}><Save className="w-4 h-4" /> Save</Button>
+              </div>
+              {bankForm ? (
+                <div className="space-y-6">
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Checkout එකේ පෙන්වන බැංකු විස්තර</h3>
+                    <p className="text-xs text-muted-foreground">මෙම තොරතුරු Bank Transfer ගෙවීම් ක්‍රමය තෝරන පාරිභෝගිකයින්ට පෙන්වනු ලැබේ.</p>
+                    <div><Label>බැංකුවේ නම / Bank Name *</Label><Input value={bankForm.bank_name || ""} onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })} placeholder="Commercial Bank of Ceylon" /></div>
+                    <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={bankForm.account_name || ""} onChange={(e) => setBankForm({ ...bankForm, account_name: e.target.value })} placeholder="TechLK (Pvt) Ltd" /></div>
+                    <div><Label>ගිණුම් අංකය / Account Number *</Label><Input value={bankForm.account_number || ""} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} placeholder="8012345678" /></div>
+                    <div><Label>ශාඛාව / Branch *</Label><Input value={bankForm.branch || ""} onChange={(e) => setBankForm({ ...bankForm, branch: e.target.value })} placeholder="Colombo Fort" /></div>
+                    <div><Label>අමතර තොරතුරු / Additional Info</Label><Textarea value={bankForm.additional_info || ""} onChange={(e) => setBankForm({ ...bankForm, additional_info: e.target.value })} rows={2} placeholder="SWIFT code, special instructions, etc." /></div>
+                  </div>
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-3">
+                    <h3 className="font-semibold text-foreground">Preview</h3>
+                    <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                      {[
+                        { label: "බැංකුව", value: bankForm.bank_name },
+                        { label: "ගිණුම් නම", value: bankForm.account_name },
+                        { label: "ගිණුම් අංකය", value: bankForm.account_number },
+                        { label: "ශාඛාව", value: bankForm.branch },
+                      ].map((r) => (
+                        <div key={r.label} className="flex justify-between">
+                          <span className="text-muted-foreground">{r.label}</span>
+                          <span className="font-medium text-foreground">{r.value || "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading bank details...</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* ═══ Reports Tab ═══ */}
           {tab === "reports" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -1409,9 +1485,15 @@ const AdminDashboard = () => {
                 ))}
               </div>
               <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
-                <Upload className="w-4 h-4" />{uploading ? "Uploading..." : "Upload images"}
+                <Upload className="w-4 h-4" />{uploading ? "Uploading..." : "Upload images / පින්තූර එකතු කරන්න"}
                 <input type="file" accept="image/*" multiple onChange={handleProductImageUpload} className="hidden" disabled={uploading} />
               </label>
+            </div>
+            <div className="border-t border-border pt-4 space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2"><Video className="w-4 h-4 text-secondary" /> වීඩියෝ සහ ලේඛන / Videos & Documents</h4>
+              <div><Label>වීඩියෝ URL / Video URL</Label><Input value={productForm.video_url} onChange={(e) => setProductForm({ ...productForm, video_url: e.target.value })} placeholder="https://youtube.com/watch?v=... හෝ වීඩියෝ link එක" /></div>
+              <div><Label>Datasheet / PDF URL</Label><Input value={productForm.datasheet_url} onChange={(e) => setProductForm({ ...productForm, datasheet_url: e.target.value })} placeholder="https://... datasheet PDF link එක" /></div>
+              <p className="text-xs text-muted-foreground">සියලුම නිෂ්පාදන සඳහා මේවා අවශ්‍ය නොවේ. තිබේ නම් පමණක් එකතු කරන්න.</p>
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2"><Switch checked={productForm.is_active} onCheckedChange={(v) => setProductForm({ ...productForm, is_active: v })} /><Label>Active</Label></div>

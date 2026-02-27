@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Clock, Package, ArrowRight, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
@@ -14,31 +15,47 @@ const OrderSuccess = () => {
   const [verifying, setVerifying] = useState(method !== "bank");
   const [paymentStatus, setPaymentStatus] = useState(method === "bank" ? "pending" : "unknown");
 
+  const { data: bankDetails } = useQuery({
+    queryKey: ["site-bank-details"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("site_settings" as any)
+        .select("*")
+        .eq("key", "bank_details")
+        .maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   useEffect(() => {
     if (!orderId || method === "bank") return;
-
     const verify = async () => {
       try {
         const { data, error } = await supabase.functions.invoke("verify-payment", {
           body: { order_id: orderId },
         });
-        if (!error && data) {
-          setPaymentStatus(data.status || "unknown");
-        }
+        if (!error && data) setPaymentStatus(data.status || "unknown");
       } catch {
         setPaymentStatus("unknown");
       } finally {
         setVerifying(false);
       }
     };
-
-    // Small delay to let Stripe process
     const timer = setTimeout(verify, 2000);
     return () => clearTimeout(timer);
   }, [orderId, method]);
 
   const isBankTransfer = method === "bank";
   const isPaid = paymentStatus === "paid";
+
+  const bank = bankDetails || {
+    bank_name: "Commercial Bank of Ceylon",
+    account_name: "TechLK (Pvt) Ltd",
+    account_number: "8012345678",
+    branch: "Colombo Fort",
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,51 +89,50 @@ const OrderSuccess = () => {
 
                 <div>
                   <h1 className="text-2xl font-bold font-display text-foreground mb-2">
-                    {isPaid
-                      ? "Payment Successful!"
-                      : isBankTransfer
-                      ? "Order Placed!"
-                      : "Order Created!"}
+                    {isPaid ? "Payment Successful!" : isBankTransfer ? "Order Placed!" : "Order Created!"}
                   </h1>
                   <p className="text-muted-foreground">
                     {isPaid
                       ? "Your payment has been confirmed. We'll start processing your order right away."
                       : isBankTransfer
-                      ? "Please transfer the payment to our bank account. Your order will be confirmed after payment verification."
+                      ? "කරුණාකර පහත බැංකු ගිණුමට මුදල් මාරු කරන්න. ගෙවීම තහවුරු කිරීමෙන් පසු ඔබේ ඇණවුම තහවුරු වනු ඇත."
                       : "Your order has been created. Payment status will be updated shortly."}
                   </p>
                 </div>
 
                 {orderId && (
                   <div className="bg-muted/50 rounded-xl p-4">
-                    <p className="text-xs text-muted-foreground mb-1">Order ID</p>
+                    <p className="text-xs text-muted-foreground mb-1">ඇණවුම් අංකය / Order ID</p>
                     <p className="text-sm font-mono font-medium text-foreground">{orderId.slice(0, 8).toUpperCase()}</p>
                   </div>
                 )}
 
                 {isBankTransfer && (
                   <div className="bg-card rounded-xl border border-border p-5 text-left space-y-3">
-                    <h3 className="text-sm font-bold text-foreground">Bank Transfer Details</h3>
+                    <h3 className="text-sm font-bold text-foreground">බැංකු මාරු විස්තර / Bank Transfer Details</h3>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Bank</span>
-                        <span className="font-medium text-foreground">Commercial Bank of Ceylon</span>
+                        <span className="text-muted-foreground">බැංකුව / Bank</span>
+                        <span className="font-medium text-foreground">{bank.bank_name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Account Name</span>
-                        <span className="font-medium text-foreground">TechLK (Pvt) Ltd</span>
+                        <span className="text-muted-foreground">ගිණුම් නම / Account Name</span>
+                        <span className="font-medium text-foreground">{bank.account_name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Account No</span>
-                        <span className="font-medium text-foreground">8012345678</span>
+                        <span className="text-muted-foreground">ගිණුම් අංකය / Account No</span>
+                        <span className="font-medium text-foreground">{bank.account_number}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Branch</span>
-                        <span className="font-medium text-foreground">Colombo Fort</span>
+                        <span className="text-muted-foreground">ශාඛාව / Branch</span>
+                        <span className="font-medium text-foreground">{bank.branch}</span>
                       </div>
+                      {bank.additional_info && (
+                        <p className="text-xs text-muted-foreground pt-1 border-t border-border">{bank.additional_info}</p>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Please include your Order ID as the reference. Upload your payment receipt via your profile &gt; Order History.
+                      කරුණාකර ඔබේ ඇණවුම් අංකය reference ලෙස ඇතුළත් කරන්න. ඔබේ profile &gt; Order History වෙතින් ගෙවීම් රිසිට්පත upload කරන්න.
                     </p>
                   </div>
                 )}
@@ -124,7 +140,7 @@ const OrderSuccess = () => {
                 <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
                   <Button asChild variant="default">
                     <Link to="/profile" className="gap-2">
-                      <Package className="w-4 h-4" /> View Orders
+                      <Package className="w-4 h-4" /> ඇණවුම් බලන්න / View Orders
                     </Link>
                   </Button>
                   <Button asChild variant="outline">
