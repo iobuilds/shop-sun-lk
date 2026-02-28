@@ -50,12 +50,10 @@ const OrderSuccess = () => {
   const isBankTransfer = method === "bank";
   const isPaid = paymentStatus === "paid";
 
-  const bank = bankDetails || {
-    bank_name: "Commercial Bank of Ceylon",
-    account_name: "TechLK (Pvt) Ltd",
-    account_number: "8012345678",
-    branch: "Colombo Fort",
-  };
+  // Support both old single-object and new array format
+  const bankAccounts: any[] = bankDetails
+    ? Array.isArray(bankDetails) ? bankDetails : [bankDetails]
+    : [{ bank_name: "Commercial Bank of Ceylon", account_name: "TechLK (Pvt) Ltd", account_number: "8012345678", branch: "Colombo Fort" }];
 
   return (
     <div className="min-h-screen bg-background">
@@ -108,31 +106,33 @@ const OrderSuccess = () => {
                 )}
 
                 {isBankTransfer && (
-                  <div className="bg-card rounded-xl border border-border p-5 text-left space-y-3">
+                  <div className="bg-card rounded-xl border border-border p-5 text-left space-y-4">
                     <h3 className="text-sm font-bold text-foreground">බැංකු මාරු විස්තර / Bank Transfer Details</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">බැංකුව / Bank</span>
-                        <span className="font-medium text-foreground">{bank.bank_name}</span>
+                    {bankAccounts.map((bank: any, idx: number) => (
+                      <div key={idx} className="space-y-2 text-sm">
+                        {bankAccounts.length > 1 && (
+                          <p className="text-xs font-bold text-foreground pt-2 first:pt-0 border-t first:border-t-0 border-border">
+                            ගිණුම / Account #{idx + 1}
+                          </p>
+                        )}
+                        {[
+                          { si: "බැංකුව", en: "Bank", value: bank.bank_name },
+                          { si: "ගිණුම් නම", en: "Account Name", value: bank.account_name },
+                          { si: "ගිණුම් අංකය", en: "Account No", value: bank.account_number },
+                          { si: "ශාඛාව", en: "Branch", value: bank.branch },
+                        ].map((r) => (
+                          <div key={r.en} className="flex justify-between">
+                            <span className="text-muted-foreground">{r.si} / {r.en}</span>
+                            <span className="font-medium text-foreground">{r.value}</span>
+                          </div>
+                        ))}
+                        {bank.additional_info && (
+                          <p className="text-xs text-muted-foreground pt-1 border-t border-border">{bank.additional_info}</p>
+                        )}
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">ගිණුම් නම / Account Name</span>
-                        <span className="font-medium text-foreground">{bank.account_name}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">ගිණුම් අංකය / Account No</span>
-                        <span className="font-medium text-foreground">{bank.account_number}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">ශාඛාව / Branch</span>
-                        <span className="font-medium text-foreground">{bank.branch}</span>
-                      </div>
-                      {bank.additional_info && (
-                        <p className="text-xs text-muted-foreground pt-1 border-t border-border">{bank.additional_info}</p>
-                      )}
-                    </div>
+                    ))}
                     <p className="text-xs text-muted-foreground mt-2">
-                      කරුණාකර ඔබේ ඇණවුම් අංකය reference ලෙස ඇතුළත් කරන්න. ඔබේ profile &gt; Order History වෙතින් ගෙවීම් රිසිට්පත upload කරන්න.
+                      කරුණාකර ඔබේ ඇණවුම් අංකය reference ලෙස ඇතුළත් කරන්න / Please include your Order ID as the payment reference. ඔබේ profile &gt; Order History වෙතින් ගෙවීම් රිසිට්පත upload කරන්න / Upload payment receipt from Profile &gt; Order History.
                     </p>
                   </div>
                 )}

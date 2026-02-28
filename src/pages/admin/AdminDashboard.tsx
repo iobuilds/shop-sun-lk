@@ -207,7 +207,10 @@ const AdminDashboard = () => {
     queryFn: async () => {
       const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "bank_details").maybeSingle();
       if (error) throw error;
-      return (data as any)?.value as any || { bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" };
+      const val = (data as any)?.value;
+      // Migrate old single-object format to array
+      if (val && !Array.isArray(val)) return [val];
+      return (val as any[]) || [{ bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" }];
     },
   });
 
@@ -559,7 +562,21 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["site-seo-settings"] });
   };
 
-  // ── Bank Details Settings ──
+  // ── Bank Details Settings (multiple accounts) ──
+  const addBankAccount = () => {
+    if (!bankForm) return;
+    setBankForm([...bankForm, { bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" }]);
+  };
+  const removeBankAccount = (idx: number) => {
+    if (!bankForm || bankForm.length <= 1) return;
+    setBankForm(bankForm.filter((_: any, i: number) => i !== idx));
+  };
+  const updateBankAccount = (idx: number, field: string, value: string) => {
+    if (!bankForm) return;
+    const updated = [...bankForm];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setBankForm(updated);
+  };
   const saveBankSettings = async () => {
     if (!bankForm) return;
     const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "bank_details").maybeSingle();
@@ -1306,35 +1323,50 @@ const AdminDashboard = () => {
           {tab === "bank" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold font-display text-foreground">Bank Details</h2>
-                <Button onClick={saveBankSettings} size="sm" className="gap-1.5" disabled={!bankForm}><Save className="w-4 h-4" /> Save</Button>
+                <h2 className="text-xl font-bold font-display text-foreground">බැංකු ගිණුම් / Bank Accounts</h2>
+                <div className="flex gap-2">
+                  <Button onClick={addBankAccount} size="sm" variant="outline" className="gap-1.5"><Plus className="w-4 h-4" /> Add Account</Button>
+                  <Button onClick={saveBankSettings} size="sm" className="gap-1.5" disabled={!bankForm}><Save className="w-4 h-4" /> Save</Button>
+                </div>
               </div>
-              {bankForm ? (
+              {bankForm && Array.isArray(bankForm) ? (
                 <div className="space-y-6">
-                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
-                    <h3 className="font-semibold text-foreground">Checkout එකේ පෙන්වන බැංකු විස්තර</h3>
-                    <p className="text-xs text-muted-foreground">මෙම තොරතුරු Bank Transfer ගෙවීම් ක්‍රමය තෝරන පාරිභෝගිකයින්ට පෙන්වනු ලැබේ.</p>
-                    <div><Label>බැංකුවේ නම / Bank Name *</Label><Input value={bankForm.bank_name || ""} onChange={(e) => setBankForm({ ...bankForm, bank_name: e.target.value })} placeholder="Commercial Bank of Ceylon" /></div>
-                    <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={bankForm.account_name || ""} onChange={(e) => setBankForm({ ...bankForm, account_name: e.target.value })} placeholder="TechLK (Pvt) Ltd" /></div>
-                    <div><Label>ගිණුම් අංකය / Account Number *</Label><Input value={bankForm.account_number || ""} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} placeholder="8012345678" /></div>
-                    <div><Label>ශාඛාව / Branch *</Label><Input value={bankForm.branch || ""} onChange={(e) => setBankForm({ ...bankForm, branch: e.target.value })} placeholder="Colombo Fort" /></div>
-                    <div><Label>අමතර තොරතුරු / Additional Info</Label><Textarea value={bankForm.additional_info || ""} onChange={(e) => setBankForm({ ...bankForm, additional_info: e.target.value })} rows={2} placeholder="SWIFT code, special instructions, etc." /></div>
-                  </div>
-                  <div className="bg-card rounded-xl border border-border p-6 space-y-3">
-                    <h3 className="font-semibold text-foreground">Preview</h3>
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
-                      {[
-                        { label: "බැංකුව", value: bankForm.bank_name },
-                        { label: "ගිණුම් නම", value: bankForm.account_name },
-                        { label: "ගිණුම් අංකය", value: bankForm.account_number },
-                        { label: "ශාඛාව", value: bankForm.branch },
-                      ].map((r) => (
-                        <div key={r.label} className="flex justify-between">
-                          <span className="text-muted-foreground">{r.label}</span>
-                          <span className="font-medium text-foreground">{r.value || "—"}</span>
-                        </div>
-                      ))}
+                  {bankForm.map((acc: any, idx: number) => (
+                    <div key={idx} className="bg-card rounded-xl border border-border p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-foreground">ගිණුම / Account #{idx + 1}</h3>
+                        {bankForm.length > 1 && (
+                          <Button onClick={() => removeBankAccount(idx)} size="sm" variant="ghost" className="text-destructive hover:text-destructive"><Trash2 className="w-4 h-4" /></Button>
+                        )}
+                      </div>
+                      <div><Label>බැංකුවේ නම / Bank Name *</Label><Input value={acc.bank_name || ""} onChange={(e) => updateBankAccount(idx, "bank_name", e.target.value)} placeholder="Commercial Bank of Ceylon" /></div>
+                      <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={acc.account_name || ""} onChange={(e) => updateBankAccount(idx, "account_name", e.target.value)} placeholder="TechLK (Pvt) Ltd" /></div>
+                      <div><Label>ගිණුම් අංකය / Account Number *</Label><Input value={acc.account_number || ""} onChange={(e) => updateBankAccount(idx, "account_number", e.target.value)} placeholder="8012345678" /></div>
+                      <div><Label>ශාඛාව / Branch *</Label><Input value={acc.branch || ""} onChange={(e) => updateBankAccount(idx, "branch", e.target.value)} placeholder="Colombo Fort" /></div>
+                      <div><Label>අමතර තොරතුරු / Additional Info</Label><Textarea value={acc.additional_info || ""} onChange={(e) => updateBankAccount(idx, "additional_info", e.target.value)} rows={2} placeholder="SWIFT code, special instructions, etc." /></div>
                     </div>
+                  ))}
+
+                  {/* Bilingual Preview */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">පෙරදසුන / Preview (as shown to customers)</h3>
+                    {bankForm.map((acc: any, idx: number) => (
+                      <div key={idx} className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
+                        {bankForm.length > 1 && <p className="text-xs font-bold text-foreground mb-2">ගිණුම / Account #{idx + 1}</p>}
+                        {[
+                          { si: "බැංකුව", en: "Bank", value: acc.bank_name },
+                          { si: "ගිණුම් නම", en: "Account Name", value: acc.account_name },
+                          { si: "ගිණුම් අංකය", en: "Account No", value: acc.account_number },
+                          { si: "ශාඛාව", en: "Branch", value: acc.branch },
+                        ].map((r) => (
+                          <div key={r.en} className="flex justify-between">
+                            <span className="text-muted-foreground">{r.si} / {r.en}</span>
+                            <span className="font-medium text-foreground">{r.value || "—"}</span>
+                          </div>
+                        ))}
+                        {acc.additional_info && <p className="text-xs text-muted-foreground pt-1 border-t border-border">{acc.additional_info}</p>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (
