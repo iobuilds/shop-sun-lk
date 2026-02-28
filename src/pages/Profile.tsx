@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
@@ -17,10 +17,11 @@ type ProfileTab = "details" | "orders" | "address";
 
 const Profile = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<ProfileTab>("details");
+  const [tab, setTab] = useState<ProfileTab>((searchParams.get("tab") as ProfileTab) || "details");
   const [saving, setSaving] = useState(false);
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
 
