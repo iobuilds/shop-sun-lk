@@ -2,18 +2,22 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Clock, Package, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle, Clock, Package, ArrowRight, Loader2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 const OrderSuccess = () => {
   const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const orderId = searchParams.get("order_id");
   const method = searchParams.get("method");
   const [verifying, setVerifying] = useState(method !== "bank");
   const [paymentStatus, setPaymentStatus] = useState(method === "bank" ? "pending" : "unknown");
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [receiptUploaded, setReceiptUploaded] = useState(false);
 
   const { data: bankDetails } = useQuery({
     queryKey: ["site-bank-details"],
@@ -49,6 +53,29 @@ const OrderSuccess = () => {
 
   const isBankTransfer = method === "bank";
   const isPaid = paymentStatus === "paid";
+
+  const handleReceiptUpload = async (file: File) => {
+    if (!orderId) return;
+    setUploadingReceipt(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const fileName = `receipts/${orderId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("images").upload(fileName, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(fileName);
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({ receipt_url: urlData.publicUrl })
+        .eq("id", orderId);
+      if (updateError) throw updateError;
+      setReceiptUploaded(true);
+      toast.success("රිසිට්පත සාර්ථකව upload කරන ලදි / Receipt uploaded successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setUploadingReceipt(false);
+    }
+  };
 
   // Support both old single-object and new array format
   const bankAccounts: any[] = bankDetails
@@ -132,8 +159,39 @@ const OrderSuccess = () => {
                       </div>
                     ))}
                     <p className="text-xs text-muted-foreground mt-2">
-                      කරුණාකර ඔබේ ඇණවුම් අංකය reference ලෙස ඇතුළත් කරන්න / Please include your Order ID as the payment reference. ඔබේ profile &gt; Order History වෙතින් ගෙවීම් රිසිට්පත upload කරන්න / Upload payment receipt from Profile &gt; Order History.
+                      කරුණාකර ඔබේ ඇණවුම් අංකය reference ලෙස ඇතුළත් කරන්න / Please include your Order ID as the payment reference.
                     </p>
+
+                    {/* Receipt upload section */}
+                    <div className="border-t border-border pt-3 mt-3">
+                      {receiptUploaded ? (
+                        <div className="flex items-center gap-2 text-secondary">
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="text-sm font-medium">රිසිට්පත upload කරන ලදි / Receipt uploaded</span>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">ගෙවීම් රිසිට්පත upload කරන්න (දැන් හෝ පසුව Profile &gt; Orders වෙතින්) / Upload payment receipt now or later from Profile &gt; Orders</p>
+                          <label>
+                            <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium cursor-pointer hover:opacity-90 transition-opacity">
+                              <Upload className="w-3.5 h-3.5" />
+                              {uploadingReceipt ? "Uploading..." : "Upload Receipt / රිසිට්පත Upload කරන්න"}
+                            </span>
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              disabled={uploadingReceipt}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleReceiptUpload(file);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
