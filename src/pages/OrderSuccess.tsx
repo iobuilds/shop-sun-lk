@@ -197,7 +197,7 @@ const OrderSuccess = () => {
 
                 <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
                   <Button asChild variant="default">
-                    <Link to="/profile" className="gap-2">
+                    <Link to="/profile?tab=orders" className="gap-2">
                       <Package className="w-4 h-4" /> ඇණවුම් බලන්න / View Orders
                     </Link>
                   </Button>
