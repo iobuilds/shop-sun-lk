@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -87,6 +87,11 @@ const AdminDashboard = () => {
   const [comboForm, setComboForm] = useState<ComboForm>(emptyCombo);
   const [comboImagePreviews, setComboImagePreviews] = useState<string[]>([]);
 
+  // Promo banners state
+  const [promoDialog, setPromoDialog] = useState(false);
+  const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
+  const [promoForm, setPromoForm] = useState({ title: "", subtitle: "", description: "", badge_text: "", image_url: "", link_url: "", gradient_from: "primary", sort_order: "0", is_active: true });
+
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     const ext = file.name.split(".").pop();
     const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
@@ -126,6 +131,14 @@ const AdminDashboard = () => {
     queryFn: async () => {
       const { data, error } = await supabase.from("banners").select("*").order("sort_order");
       if (error) throw error; return data;
+    },
+  });
+
+  const { data: promoBanners } = useQuery({
+    queryKey: ["admin-promo-banners"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("promo_banners" as any).select("*").order("sort_order");
+      if (error) throw error; return data as any[];
     },
   });
 
@@ -229,7 +242,8 @@ const AdminDashboard = () => {
     { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
     { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
     { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: orders?.length || 0 },
-    { id: "banners" as Tab, label: "Banners", icon: Image, count: banners?.length || 0 },
+    { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
+    { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
     { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
     { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
     { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
@@ -592,6 +606,36 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["site-bank-details"] });
   };
 
+  // ── Promo Banner CRUD ──
+  const emptyPromo = { title: "", subtitle: "", description: "", badge_text: "", image_url: "", link_url: "", gradient_from: "primary", sort_order: "0", is_active: true };
+  const openAddPromo = () => { setEditingPromoId(null); setPromoForm(emptyPromo); setPromoDialog(true); };
+  const openEditPromo = (p: any) => {
+    setEditingPromoId(p.id);
+    setPromoForm({ title: p.title, subtitle: p.subtitle || "", description: p.description || "", badge_text: p.badge_text || "", image_url: p.image_url || "", link_url: p.link_url || "", gradient_from: p.gradient_from || "primary", sort_order: String(p.sort_order || 0), is_active: p.is_active });
+    setPromoDialog(true);
+  };
+  const savePromo = async () => {
+    const payload = { title: promoForm.title, subtitle: promoForm.subtitle || null, description: promoForm.description || null, badge_text: promoForm.badge_text || null, image_url: promoForm.image_url, link_url: promoForm.link_url || null, gradient_from: promoForm.gradient_from, sort_order: parseInt(promoForm.sort_order) || 0, is_active: promoForm.is_active } as any;
+    if (editingPromoId) {
+      const { error } = await supabase.from("promo_banners" as any).update(payload).eq("id", editingPromoId);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    } else {
+      const { error } = await supabase.from("promo_banners" as any).insert(payload);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    }
+    toast({ title: editingPromoId ? "Promo banner updated" : "Promo banner added" });
+    setPromoDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-promo-banners"] });
+    queryClient.invalidateQueries({ queryKey: ["active-promo-banners"] });
+  };
+  const deletePromo = async (id: string) => {
+    if (!confirm("Delete this promo banner?")) return;
+    await supabase.from("promo_banners" as any).delete().eq("id", id);
+    toast({ title: "Promo banner deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-promo-banners"] });
+    queryClient.invalidateQueries({ queryKey: ["active-promo-banners"] });
+  };
+
   // ── Combo CRUD ──
   const openAddCombo = () => { setEditingComboId(null); setComboForm(emptyCombo); setComboImagePreviews([]); setComboDialog(true); };
   const openEditCombo = (c: any) => {
@@ -933,6 +977,41 @@ const AdminDashboard = () => {
                   <div className="col-span-2 text-center py-16 text-muted-foreground">
                     <Image className="w-12 h-12 mx-auto mb-3 opacity-30" />
                     <p>No banners yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ Promo Banners Tab ═══ */}
+          {tab === "promo_banners" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">ප්‍රවර්ධන බැනර් / Promo Banners</h2>
+                <Button onClick={openAddPromo} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Promo</Button>
+              </div>
+              <div className="space-y-3">
+                {promoBanners?.map((p: any) => (
+                  <div key={p.id} className="bg-card rounded-xl border border-border p-4 flex items-center gap-4">
+                    {p.image_url && <img src={p.image_url} alt={p.title} className="w-24 h-16 rounded-lg object-cover border border-border" />}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground">{p.title}</p>
+                      <p className="text-xs text-muted-foreground">{p.description || "No description"}</p>
+                      <div className="flex gap-2 mt-1">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${p.is_active ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{p.is_active ? "Active" : "Inactive"}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{p.gradient_from}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEditPromo(p)}><Pencil className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePromo(p.id)}><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                ))}
+                {(!promoBanners || promoBanners.length === 0) && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Image className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No promo banners yet</p>
                   </div>
                 )}
               </div>
@@ -1745,6 +1824,40 @@ const AdminDashboard = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setComboDialog(false)}>Cancel</Button>
               <Button onClick={saveCombo} disabled={!comboForm.name || !comboForm.combo_price}>Save Combo</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ Promo Banner Dialog ═══ */}
+      <Dialog open={promoDialog} onOpenChange={setPromoDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingPromoId ? "Edit" : "Add"} Promo Banner</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Title *</Label><Input value={promoForm.title} onChange={(e) => setPromoForm({ ...promoForm, title: e.target.value })} placeholder="Combo Starter Packs" /></div>
+            <div><Label>Badge Text</Label><Input value={promoForm.badge_text} onChange={(e) => setPromoForm({ ...promoForm, badge_text: e.target.value })} placeholder="⚡ Flash Sale" /></div>
+            <div><Label>Description</Label><Textarea value={promoForm.description} onChange={(e) => setPromoForm({ ...promoForm, description: e.target.value })} rows={2} placeholder="Short description..." /></div>
+            <div><Label>Image URL</Label><Input value={promoForm.image_url} onChange={(e) => setPromoForm({ ...promoForm, image_url: e.target.value })} placeholder="https://..." /></div>
+            <div><Label>Link URL</Label><Input value={promoForm.link_url} onChange={(e) => setPromoForm({ ...promoForm, link_url: e.target.value })} placeholder="/category/..." /></div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Gradient Color</Label>
+                <Select value={promoForm.gradient_from} onValueChange={(v) => setPromoForm({ ...promoForm, gradient_from: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="primary">Primary (Blue)</SelectItem>
+                    <SelectItem value="destructive">Destructive (Red)</SelectItem>
+                    <SelectItem value="secondary">Secondary (Green)</SelectItem>
+                    <SelectItem value="accent">Accent (Gold)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Sort Order</Label><Input type="number" value={promoForm.sort_order} onChange={(e) => setPromoForm({ ...promoForm, sort_order: e.target.value })} /></div>
+            </div>
+            <div className="flex items-center gap-2"><Switch checked={promoForm.is_active} onCheckedChange={(v) => setPromoForm({ ...promoForm, is_active: v })} /><Label>Active</Label></div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setPromoDialog(false)}>Cancel</Button>
+              <Button onClick={savePromo} disabled={!promoForm.title}>Save Promo Banner</Button>
             </div>
           </div>
         </DialogContent>

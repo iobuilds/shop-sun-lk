@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -33,6 +34,23 @@ const Checkout = () => {
     address_line2: "",
     city: "",
     postal_code: "",
+  });
+
+  // Bank details for preview
+  const { data: bankDetails } = useQuery({
+    queryKey: ["site-bank-details"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("site_settings" as any)
+        .select("*")
+        .eq("key", "bank_details")
+        .maybeSingle();
+      if (error) throw error;
+      const val = (data as any)?.value;
+      if (val && !Array.isArray(val)) return [val];
+      return (val as any[]) || [];
+    },
+    staleTime: 5 * 60 * 1000,
   });
 
   const discount = appliedCoupon?.discount || 0;
@@ -194,6 +212,42 @@ const Checkout = () => {
                       </div>
                     </label>
                   </RadioGroup>
+
+                  {/* Bank Details Preview when bank_transfer selected */}
+                  <AnimatePresence>
+                    {paymentMethod === "bank_transfer" && bankDetails && bankDetails.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="bg-muted/50 rounded-lg p-4 mt-3 space-y-3">
+                          <p className="text-xs font-semibold text-foreground">බැංකු මාරු විස්තර / Bank Transfer Details</p>
+                          {bankDetails.map((bank: any, idx: number) => (
+                            <div key={idx} className="space-y-1.5 text-sm">
+                              {bankDetails.length > 1 && (
+                                <p className="text-xs font-bold text-muted-foreground pt-1 first:pt-0">ගිණුම / Account #{idx + 1}</p>
+                              )}
+                              {[
+                                { si: "බැංකුව", en: "Bank", value: bank.bank_name },
+                                { si: "ගිණුම් නම", en: "Account Name", value: bank.account_name },
+                                { si: "ගිණුම් අංකය", en: "Account No", value: bank.account_number },
+                                { si: "ශාඛාව", en: "Branch", value: bank.branch },
+                              ].map((r) => (
+                                <div key={r.en} className="flex justify-between">
+                                  <span className="text-muted-foreground text-xs">{r.si} / {r.en}</span>
+                                  <span className="font-medium text-foreground text-xs">{r.value}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                          <p className="text-[10px] text-muted-foreground">ඇණවුම තහවුරු කිරීමෙන් පසු ඔබට මුදල් මාරු කිරීම සඳහා මෙම විස්තර ලැබෙනු ඇත / After placing the order, use these details to transfer payment.</p>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               </div>
 
