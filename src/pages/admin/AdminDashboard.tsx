@@ -238,6 +238,12 @@ const AdminDashboard = () => {
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
+  const comboCategoryProducts = useMemo(() => {
+    const comboCategoryId = categories?.find((c: any) => c.slug === "combo-packs")?.id;
+    if (!comboCategoryId || !products) return [];
+    return products.filter((p: any) => p.category_id === comboCategoryId);
+  }, [categories, products]);
+
   const tabs = [
     { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
     { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
@@ -245,7 +251,7 @@ const AdminDashboard = () => {
     { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
     { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
     { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
-    { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
+    { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: (comboPacks?.length || 0) + comboCategoryProducts.length },
     { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
     { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
     { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
@@ -1129,7 +1135,7 @@ const AdminDashboard = () => {
                 <h2 className="text-xl font-bold font-display text-foreground">Combo Packs</h2>
                 <Button onClick={openAddCombo} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Combo</Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {comboPacks?.map((c: any) => {
                   const savings = c.original_price - c.combo_price;
                   return (
@@ -1161,10 +1167,30 @@ const AdminDashboard = () => {
                 {(!comboPacks || comboPacks.length === 0) && (
                   <div className="col-span-3 text-center py-16 text-muted-foreground">
                     <Layers className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No combo packs yet</p>
+                    <p>No saved combo packs yet</p>
                   </div>
                 )}
               </div>
+
+              {comboCategoryProducts.length > 0 && (
+                <div className="bg-card rounded-xl border border-border p-4 md:p-5">
+                  <h3 className="text-base font-semibold text-foreground mb-3">Products currently under “Combo Packs” category</h3>
+                  <div className="space-y-2">
+                    {comboCategoryProducts.map((p: any) => (
+                      <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img src={p.images?.[0] || "/placeholder.svg"} alt={p.name} className="w-10 h-10 rounded-md object-cover" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">Rs. {Number(p.price).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => openEditProduct(p)}>Edit Product</Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
