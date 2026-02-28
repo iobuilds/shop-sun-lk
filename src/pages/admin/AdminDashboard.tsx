@@ -256,7 +256,11 @@ const AdminDashboard = () => {
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
 
+  const [productPage, setProductPage] = useState(0);
+  const PRODUCTS_PER_PAGE = 15;
   const filteredProducts = products?.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const totalProductPages = Math.ceil((filteredProducts?.length || 0) / PRODUCTS_PER_PAGE);
+  const paginatedProducts = filteredProducts?.slice(productPage * PRODUCTS_PER_PAGE, (productPage + 1) * PRODUCTS_PER_PAGE);
 
   // ── Product CRUD ──
   const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setProductDialog(true); };
@@ -693,7 +697,18 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["combo-packs"] });
   };
 
-  // ── Reports data ──
+  // ── Delete Order ──
+  const deleteOrder = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
+    // Delete order items first
+    const { error: itemsError } = await supabase.from("order_items").delete().eq("order_id", id);
+    if (itemsError) { toast({ title: "Error", description: itemsError.message, variant: "destructive" }); return; }
+    const { error } = await supabase.from("orders").delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Order deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
   const reportData = useMemo(() => {
     if (!orders) return null;
     const totalSales = orders.length;
@@ -805,7 +820,7 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredProducts?.map((p) => (
+                      {paginatedProducts?.map((p) => (
                         <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
@@ -840,6 +855,21 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
+              {/* Pagination */}
+              {totalProductPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-xs text-muted-foreground">
+                    Showing {productPage * PRODUCTS_PER_PAGE + 1}–{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts?.length || 0)} of {filteredProducts?.length || 0}
+                  </p>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" disabled={productPage === 0} onClick={() => setProductPage(p => p - 1)}>Previous</Button>
+                    {Array.from({ length: totalProductPages }, (_, i) => (
+                      <Button key={i} variant={productPage === i ? "default" : "outline"} size="sm" onClick={() => setProductPage(i)} className="w-8 h-8 p-0">{i + 1}</Button>
+                    )).slice(Math.max(0, productPage - 2), productPage + 3)}
+                    <Button variant="outline" size="sm" disabled={productPage >= totalProductPages - 1} onClick={() => setProductPage(p => p + 1)}>Next</Button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 
@@ -891,6 +921,7 @@ const AdminDashboard = () => {
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Payment</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Receipt</th>
+                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -925,9 +956,12 @@ const AdminDashboard = () => {
                               </Select>
                             </td>
                             <td className="px-4 py-3">
-                              {(o as any).receipt_url ? (
+                            {(o as any).receipt_url ? (
                                 <a href={(o as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary underline flex items-center gap-1"><Eye className="w-3 h-3" /> View</a>
                               ) : <span className="text-xs text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
                             </td>
                           </tr>
                         ))}
