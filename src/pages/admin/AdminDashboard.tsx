@@ -1174,7 +1174,8 @@ const AdminDashboard = () => {
 
               {comboCategoryProducts.length > 0 && (
                 <div className="bg-card rounded-xl border border-border p-4 md:p-5">
-                  <h3 className="text-base font-semibold text-foreground mb-3">Products currently under “Combo Packs” category</h3>
+                  <h3 className="text-base font-semibold text-foreground mb-3">Products in "Combo Packs" category (not yet real combos)</h3>
+                  <p className="text-xs text-muted-foreground mb-3">Convert these to real combo packs with bundled pricing and multiple products.</p>
                   <div className="space-y-2">
                     {comboCategoryProducts.map((p: any) => (
                       <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
@@ -1185,7 +1186,22 @@ const AdminDashboard = () => {
                             <p className="text-xs text-muted-foreground">Rs. {Number(p.price).toLocaleString()}</p>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => openEditProduct(p)}>Edit Product</Button>
+                        <Button size="sm" onClick={() => {
+                          setEditingComboId(null);
+                          setComboImagePreviews(p.images || []);
+                          setComboForm({
+                            name: p.name,
+                            slug: p.slug || p.name.toLowerCase().replace(/\s+/g, "-"),
+                            description: p.description || "",
+                            combo_price: String(p.discount_price || p.price || ""),
+                            original_price: String(p.price || ""),
+                            images: (p.images || []).join(", "),
+                            is_active: true,
+                            is_featured: false,
+                            items: [{ product_id: p.id, quantity: "1" }, { product_id: "", quantity: "1" }],
+                          });
+                          setComboDialog(true);
+                        }}>Convert to Combo</Button>
                       </div>
                     ))}
                   </div>
