@@ -1837,7 +1837,28 @@ const AdminDashboard = () => {
             <div><Label>Title *</Label><Input value={promoForm.title} onChange={(e) => setPromoForm({ ...promoForm, title: e.target.value })} placeholder="Combo Starter Packs" /></div>
             <div><Label>Badge Text</Label><Input value={promoForm.badge_text} onChange={(e) => setPromoForm({ ...promoForm, badge_text: e.target.value })} placeholder="⚡ Flash Sale" /></div>
             <div><Label>Description</Label><Textarea value={promoForm.description} onChange={(e) => setPromoForm({ ...promoForm, description: e.target.value })} rows={2} placeholder="Short description..." /></div>
-            <div><Label>Image URL</Label><Input value={promoForm.image_url} onChange={(e) => setPromoForm({ ...promoForm, image_url: e.target.value })} placeholder="https://..." /></div>
+            <div>
+              <Label>Banner Image</Label>
+              <div className="flex gap-2 items-center">
+                <Input value={promoForm.image_url} onChange={(e) => setPromoForm({ ...promoForm, image_url: e.target.value })} placeholder="https://... or upload" className="flex-1" />
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploading(true);
+                    const url = await uploadFile(file, "promo-banners");
+                    setUploading(false);
+                    if (url) setPromoForm((prev: any) => ({ ...prev, image_url: url }));
+                  }} />
+                  <span className="inline-flex items-center gap-1 px-3 py-2 text-sm border border-input rounded-md bg-background hover:bg-muted transition-colors">
+                    <Upload className="w-4 h-4" /> {uploading ? "Uploading..." : "Upload"}
+                  </span>
+                </label>
+              </div>
+              {promoForm.image_url && (
+                <img src={promoForm.image_url} alt="Preview" className="mt-2 w-full h-32 object-cover rounded-lg border border-border" />
+              )}
+            </div>
             <div><Label>Link URL</Label><Input value={promoForm.link_url} onChange={(e) => setPromoForm({ ...promoForm, link_url: e.target.value })} placeholder="/category/..." /></div>
             <div className="grid grid-cols-2 gap-4">
               <div>
