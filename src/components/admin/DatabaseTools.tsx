@@ -143,6 +143,7 @@ const DatabaseTools = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      toast({ title: "Download complete", description: fileName });
     } catch (e: any) {
       toast({ title: "Download failed", description: e.message, variant: "destructive" });
     } finally {
