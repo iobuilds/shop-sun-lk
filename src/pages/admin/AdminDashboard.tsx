@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank" | "sms_templates" | "sms_logs";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -227,8 +227,28 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: smsTemplates } = useQuery({
+    queryKey: ["admin-sms-templates"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sms_templates" as any).select("*").order("created_at");
+      if (error) throw error; return data as any[];
+    },
+  });
+
+  const { data: smsLogs } = useQuery({
+    queryKey: ["admin-sms-logs"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("sms_logs" as any).select("*").order("created_at", { ascending: false }).limit(100);
+      if (error) throw error; return data as any[];
+    },
+  });
+
   const [seoForm, setSeoForm] = useState<any>(null);
   const [bankForm, setBankForm] = useState<any>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateForm, setTemplateForm] = useState({ template_key: "", name: "", message_template: "", description: "", is_active: true });
+  const [templateDialog, setTemplateDialog] = useState(false);
+
   useEffect(() => {
     if (seoSettings && !seoForm) setSeoForm(seoSettings);
   }, [seoSettings]);
@@ -252,6 +272,8 @@ const AdminDashboard = () => {
     { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
     { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
     { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
+    { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
+    { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
     { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
     { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
@@ -544,16 +566,28 @@ const AdminDashboard = () => {
   };
 
   // ── Order status ──
+  const sendOrderSms = useCallback(async (orderId: string, status: string) => {
+    try {
+      await supabase.functions.invoke("send-order-sms", {
+        body: { order_id: orderId, status },
+      });
+    } catch (e) {
+      console.error("SMS send failed:", e);
+    }
+  }, []);
+
   const updateOrderStatus = async (orderId: string, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: `Order status changed to ${status}` });
+    sendOrderSms(orderId, status);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
   const updatePaymentStatus = async (orderId: string, payment_status: string) => {
     const { error } = await supabase.from("orders").update({ payment_status }).eq("id", orderId);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: `Payment status changed to ${payment_status}` });
+    if (payment_status === "paid") sendOrderSms(orderId, "paid");
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
@@ -1602,6 +1636,101 @@ const AdminDashboard = () => {
               )}
             </motion.div>
           )}
+
+          {/* ═══ SMS Templates Tab ═══ */}
+          {tab === "sms_templates" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">SMS Templates</h2>
+                <Button size="sm" className="gap-1" onClick={() => {
+                  setEditingTemplateId(null);
+                  setTemplateForm({ template_key: "", name: "", message_template: "", description: "", is_active: true });
+                  setTemplateDialog(true);
+                }}><Plus className="w-4 h-4" /> Add Template</Button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">Placeholders: {"{{customer_name}}, {{order_id}}, {{total}}, {{status}}, {{tracking_info}}, {{eta}}, {{OTP5}}"}</p>
+              <div className="space-y-3">
+                {smsTemplates?.map((t: any) => (
+                  <div key={t.id} className="bg-card rounded-xl border border-border p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-foreground">{t.name}</span>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground font-mono">{t.template_key}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded ${t.is_active ? 'bg-secondary/10 text-secondary' : 'bg-destructive/10 text-destructive'}`}>
+                          {t.is_active ? 'Active' : 'Disabled'}
+                        </span>
+                      </div>
+                      <div className="flex gap-1">
+                        <button onClick={() => {
+                          setEditingTemplateId(t.id);
+                          setTemplateForm({ template_key: t.template_key, name: t.name, message_template: t.message_template, description: t.description || "", is_active: t.is_active });
+                          setTemplateDialog(true);
+                        }} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
+                        <button onClick={async () => {
+                          if (!confirm("Delete this template?")) return;
+                          await supabase.from("sms_templates" as any).delete().eq("id", t.id);
+                          queryClient.invalidateQueries({ queryKey: ["admin-sms-templates"] });
+                          toast({ title: "Template deleted" });
+                        }} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded font-mono">{t.message_template}</p>
+                    {t.description && <p className="text-xs text-muted-foreground mt-1">{t.description}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{t.message_template.length} characters</p>
+                  </div>
+                ))}
+                {(!smsTemplates || smsTemplates.length === 0) && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Send className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No SMS templates yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* ═══ SMS Logs Tab ═══ */}
+          {tab === "sms_logs" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">SMS Delivery Log</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead><tr className="border-b border-border text-left">
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Time</th>
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Phone</th>
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Template</th>
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Status</th>
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Message</th>
+                  </tr></thead>
+                  <tbody>
+                    {smsLogs?.map((log: any) => (
+                      <tr key={log.id} className="border-b border-border/50 hover:bg-muted/30">
+                        <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs">{log.phone}</td>
+                        <td className="px-3 py-2">
+                          {log.template_key && <span className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{log.template_key}</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`text-xs px-2 py-0.5 rounded ${log.status === 'sent' ? 'bg-secondary/10 text-secondary' : 'bg-destructive/10 text-destructive'}`}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground max-w-xs truncate">{log.message}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {(!smsLogs || smsLogs.length === 0) && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Phone className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No SMS logs yet</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
         </main>
       </div>
 
@@ -1922,6 +2051,61 @@ const AdminDashboard = () => {
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setPromoDialog(false)}>Cancel</Button>
               <Button onClick={savePromo} disabled={!promoForm.title}>Save Promo Banner</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══ SMS Template Dialog ═══ */}
+      <Dialog open={templateDialog} onOpenChange={setTemplateDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editingTemplateId ? "Edit" : "Add"} SMS Template</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Name *</Label><Input value={templateForm.name} onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })} placeholder="Order Placed" /></div>
+            <div><Label>Template Key *</Label><Input value={templateForm.template_key} onChange={(e) => setTemplateForm({ ...templateForm, template_key: e.target.value })} placeholder="order_placed" disabled={!!editingTemplateId} /></div>
+            <div>
+              <Label>Message Template *</Label>
+              <Textarea value={templateForm.message_template} onChange={(e) => setTemplateForm({ ...templateForm, message_template: e.target.value })} rows={4} placeholder="Hi {{customer_name}}, your order #{{order_id}}..." />
+              <p className="text-xs text-muted-foreground mt-1">{templateForm.message_template.length} characters</p>
+            </div>
+            <div><Label>Description</Label><Input value={templateForm.description} onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="When this template is used" /></div>
+            <div className="flex items-center gap-2"><Switch checked={templateForm.is_active} onCheckedChange={(v) => setTemplateForm({ ...templateForm, is_active: v })} /><Label>Active</Label></div>
+            {templateForm.message_template && (
+              <div className="bg-muted/50 rounded-lg p-3 border border-border">
+                <p className="text-xs text-muted-foreground mb-1 font-semibold">Preview:</p>
+                <p className="text-sm text-foreground">{templateForm.message_template
+                  .replace(/\{\{customer_name\}\}/g, "John")
+                  .replace(/\{\{order_id\}\}/g, "A1B2C3D4")
+                  .replace(/\{\{total\}\}/g, "4,500")
+                  .replace(/\{\{status\}\}/g, "shipped")
+                  .replace(/\{\{tracking_info\}\}/g, "Tracking: TRK123456. ")
+                  .replace(/\{\{eta\}\}/g, "3-5 business days")
+                  .replace(/\{\{OTP\d\}\}/g, "12345")
+                }</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setTemplateDialog(false)}>Cancel</Button>
+              <Button disabled={!templateForm.name || !templateForm.template_key || !templateForm.message_template} onClick={async () => {
+                const payload = {
+                  name: templateForm.name,
+                  template_key: templateForm.template_key,
+                  message_template: templateForm.message_template,
+                  description: templateForm.description || null,
+                  is_active: templateForm.is_active,
+                };
+                if (editingTemplateId) {
+                  const { error } = await supabase.from("sms_templates" as any).update(payload).eq("id", editingTemplateId);
+                  if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  toast({ title: "Template updated" });
+                } else {
+                  const { error } = await supabase.from("sms_templates" as any).insert(payload);
+                  if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  toast({ title: "Template created" });
+                }
+                setTemplateDialog(false);
+                queryClient.invalidateQueries({ queryKey: ["admin-sms-templates"] });
+              }}>Save Template</Button>
             </div>
           </div>
         </DialogContent>
