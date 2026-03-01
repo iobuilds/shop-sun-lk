@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
@@ -226,6 +226,14 @@ const Navbar = () => {
                 {cat.name}
               </Link>
             ))}
+            <a
+              href="https://3dprint.iobuilds.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
+            >
+              <Printer className="w-3.5 h-3.5" /> 3D Print
+            </a>
             <Link
               to="/daily-deals"
               className="ml-auto px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
