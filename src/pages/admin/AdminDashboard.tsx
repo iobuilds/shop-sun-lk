@@ -310,6 +310,9 @@ const AdminDashboard = () => {
 
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [smsLogSearch, setSmsLogSearch] = useState("");
 
   const filteredProducts = products?.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
@@ -329,14 +332,17 @@ const AdminDashboard = () => {
   const totalUserPages = Math.ceil((filteredUsers?.length || 0) / ITEMS_PER_PAGE);
   const paginatedUsers = filteredUsers?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
 
-  const totalReviewPages = Math.ceil((allReviews?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedReviews = allReviews?.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
+  const filteredReviews = allReviews?.filter((r: any) => !reviewSearch || (r.products?.name || "").toLowerCase().includes(reviewSearch.toLowerCase()) || (r.comment || "").toLowerCase().includes(reviewSearch.toLowerCase()));
+  const totalReviewPages = Math.ceil((filteredReviews?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedReviews = filteredReviews?.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
 
-  const totalContactPages = Math.ceil((contactMessages?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedContacts = contactMessages?.slice(contactPage * ITEMS_PER_PAGE, (contactPage + 1) * ITEMS_PER_PAGE);
+  const filteredContacts = contactMessages?.filter((m: any) => !contactSearch || (m.email || "").toLowerCase().includes(contactSearch.toLowerCase()) || (m.name || "").toLowerCase().includes(contactSearch.toLowerCase()) || (m.subject || "").toLowerCase().includes(contactSearch.toLowerCase()));
+  const totalContactPages = Math.ceil((filteredContacts?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedContacts = filteredContacts?.slice(contactPage * ITEMS_PER_PAGE, (contactPage + 1) * ITEMS_PER_PAGE);
 
-  const totalSmsLogPages = Math.ceil((smsLogs?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedSmsLogs = smsLogs?.slice(smsLogPage * ITEMS_PER_PAGE, (smsLogPage + 1) * ITEMS_PER_PAGE);
+  const filteredSmsLogs = smsLogs?.filter((l: any) => !smsLogSearch || (l.phone || "").includes(smsLogSearch) || (l.status || "").toLowerCase().includes(smsLogSearch.toLowerCase()) || (l.template_key || "").toLowerCase().includes(smsLogSearch.toLowerCase()));
+  const totalSmsLogPages = Math.ceil((filteredSmsLogs?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedSmsLogs = filteredSmsLogs?.slice(smsLogPage * ITEMS_PER_PAGE, (smsLogPage + 1) * ITEMS_PER_PAGE);
 
   // Reusable pagination renderer
   const renderPagination = (currentPage: number, totalPages: number, setPage: (p: number | ((prev: number) => number)) => void, totalItems: number) => {
@@ -1464,7 +1470,13 @@ const AdminDashboard = () => {
           {/* ═══ Reviews Tab ═══ */}
           {tab === "reviews" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Reviews Moderation</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Reviews Moderation</h2>
+                <div className="relative w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input placeholder="Search by product or comment..." value={reviewSearch} onChange={(e) => { setReviewSearch(e.target.value); setReviewPage(0); }} className="h-8 text-xs pl-8" />
+                </div>
+              </div>
               <div className="space-y-3">
                 {paginatedReviews?.map((r: any) => (
                   <div key={r.id} className="bg-card rounded-xl border border-border p-5">
@@ -1500,14 +1512,20 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
-              {renderPagination(reviewPage, totalReviewPages, setReviewPage, allReviews?.length || 0)}
+              {renderPagination(reviewPage, totalReviewPages, setReviewPage, filteredReviews?.length || 0)}
             </motion.div>
           )}
 
           {/* ═══ Contact Messages Tab ═══ */}
           {tab === "contacts" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Contact Messages</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Contact Messages</h2>
+                <div className="relative w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input placeholder="Search by name, email, subject..." value={contactSearch} onChange={(e) => { setContactSearch(e.target.value); setContactPage(0); }} className="h-8 text-xs pl-8" />
+                </div>
+              </div>
               <div className="space-y-4">
                 {paginatedContacts?.map((m: any) => (
                   <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
@@ -1538,7 +1556,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
-              {renderPagination(contactPage, totalContactPages, setContactPage, contactMessages?.length || 0)}
+              {renderPagination(contactPage, totalContactPages, setContactPage, filteredContacts?.length || 0)}
             </motion.div>
           )}
 
@@ -1904,11 +1922,17 @@ const AdminDashboard = () => {
           {/* ═══ SMS Logs Tab ═══ */}
           {tab === "sms_logs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 gap-3">
                 <h2 className="text-xl font-bold font-display text-foreground">SMS Delivery Log</h2>
-                {smsLogs && smsLogs.length > 0 && (
-                  <Button variant="destructive" size="sm" className="gap-1" onClick={deleteAllSmsLogs}><Trash2 className="w-4 h-4" /> Clear All</Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <div className="relative w-48">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input placeholder="Search by phone, status..." value={smsLogSearch} onChange={(e) => { setSmsLogSearch(e.target.value); setSmsLogPage(0); }} className="h-8 text-xs pl-8" />
+                  </div>
+                  {smsLogs && smsLogs.length > 0 && (
+                    <Button variant="destructive" size="sm" className="gap-1" onClick={deleteAllSmsLogs}><Trash2 className="w-4 h-4" /> Clear All</Button>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1950,7 +1974,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
-              {renderPagination(smsLogPage, totalSmsLogPages, setSmsLogPage, smsLogs?.length || 0)}
+              {renderPagination(smsLogPage, totalSmsLogPages, setSmsLogPage, filteredSmsLogs?.length || 0)}
             </motion.div>
           )}
         </main>
