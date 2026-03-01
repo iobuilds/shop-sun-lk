@@ -534,6 +534,7 @@ export type Database = {
         Row: {
           attachments: Json | null
           category_id: string | null
+          cost_price: number | null
           created_at: string | null
           datasheet_url: string | null
           description: string | null
@@ -556,6 +557,7 @@ export type Database = {
         Insert: {
           attachments?: Json | null
           category_id?: string | null
+          cost_price?: number | null
           created_at?: string | null
           datasheet_url?: string | null
           description?: string | null
@@ -578,6 +580,7 @@ export type Database = {
         Update: {
           attachments?: Json | null
           category_id?: string | null
+          cost_price?: number | null
           created_at?: string | null
           datasheet_url?: string | null
           description?: string | null
