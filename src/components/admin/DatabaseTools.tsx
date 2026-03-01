@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Database, Download, Upload, Trash2, Loader2, AlertTriangle, Clock, FileDown, RotateCcw } from "lucide-react";
+import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, FileDown, RotateCcw, Lock, ShieldCheck, Download } from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -27,6 +29,15 @@ const DatabaseTools = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  // Password confirmation state
+  const [passwordDialog, setPasswordDialog] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "restore" | "upload_restore"; payload?: any } | null>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  // Restore confirm state
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [confirmUploadRestore, setConfirmUploadRestore] = useState<any>(null);
 
@@ -53,7 +64,58 @@ const DatabaseTools = () => {
 
   useEffect(() => { fetchBackups(); }, []);
 
-  const createBackup = async () => {
+  // Password verification
+  const requestPasswordConfirmation = (actionType: "backup" | "restore" | "upload_restore", payload?: any) => {
+    setPendingAction({ type: actionType, payload });
+    setPassword("");
+    setPasswordError("");
+    setPasswordDialog(true);
+  };
+
+  const verifyPasswordAndExecute = async () => {
+    if (!password.trim()) {
+      setPasswordError("Please enter your password");
+      return;
+    }
+    setVerifying(true);
+    setPasswordError("");
+
+    try {
+      // Get current user email
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error("Unable to verify identity");
+
+      // Re-authenticate with password
+      const { error } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: password,
+      });
+
+      if (error) {
+        setPasswordError("Incorrect password. Please try again.");
+        setVerifying(false);
+        return;
+      }
+
+      setPasswordDialog(false);
+      setPassword("");
+
+      // Execute the pending action
+      if (pendingAction?.type === "backup") {
+        await executeCreateBackup();
+      } else if (pendingAction?.type === "restore") {
+        await executeRestore(pendingAction.payload);
+      } else if (pendingAction?.type === "upload_restore") {
+        await executeUploadRestore();
+      }
+    } catch (e: any) {
+      setPasswordError(e.message);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const executeCreateBackup = async () => {
     setCreating(true);
     try {
       const data = await callBackupFn({ action: "backup" });
@@ -86,7 +148,7 @@ const DatabaseTools = () => {
     }
   };
 
-  const restoreFromBackup = async (fileName: string) => {
+  const executeRestore = async (fileName: string) => {
     setRestoring(true);
     setConfirmRestore(null);
     try {
@@ -137,9 +199,18 @@ const DatabaseTools = () => {
 
   return (
     <div className="space-y-6">
+      {/* Info Banner */}
+      <div className="flex items-start gap-3 bg-muted/50 rounded-lg p-4 border border-border">
+        <ShieldCheck className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
+        <div className="text-sm text-muted-foreground">
+          <p className="font-medium text-foreground mb-1">Automatic daily backups enabled</p>
+          <p>A snapshot is automatically created every day at 2:00 AM. All backup and restore actions require password confirmation for security.</p>
+        </div>
+      </div>
+
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
-        <Button onClick={createBackup} disabled={creating || restoring}>
+        <Button onClick={() => requestPasswordConfirmation("backup")} disabled={creating || restoring}>
           {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
           {creating ? "Creating Snapshot..." : "Create Snapshot"}
         </Button>
@@ -171,7 +242,7 @@ const DatabaseTools = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Snapshots</CardTitle>
-          <CardDescription>Available database snapshots</CardDescription>
+          <CardDescription>Available database snapshots (manual + automatic)</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -182,10 +253,14 @@ const DatabaseTools = () => {
             <div className="space-y-2">
               {backups.filter(b => b.name.endsWith('.json')).map((b) => {
                 const log = logs.find(l => l.file_name === b.name && l.action === "backup");
+                const isAutomatic = b.name.includes("scheduled") || log?.created_by_email === null;
                 return (
                   <div key={b.name} className="flex items-center justify-between bg-muted/30 rounded-lg p-3 border border-border">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{b.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">{b.name}</p>
+                        {isAutomatic && <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary font-medium">Auto</span>}
+                      </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(b.created_at).toLocaleString()}</span>
                         {log?.file_size && <span>{formatSize(log.file_size)}</span>}
@@ -228,7 +303,7 @@ const DatabaseTools = () => {
                     {l.action}
                   </span>
                   <span className="text-muted-foreground truncate flex-1">{l.file_name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{l.created_by_email || "—"}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{l.created_by_email || "system"}</span>
                   <span className="text-xs text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleString()}</span>
                 </div>
               ))}
@@ -237,7 +312,38 @@ const DatabaseTools = () => {
         </CardContent>
       </Card>
 
-      {/* Confirm Restore Dialog */}
+      {/* Password Confirmation Dialog */}
+      <Dialog open={passwordDialog} onOpenChange={(open) => { if (!open) { setPasswordDialog(false); setPendingAction(null); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Confirm Your Identity</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Enter your admin password to {pendingAction?.type === "backup" ? "create a backup" : "restore the database"}.
+          </p>
+          <div className="space-y-2">
+            <Label>Password</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && verifyPasswordAndExecute()}
+              placeholder="Enter your password"
+              autoFocus
+            />
+            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setPasswordDialog(false); setPendingAction(null); }}>Cancel</Button>
+            <Button onClick={verifyPasswordAndExecute} disabled={verifying}>
+              {verifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Restore Dialog (after password is verified, or for selecting file) */}
       <Dialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
         <DialogContent>
           <DialogHeader>
@@ -249,8 +355,13 @@ const DatabaseTools = () => {
           <p className="text-sm font-medium mt-2">File: {confirmRestore}</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => confirmRestore && restoreFromBackup(confirmRestore)}>
-              Yes, Restore
+            <Button variant="destructive" onClick={() => {
+              if (confirmRestore) {
+                setConfirmRestore(null);
+                requestPasswordConfirmation("restore", confirmRestore);
+              }
+            }}>
+              Continue
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -267,8 +378,10 @@ const DatabaseTools = () => {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmUploadRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={executeUploadRestore}>
-              Yes, Restore
+            <Button variant="destructive" onClick={() => {
+              requestPasswordConfirmation("upload_restore");
+            }}>
+              Continue
             </Button>
           </DialogFooter>
         </DialogContent>

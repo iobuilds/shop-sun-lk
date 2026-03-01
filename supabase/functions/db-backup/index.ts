@@ -19,16 +19,52 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  const adminClient = createClient(supabaseUrl, serviceKey);
+
+  const body = await req.json();
+  const { action } = body;
+
+  // Scheduled backup from pg_cron - no user auth needed
+  if (action === "scheduled_backup") {
+    try {
+      const backup: Record<string, any[]> = {};
+      for (const table of TABLES) {
+        const { data, error } = await adminClient.from(table).select("*");
+        if (error) { console.error(`Error fetching ${table}:`, error.message); backup[table] = []; }
+        else { backup[table] = data || []; }
+      }
+      const jsonStr = JSON.stringify(backup, null, 2);
+      const blob = new Uint8Array(new TextEncoder().encode(jsonStr));
+      const fileName = `scheduled-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, blob, { contentType: "application/json", upsert: false });
+      if (uploadError) {
+        return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      await adminClient.from("db_backup_logs").insert({ action: "backup", file_name: fileName, file_size: blob.length, created_by_email: "system (scheduled)" });
+
+      // Clean up old scheduled backups - keep only the last 10
+      const { data: allFiles } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
+      const scheduledFiles = (allFiles || []).filter(f => f.name.startsWith("scheduled-backup-"));
+      if (scheduledFiles.length > 10) {
+        const toDelete = scheduledFiles.slice(10).map(f => f.name);
+        await adminClient.storage.from("db-backups").remove(toDelete);
+      }
+
+      return new Response(JSON.stringify({ success: true, file_name: fileName }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // All other actions require admin authentication
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-
-  // Verify caller is admin
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
@@ -37,14 +73,10 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const adminClient = createClient(supabaseUrl, serviceKey);
   const { data: roleData } = await adminClient.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
   if (!roleData) {
     return new Response(JSON.stringify({ error: "Admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-
-  const body = await req.json();
-  const { action } = body;
 
   if (action === "backup") {
     try {
