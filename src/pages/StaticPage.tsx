@@ -40,7 +40,7 @@ const StaticPage = () => {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="pt-36 pb-16">
+        <main className="pt-44 pb-16">
           <div className="container mx-auto px-4">
             <div className="max-w-3xl mx-auto">
               <h1 className="text-3xl font-bold font-display text-foreground mb-4">Contact Us</h1>
@@ -112,7 +112,7 @@ const StaticPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-36 pb-16">
+      <main className="pt-44 pb-16">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             <h1 className="text-3xl font-bold font-display text-foreground mb-8">{page.title}</h1>
