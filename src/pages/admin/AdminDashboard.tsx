@@ -17,7 +17,7 @@ import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
 import DatabaseTools from "@/components/admin/DatabaseTools";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "db_tools";
+type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "db_tools";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -324,6 +324,7 @@ const AdminDashboard = () => {
   }).length || 0;
 
   const pendingOrderCount = orders?.filter(o => o.status === "pending" || o.status === "confirmed").length || 0;
+  const deliveryActionCount = orders?.filter(o => ["confirmed", "paid", "processing", "packed", "shipped"].includes(o.status)).length || 0;
 
   const sidebarGroups = [
     {
@@ -340,6 +341,7 @@ const AdminDashboard = () => {
       label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true,
       items: [
         { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: pendingOrderCount },
+        { id: "delivery_updates" as Tab, label: "Delivery Updates", icon: Truck, count: deliveryActionCount },
       ],
     },
     {
@@ -1415,7 +1417,72 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {/* ═══ Banners Tab ═══ */}
+          {/* ═══ Delivery Updates Tab ═══ */}
+          {tab === "delivery_updates" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Delivery Updates</h2>
+                <p className="text-sm text-muted-foreground">Orders needing delivery action</p>
+              </div>
+              {(() => {
+                const deliveryOrders = orders?.filter(o => ["confirmed", "paid", "processing", "packed", "shipped"].includes(o.status)) || [];
+                return deliveryOrders.length > 0 ? (
+                  <div className="bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/50">
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Order ID</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Total</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Tracking</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">ETA</th>
+                            <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {deliveryOrders.map((o) => (
+                            <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                              <td className="px-4 py-3 font-mono text-xs text-foreground">{o.id.slice(0, 8)}</td>
+                              <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(o.created_at!).toLocaleDateString()}</td>
+                              <td className="px-4 py-3 font-medium text-foreground">Rs. {o.total.toLocaleString()}</td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
+                                  o.status === "shipped" ? "bg-secondary/10 text-secondary" :
+                                  o.status === "packed" ? "bg-accent/10 text-accent-foreground" :
+                                  "bg-muted text-muted-foreground"
+                                }`}>{o.status?.replace(/_/g, " ")}</span>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-muted-foreground">
+                                {(o as any).tracking_number ? (
+                                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{(o as any).tracking_number}</span>
+                                ) : <span className="text-destructive/70">Not set</span>}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-muted-foreground">
+                                {(o as any).expected_delivery || <span className="text-destructive/70">Not set</span>}
+                              </td>
+                              <td className="px-4 py-3">
+                                <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openOrderDetail(o)}>
+                                  <Truck className="w-3.5 h-3.5" /> Update
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Truck className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p>No orders need delivery updates right now</p>
+                  </div>
+                );
+              })()}
+            </motion.div>
+          )}
+
           {tab === "banners" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
