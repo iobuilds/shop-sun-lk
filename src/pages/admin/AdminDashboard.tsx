@@ -257,7 +257,17 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: stockSettings } = useQuery({
+    queryKey: ["admin-stock-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "stock_settings").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || { low_stock_threshold: 5 };
+    },
+  });
+
   const [seoForm, setSeoForm] = useState<any>(null);
+  const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [bankForm, setBankForm] = useState<any>(null);
   const [companyForm, setCompanyForm] = useState<any>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
@@ -273,6 +283,9 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (companySettings && !companyForm) setCompanyForm(companySettings);
   }, [companySettings]);
+  useEffect(() => {
+    if (stockSettings) setLowStockThreshold(stockSettings.low_stock_threshold || 5);
+  }, [stockSettings]);
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
@@ -856,8 +869,6 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
-  const LOW_STOCK_THRESHOLD = 5;
-
   const reportData = useMemo(() => {
     if (!orders) return null;
     const totalSales = orders.length;
@@ -906,11 +917,11 @@ const AdminDashboard = () => {
     const totalStockValue = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0) * Number(p.price), 0) || 0;
     const totalStockCostValue = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0) * (Number((p as any).cost_price) || 0), 0) || 0;
     const totalStockQty = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0), 0) || 0;
-    const lowStockProducts = products?.filter(p => (Number(p.stock_quantity) || 0) <= LOW_STOCK_THRESHOLD && p.is_active) || [];
+    const lowStockProducts = products?.filter(p => (Number(p.stock_quantity) || 0) <= lowStockThreshold && (Number(p.stock_quantity) || 0) > 0 && p.is_active) || [];
     const outOfStockProducts = products?.filter(p => (Number(p.stock_quantity) || 0) === 0 && p.is_active) || [];
 
     return { totalSales, totalRevenue, pendingRevenue, monthlyRevenue, bestSellers, paymentMethods: Array.from(paymentMethods.entries()), statusBreakdown: Array.from(statusMap.entries()), totalProfit, totalCost, totalProducts, totalStockValue, totalStockCostValue, totalStockQty, lowStockProducts, outOfStockProducts };
-  }, [orders, products]);
+  }, [orders, products, lowStockThreshold]);
 
   if (loading) {
     return (
@@ -1016,7 +1027,7 @@ const AdminDashboard = () => {
                           <td className="px-4 py-3 font-medium text-foreground">Rs. {p.price.toLocaleString()}</td>
                           <td className="px-4 py-3">
                             <span className={`text-xs font-medium ${(p.stock_quantity || 0) > 10 ? "text-secondary" : (p.stock_quantity || 0) > 0 ? "text-accent-foreground" : "text-destructive"}`}>
-                              {p.stock_quantity || 0}{(p.stock_quantity || 0) <= 5 && (p.stock_quantity || 0) > 0 ? " ⚠️" : ""}
+                              {p.stock_quantity || 0}{(p.stock_quantity || 0) <= lowStockThreshold && (p.stock_quantity || 0) > 0 ? " ⚠️" : ""}
                             </span>
                           </td>
                           <td className="px-4 py-3">
@@ -1848,6 +1859,38 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
+                  {/* Low Stock Threshold Setting */}
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <Package className="w-4 h-4" /> Low Stock Threshold
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={lowStockThreshold}
+                        onChange={e => setLowStockThreshold(Number(e.target.value) || 1)}
+                        className="w-24"
+                      />
+                      <span className="text-sm text-muted-foreground">Products with stock ≤ this value will be flagged as low stock</span>
+                      <Button size="sm" onClick={async () => {
+                        const val = { low_stock_threshold: lowStockThreshold };
+                        const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "stock_settings").maybeSingle();
+                        if (existing) {
+                          const { error } = await supabase.from("site_settings" as any).update({ value: val, updated_at: new Date().toISOString() } as any).eq("key", "stock_settings");
+                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                        } else {
+                          const { error } = await supabase.from("site_settings" as any).insert({ key: "stock_settings", value: val } as any);
+                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                        }
+                        toast({ title: "Threshold saved" });
+                        queryClient.invalidateQueries({ queryKey: ["admin-stock-settings"] });
+                      }}>
+                        <Save className="w-3 h-3 mr-1" /> Save
+                      </Button>
+                    </div>
+                  </div>
+
                   {/* Low Stock & Out of Stock Alerts */}
                   {(reportData.outOfStockProducts.length > 0 || reportData.lowStockProducts.length > 0) && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1869,7 +1912,7 @@ const AdminDashboard = () => {
                       {reportData.lowStockProducts.length > 0 && (
                         <div className="bg-card rounded-xl border border-accent/30 p-5">
                           <h3 className="font-semibold text-accent-foreground mb-4 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" /> {"Low Stock \u2264"}{LOW_STOCK_THRESHOLD} ({reportData.lowStockProducts.length})
+                            <TrendingUp className="w-4 h-4" /> {"Low Stock ≤"}{lowStockThreshold} ({reportData.lowStockProducts.length})
                           </h3>
                           <div className="space-y-2 max-h-60 overflow-y-auto">
                             {reportData.lowStockProducts.map((p: any) => (
