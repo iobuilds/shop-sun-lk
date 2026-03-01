@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,6 +90,16 @@ const AdminDashboard = () => {
   const [editingComboId, setEditingComboId] = useState<string | null>(null);
   const [comboForm, setComboForm] = useState<ComboForm>(emptyCombo);
   const [comboImagePreviews, setComboImagePreviews] = useState<string[]>([]);
+
+  // Order detail dialog state
+  const [orderDetailDialog, setOrderDetailDialog] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [orderDeliveryForm, setOrderDeliveryForm] = useState({
+    status: "", tracking_number: "", courier_name: "", tracking_link: "",
+    expected_delivery: "", delivery_note: "",
+  });
+  const [orderStatusHistory, setOrderStatusHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Promo banners state
   const [promoDialog, setPromoDialog] = useState(false);
@@ -706,19 +716,86 @@ const AdminDashboard = () => {
   };
 
   // ── Order status ──
-  const sendOrderSms = useCallback(async (orderId: string, status: string) => {
+  const sendOrderSms = useCallback(async (orderId: string, status: string, tracking_code?: string) => {
     try {
       await supabase.functions.invoke("send-order-sms", {
-        body: { order_id: orderId, status },
+        body: { order_id: orderId, status, tracking_code },
       });
     } catch (e) {
       console.error("SMS send failed:", e);
     }
   }, []);
 
+  const openOrderDetail = async (order: any) => {
+    setSelectedOrder(order);
+    setOrderDeliveryForm({
+      status: order.status || "pending",
+      tracking_number: (order as any).tracking_number || "",
+      courier_name: (order as any).courier_name || "",
+      tracking_link: (order as any).tracking_link || "",
+      expected_delivery: (order as any).expected_delivery || "",
+      delivery_note: "",
+    });
+    setOrderDetailDialog(true);
+    // Load status history
+    setLoadingHistory(true);
+    const { data } = await supabase
+      .from("order_status_history" as any)
+      .select("*")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: true });
+    setOrderStatusHistory((data as any[]) || []);
+    setLoadingHistory(false);
+  };
+
+  const saveOrderDeliveryUpdate = async () => {
+    if (!selectedOrder) return;
+    const orderId = selectedOrder.id;
+    const prevStatus = selectedOrder.status;
+    const newStatus = orderDeliveryForm.status;
+
+    // Update orders table
+    const { error } = await supabase.from("orders").update({
+      status: newStatus,
+      tracking_number: orderDeliveryForm.tracking_number || null,
+      courier_name: orderDeliveryForm.courier_name || null,
+      tracking_link: orderDeliveryForm.tracking_link || null,
+      expected_delivery: orderDeliveryForm.expected_delivery || null,
+      delivery_note: orderDeliveryForm.delivery_note || null,
+    } as any).eq("id", orderId);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+
+    // Insert status history entry
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("order_status_history" as any).insert({
+      order_id: orderId,
+      status: newStatus,
+      note: orderDeliveryForm.delivery_note || null,
+      tracking_number: orderDeliveryForm.tracking_number || null,
+      courier_name: orderDeliveryForm.courier_name || null,
+      tracking_link: orderDeliveryForm.tracking_link || null,
+      expected_delivery: orderDeliveryForm.expected_delivery || null,
+      changed_by: session?.user?.id || null,
+    } as any);
+
+    // Send SMS only if status actually changed
+    if (newStatus !== prevStatus) {
+      sendOrderSms(orderId, newStatus, orderDeliveryForm.tracking_number || undefined);
+    }
+
+    toast({ title: "Order updated successfully" });
+    setOrderDetailDialog(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
   const updateOrderStatus = async (orderId: string, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    // Insert history
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("order_status_history" as any).insert({
+      order_id: orderId, status, changed_by: session?.user?.id || null,
+    } as any);
     toast({ title: `Order status changed to ${status}` });
     sendOrderSms(orderId, status);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
@@ -1163,11 +1240,11 @@ const AdminDashboard = () => {
                 <h2 className="text-xl font-bold font-display text-foreground">Orders</h2>
                 <div className="flex items-center gap-2">
                   <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrderPage(0); }}>
-                    <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Filter by status" /></SelectTrigger>
+                    <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Filter by status" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Statuses</SelectItem>
-                      {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
-                        <SelectItem key={s} value={s} className="capitalize text-xs">{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                      {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
+                        <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace(/_/g, " ")}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1202,10 +1279,10 @@ const AdminDashboard = () => {
                             </td>
                             <td className="px-4 py-3">
                               <Select value={o.status} onValueChange={(v) => updateOrderStatus(o.id, v)}>
-                                <SelectTrigger className="h-7 text-xs w-28"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
-                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
+                                  {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
+                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace(/_/g, " ")}</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -1226,7 +1303,10 @@ const AdminDashboard = () => {
                               ) : <span className="text-xs text-muted-foreground">—</span>}
                             </td>
                             <td className="px-4 py-3">
-                              <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => openOrderDetail(o)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Manage delivery"><Truck className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2830,6 +2910,104 @@ const AdminDashboard = () => {
               }}>Save Template</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* ═══ Order Detail / Delivery Management Dialog ═══ */}
+      <Dialog open={orderDetailDialog} onOpenChange={setOrderDetailDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Order Delivery Management</DialogTitle></DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-6">
+              {/* Order Summary */}
+              <div className="bg-muted/50 rounded-lg p-4 border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-mono font-bold text-foreground">#{selectedOrder.id.slice(0, 8).toUpperCase()}</p>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
+                    selectedOrder.status === "delivered" ? "bg-secondary/10 text-secondary" :
+                    selectedOrder.status === "cancelled" ? "bg-destructive/10 text-destructive" :
+                    "bg-accent/10 text-accent-foreground"
+                  }`}>{selectedOrder.status?.replace(/_/g, " ")}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">Total: Rs. {selectedOrder.total?.toLocaleString()} • {new Date(selectedOrder.created_at!).toLocaleDateString()}</p>
+              </div>
+
+              {/* Status Update */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="flex items-center gap-1.5 mb-1.5"><Clock className="w-3.5 h-3.5" /> Order Status</Label>
+                  <Select value={orderDeliveryForm.status} onValueChange={(v) => setOrderDeliveryForm(f => ({ ...f, status: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
+                        <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="flex items-center gap-1.5 mb-1.5"><CalendarDays className="w-3.5 h-3.5" /> Expected Delivery</Label>
+                  <Input value={orderDeliveryForm.expected_delivery} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, expected_delivery: e.target.value }))} placeholder="e.g. 7-14 business days" />
+                </div>
+              </div>
+
+              {/* Tracking Details */}
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5"><Truck className="w-4 h-4" /> Tracking Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label>Tracking Number</Label>
+                    <Input value={orderDeliveryForm.tracking_number} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, tracking_number: e.target.value }))} placeholder="TRK123456" />
+                  </div>
+                  <div>
+                    <Label>Courier Name</Label>
+                    <Input value={orderDeliveryForm.courier_name} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, courier_name: e.target.value }))} placeholder="DHL, FedEx..." />
+                  </div>
+                  <div>
+                    <Label>Tracking Link</Label>
+                    <Input value={orderDeliveryForm.tracking_link} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, tracking_link: e.target.value }))} placeholder="https://..." />
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Note */}
+              <div>
+                <Label className="flex items-center gap-1.5 mb-1.5"><StickyNote className="w-3.5 h-3.5" /> Delivery Note (visible to customer)</Label>
+                <Textarea value={orderDeliveryForm.delivery_note} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, delivery_note: e.target.value }))} rows={2} placeholder="e.g. Delay due to weather, address verification needed..." />
+              </div>
+
+              {/* Save */}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setOrderDetailDialog(false)}>Cancel</Button>
+                <Button onClick={saveOrderDeliveryUpdate}><Save className="w-4 h-4 mr-1.5" /> Save & Update</Button>
+              </div>
+
+              {/* Status History Timeline */}
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Status Timeline</h3>
+                {loadingHistory ? (
+                  <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+                ) : orderStatusHistory.length > 0 ? (
+                  <div className="space-y-0 relative ml-3">
+                    <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-border" />
+                    {orderStatusHistory.map((h: any, i: number) => (
+                      <div key={h.id} className="flex gap-3 relative pb-4">
+                        <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 z-10 ${i === orderStatusHistory.length - 1 ? "bg-secondary" : "bg-muted-foreground/40"}`} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground capitalize">{h.status?.replace(/_/g, " ")}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleString()}</p>
+                          {h.note && <p className="text-xs text-foreground mt-0.5 bg-muted/50 rounded px-2 py-1">{h.note}</p>}
+                          {h.tracking_number && <p className="text-xs text-muted-foreground mt-0.5">Tracking: {h.tracking_number}{h.courier_name ? ` (${h.courier_name})` : ""}</p>}
+                          {h.expected_delivery && <p className="text-xs text-muted-foreground">ETA: {h.expected_delivery}</p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">No status history recorded yet</p>
+                )}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

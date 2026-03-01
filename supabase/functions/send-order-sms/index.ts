@@ -12,11 +12,15 @@ const SENDER_ID = "IO Builds";
 
 const STATUS_TEMPLATE_MAP: Record<string, string> = {
   pending: "order_placed",
+  confirmed: "order_placed",
   paid: "payment_received",
   processing: "order_processing",
+  packed: "order_processing",
   shipped: "order_shipped",
+  out_for_delivery: "order_shipped",
   delivered: "order_delivered",
   cancelled: "order_cancelled",
+  returned: "order_cancelled",
 };
 
 serve(async (req) => {

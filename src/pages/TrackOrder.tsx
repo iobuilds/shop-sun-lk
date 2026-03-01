@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
-import { Package, Search, Truck, CheckCircle, Clock, XCircle, CreditCard, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Package, Search, Truck, CheckCircle, Clock, XCircle, CreditCard, ArrowLeft, AlertTriangle, MapPin, ExternalLink, StickyNote, CalendarDays, Box } from "lucide-react";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,11 @@ type OrderWithItems = {
   discount_amount: number;
   created_at: string;
   shipping_address: any;
+  tracking_number?: string;
+  courier_name?: string;
+  tracking_link?: string;
+  expected_delivery?: string;
+  delivery_note?: string;
   order_items: {
     id: string;
     quantity: number;
@@ -30,9 +36,12 @@ type OrderWithItems = {
 
 const STATUS_STEPS = [
   { key: "pending", label: "Order Placed", icon: Package },
+  { key: "confirmed", label: "Confirmed", icon: CheckCircle },
   { key: "paid", label: "Payment Confirmed", icon: CreditCard },
   { key: "processing", label: "Processing", icon: Clock },
+  { key: "packed", label: "Packed", icon: Box },
   { key: "shipped", label: "Shipped", icon: Truck },
+  { key: "out_for_delivery", label: "Out for Delivery", icon: MapPin },
   { key: "delivered", label: "Delivered", icon: CheckCircle },
 ];
 
@@ -85,51 +94,118 @@ const OrderTimeline = ({ status }: { status: string }) => {
   );
 };
 
-const OrderCard = ({ order }: { order: OrderWithItems }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="bg-card rounded-xl border border-border p-5 space-y-4"
-  >
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div>
-        <p className="text-xs text-muted-foreground">Order ID</p>
-        <p className="font-mono font-bold text-foreground">{order.id.slice(0, 8).toUpperCase()}</p>
-      </div>
-      <div className="text-right">
-        <p className="text-xs text-muted-foreground">Placed on</p>
-        <p className="text-sm text-foreground">{new Date(order.created_at!).toLocaleDateString("en-LK", { day: "numeric", month: "short", year: "numeric" })}</p>
-      </div>
-    </div>
+const OrderCard = ({ order }: { order: OrderWithItems }) => {
+  const [statusHistory, setStatusHistory] = useState<any[]>([]);
+  const [loadedHistory, setLoadedHistory] = useState(false);
 
-    <OrderTimeline status={order.status} />
+  useEffect(() => {
+    const loadHistory = async () => {
+      const { data } = await supabase
+        .from("order_status_history" as any)
+        .select("*")
+        .eq("order_id", order.id)
+        .order("created_at", { ascending: true });
+      setStatusHistory((data as any[]) || []);
+      setLoadedHistory(true);
+    };
+    loadHistory();
+  }, [order.id]);
 
-    <div className="border-t border-border pt-3 space-y-2">
-      {order.order_items?.map((item) => (
-        <div key={item.id} className="flex items-center gap-3">
-          <img
-            src={item.products?.images?.[0] || "/placeholder.svg"}
-            alt={item.products?.name || "Product"}
-            className="w-12 h-12 rounded-lg object-cover"
-          />
-          <div className="flex-1 min-w-0">
-            <Link to={`/product/${item.products?.slug || ""}`} className="text-sm font-medium text-foreground hover:text-secondary line-clamp-1">
-              {item.products?.name || "Product"}
-            </Link>
-            <p className="text-xs text-muted-foreground">Qty: {item.quantity} × Rs. {item.unit_price.toLocaleString()}</p>
-          </div>
-          <p className="text-sm font-medium text-foreground">Rs. {item.total_price.toLocaleString()}</p>
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card rounded-xl border border-border p-5 space-y-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs text-muted-foreground">Order ID</p>
+          <p className="font-mono font-bold text-foreground">{order.id.slice(0, 8).toUpperCase()}</p>
         </div>
-      ))}
-    </div>
+        <div className="text-right">
+          <p className="text-xs text-muted-foreground">Placed on</p>
+          <p className="text-sm text-foreground">{new Date(order.created_at!).toLocaleDateString("en-LK", { day: "numeric", month: "short", year: "numeric" })}</p>
+        </div>
+      </div>
 
-    <div className="border-t border-border pt-3 flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">Total</span>
-      <span className="text-lg font-bold text-foreground">Rs. {order.total.toLocaleString()}</span>
-    </div>
-  </motion.div>
-);
+      <OrderTimeline status={order.status} />
 
+      {/* Tracking Info */}
+      {(order.tracking_number || order.courier_name || order.expected_delivery || order.delivery_note) && (
+        <div className="bg-muted/50 rounded-lg p-3 border border-border space-y-1.5">
+          {order.tracking_number && (
+            <div className="flex items-center gap-2 text-sm">
+              <Truck className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground font-medium">{order.tracking_number}</span>
+              {order.courier_name && <span className="text-muted-foreground">({order.courier_name})</span>}
+              {order.tracking_link && (
+                <a href={order.tracking_link} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline ml-auto flex items-center gap-1 text-xs">
+                  Track <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          )}
+          {order.expected_delivery && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+              <span>Expected: {order.expected_delivery}</span>
+            </div>
+          )}
+          {order.delivery_note && (
+            <div className="flex items-start gap-2 text-xs text-muted-foreground">
+              <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <span>{order.delivery_note}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-border pt-3 space-y-2">
+        {order.order_items?.map((item) => (
+          <div key={item.id} className="flex items-center gap-3">
+            <img
+              src={item.products?.images?.[0] || "/placeholder.svg"}
+              alt={item.products?.name || "Product"}
+              className="w-12 h-12 rounded-lg object-cover"
+            />
+            <div className="flex-1 min-w-0">
+              <Link to={`/product/${item.products?.slug || ""}`} className="text-sm font-medium text-foreground hover:text-secondary line-clamp-1">
+                {item.products?.name || "Product"}
+              </Link>
+              <p className="text-xs text-muted-foreground">Qty: {item.quantity} × Rs. {item.unit_price.toLocaleString()}</p>
+            </div>
+            <p className="text-sm font-medium text-foreground">Rs. {item.total_price.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-border pt-3 flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">Total</span>
+        <span className="text-lg font-bold text-foreground">Rs. {order.total.toLocaleString()}</span>
+      </div>
+
+      {/* Status History Timeline */}
+      {loadedHistory && statusHistory.length > 0 && (
+        <div className="border-t border-border pt-3">
+          <p className="text-xs font-semibold text-muted-foreground mb-2">Delivery Updates</p>
+          <div className="space-y-0 relative ml-2">
+            <div className="absolute left-0 top-1.5 bottom-1.5 w-0.5 bg-border" />
+            {statusHistory.map((h: any, i: number) => (
+              <div key={h.id} className="flex gap-2.5 relative pb-3">
+                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 z-10 ${i === statusHistory.length - 1 ? "bg-secondary" : "bg-muted-foreground/40"}`} />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground capitalize">{h.status?.replace(/_/g, " ")}</p>
+                  <p className="text-[10px] text-muted-foreground">{new Date(h.created_at).toLocaleString()}</p>
+                  {h.note && <p className="text-[10px] text-foreground bg-muted/50 rounded px-1.5 py-0.5 mt-0.5">{h.note}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
 const NotFoundRedirect = ({ orderId, onRetry }: { orderId: string; onRetry: () => void }) => {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(8);
@@ -202,7 +278,7 @@ const TrackOrder = () => {
     setLoadingMyOrders(true);
     const { data } = await supabase
       .from("orders")
-      .select("id, status, payment_status, total, subtotal, shipping_fee, discount_amount, created_at, shipping_address, order_items(id, quantity, unit_price, total_price, products(name, images, slug))")
+      .select("id, status, payment_status, total, subtotal, shipping_fee, discount_amount, created_at, shipping_address, tracking_number, courier_name, tracking_link, expected_delivery, delivery_note, order_items(id, quantity, unit_price, total_price, products(name, images, slug))")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(10);
@@ -220,7 +296,7 @@ const TrackOrder = () => {
     const query = orderId.trim().toLowerCase();
     const { data, error } = await supabase
       .from("orders")
-      .select("id, status, payment_status, total, subtotal, shipping_fee, discount_amount, created_at, shipping_address, order_items(id, quantity, unit_price, total_price, products(name, images, slug))")
+      .select("id, status, payment_status, total, subtotal, shipping_fee, discount_amount, created_at, shipping_address, tracking_number, courier_name, tracking_link, expected_delivery, delivery_note, order_items(id, quantity, unit_price, total_price, products(name, images, slug))")
       .or(`id.eq.${query},id.ilike.${query}%`)
       .limit(1)
       .maybeSingle();
