@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.send-order-sms]
 verify_jwt = false
+
+[functions.sms-balance]
+verify_jwt = false

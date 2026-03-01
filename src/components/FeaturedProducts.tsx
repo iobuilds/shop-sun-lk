@@ -68,10 +68,14 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
           </div>
           {/* Shipping & Stock Info */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-[10px]">
+            <span className="flex items-center gap-0.5 text-muted-foreground">
+              🇱🇰 Local
+            </span>
             <span className="flex items-center gap-0.5 text-secondary">
               <Truck className="w-3 h-3" />
-              {product.price >= 5000 ? "Free Delivery" : "Rs. 350 delivery"}
+              {product.price >= 5000 ? "Free Delivery" : "Rs. 350"}
             </span>
+            <span className="text-muted-foreground">ETA: 2-4 days</span>
             <span className={`flex items-center gap-0.5 ${
               (product.stock_quantity || 0) <= 0 ? "text-destructive" :
               (product.stock_quantity || 0) <= 5 ? "text-accent" : "text-muted-foreground"

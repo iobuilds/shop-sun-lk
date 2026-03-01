@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Package, Search, Truck, CheckCircle, Clock, XCircle, CreditCard, ArrowLeft, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -130,6 +130,52 @@ const OrderCard = ({ order }: { order: OrderWithItems }) => (
   </motion.div>
 );
 
+const NotFoundRedirect = ({ orderId, onRetry }: { orderId: string; onRetry: () => void }) => {
+  const navigate = useNavigate();
+  const [countdown, setCountdown] = useState(8);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          navigate("/");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [navigate]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-card rounded-xl border border-border p-8 text-center space-y-4"
+    >
+      <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+        <AlertTriangle className="w-8 h-8 text-destructive" />
+      </div>
+      <h2 className="text-xl font-bold text-foreground">404 — Tracking Not Found</h2>
+      <p className="text-muted-foreground text-sm max-w-md mx-auto">
+        This tracking code "<span className="font-mono font-bold">{orderId}</span>" is invalid or not available yet.
+      </p>
+      <p className="text-xs text-muted-foreground">Redirecting to Home in <span className="font-bold text-foreground">{countdown}s</span></p>
+      <div className="flex items-center justify-center gap-3 pt-2">
+        <Button variant="outline" onClick={onRetry}>
+          Try Again
+        </Button>
+        <Link to="/">
+          <Button variant="default">
+            <ArrowLeft className="w-4 h-4 mr-2" /> Go Home Now
+          </Button>
+        </Link>
+      </div>
+    </motion.div>
+  );
+};
+
 const TrackOrder = () => {
   const [searchParams] = useSearchParams();
   const [orderId, setOrderId] = useState(searchParams.get("id") || "");
@@ -226,33 +272,8 @@ const TrackOrder = () => {
             </form>
           </div>
 
-          {/* Not Found */}
-          {notFound && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-card rounded-xl border border-border p-8 text-center space-y-4"
-            >
-              <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
-                <AlertTriangle className="w-8 h-8 text-destructive" />
-              </div>
-              <h2 className="text-xl font-bold text-foreground">Order Not Found</h2>
-              <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                We couldn't find an order with ID "<span className="font-mono font-bold">{orderId}</span>".
-                Please check the ID and try again.
-              </p>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <Button variant="outline" onClick={() => { setNotFound(false); setOrderId(""); }}>
-                  Try Again
-                </Button>
-                <Link to="/">
-                  <Button variant="default">
-                    <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          )}
+          {/* Not Found with auto-redirect */}
+          {notFound && <NotFoundRedirect orderId={orderId} onRetry={() => { setNotFound(false); setOrderId(""); }} />}
 
           {/* Searched Order Result */}
           {searchedOrder && <OrderCard order={searchedOrder} />}
