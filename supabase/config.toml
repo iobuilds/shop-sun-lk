@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.sms-balance]
 verify_jwt = false
+
+[functions.db-backup]
+verify_jwt = false
