@@ -15,7 +15,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank" | "sms_templates" | "sms_logs";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string;
@@ -244,8 +244,22 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: companySettings } = useQuery({
+    queryKey: ["admin-company"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "company").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || {
+        store_name: "", tagline: "", description: "", address: "", phone: "", email: "",
+        business_hours: "", facebook_url: "", instagram_url: "", youtube_url: "",
+        whatsapp: "", copyright_text: "",
+      };
+    },
+  });
+
   const [seoForm, setSeoForm] = useState<any>(null);
   const [bankForm, setBankForm] = useState<any>(null);
+  const [companyForm, setCompanyForm] = useState<any>(null);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState({ template_key: "", name: "", message_template: "", description: "", is_active: true });
   const [templateDialog, setTemplateDialog] = useState(false);
@@ -256,6 +270,9 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (bankSettings && !bankForm) setBankForm(bankSettings);
   }, [bankSettings]);
+  useEffect(() => {
+    if (companySettings && !companyForm) setCompanyForm(companySettings);
+  }, [companySettings]);
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
@@ -276,6 +293,7 @@ const AdminDashboard = () => {
     { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
     { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
     { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+    { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
     { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
@@ -616,6 +634,22 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["site-seo-settings"] });
   };
 
+  // ── Company Settings ──
+  const saveCompanySettings = async () => {
+    if (!companyForm) return;
+    const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "company").maybeSingle();
+    if (existing) {
+      const { error } = await supabase.from("site_settings" as any).update({ value: companyForm, updated_at: new Date().toISOString() } as any).eq("key", "company");
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    } else {
+      const { error } = await supabase.from("site_settings" as any).insert({ key: "company", value: companyForm } as any);
+      if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    }
+    toast({ title: "Company info saved" });
+    queryClient.invalidateQueries({ queryKey: ["admin-company"] });
+    queryClient.invalidateQueries({ queryKey: ["site-company-settings"] });
+  };
+
   // ── Bank Details Settings (multiple accounts) ──
   const addBankAccount = () => {
     if (!bankForm) return;
@@ -795,7 +829,7 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 min-h-screen bg-card border-r border-border p-6 hidden md:block">
+        <aside className="w-64 min-h-screen bg-card border-r border-border p-6 hidden md:block sticky top-0 h-screen overflow-y-auto">
           <Link to="/">
             <h1 className="text-xl font-bold font-display text-foreground mb-1 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-secondary" /> Admin Panel
@@ -1495,6 +1529,55 @@ const AdminDashboard = () => {
                 <div className="text-center py-16 text-muted-foreground">
                   <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>Loading SEO settings...</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ═══ Company Info Tab ═══ */}
+          {tab === "company" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Company Information</h2>
+                <Button onClick={saveCompanySettings} size="sm" className="gap-1.5" disabled={!companyForm}><Save className="w-4 h-4" /> Save</Button>
+              </div>
+              {companyForm ? (
+                <div className="space-y-6">
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Basic Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><Label>Store / Company Name</Label><Input value={companyForm.store_name || ""} onChange={(e) => setCompanyForm({ ...companyForm, store_name: e.target.value })} placeholder="TechLK" /></div>
+                      <div><Label>Tagline</Label><Input value={companyForm.tagline || ""} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
+                    </div>
+                    <div><Label>Short Description</Label><Textarea value={companyForm.description || ""} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} rows={2} placeholder="Brief description shown in footer" /></div>
+                    <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 TechLK. All rights reserved." /></div>
+                  </div>
+
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Contact Details</h3>
+                    <div><Label>Address</Label><Textarea value={companyForm.address || ""} onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })} rows={2} placeholder="No. 42, Galle Road, Colombo 03, Sri Lanka" /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><Label>Phone</Label><Input value={companyForm.phone || ""} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} placeholder="+94 77 123 4567" /></div>
+                      <div><Label>WhatsApp</Label><Input value={companyForm.whatsapp || ""} onChange={(e) => setCompanyForm({ ...companyForm, whatsapp: e.target.value })} placeholder="+94771234567" /></div>
+                    </div>
+                    <div><Label>Email</Label><Input value={companyForm.email || ""} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@techlk.lk" /></div>
+                    <div><Label>Business Hours</Label><Textarea value={companyForm.business_hours || ""} onChange={(e) => setCompanyForm({ ...companyForm, business_hours: e.target.value })} rows={3} placeholder={"Mon-Fri: 9AM-6PM\nSat: 9AM-2PM\nSun: Closed"} /></div>
+                  </div>
+
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground">Social Media Links</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div><Label>Facebook URL</Label><Input value={companyForm.facebook_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, facebook_url: e.target.value })} placeholder="https://facebook.com/techlk" /></div>
+                      <div><Label>Instagram URL</Label><Input value={companyForm.instagram_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, instagram_url: e.target.value })} placeholder="https://instagram.com/techlk" /></div>
+                      <div><Label>YouTube URL</Label><Input value={companyForm.youtube_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, youtube_url: e.target.value })} placeholder="https://youtube.com/@techlk" /></div>
+                      <div><Label>TikTok URL</Label><Input value={companyForm.tiktok_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@techlk" /></div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Building2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading company info...</p>
                 </div>
               )}
             </motion.div>
