@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ShoppingCart, Star, Heart } from "lucide-react";
+import { ShoppingCart, Star, Heart, Truck, Package } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
@@ -55,7 +55,7 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
           <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1.5 min-h-[2.5rem] group-hover:text-secondary transition-colors">
             {product.name}
           </h3>
-          <div className="flex items-center gap-1 mb-2">
+          <div className="flex items-center gap-1 mb-1.5">
             <div className="flex items-center">
               {[...Array(5)].map((_, j) => (
                 <Star
@@ -65,6 +65,21 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
               ))}
             </div>
             <span className="text-[10px] text-muted-foreground">({product.review_count || 0})</span>
+          </div>
+          {/* Shipping & Stock Info */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-[10px]">
+            <span className="flex items-center gap-0.5 text-secondary">
+              <Truck className="w-3 h-3" />
+              {product.price >= 5000 ? "Free Delivery" : "Rs. 350 delivery"}
+            </span>
+            <span className={`flex items-center gap-0.5 ${
+              (product.stock_quantity || 0) <= 0 ? "text-destructive" :
+              (product.stock_quantity || 0) <= 5 ? "text-accent" : "text-muted-foreground"
+            }`}>
+              <Package className="w-3 h-3" />
+              {(product.stock_quantity || 0) <= 0 ? "Out of Stock" :
+               (product.stock_quantity || 0) <= 5 ? `Only ${product.stock_quantity} left` : "In Stock"}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -86,7 +101,8 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
                   slug: product.slug,
                 });
               }}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
+              disabled={(product.stock_quantity || 0) <= 0}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ShoppingCart className="w-4 h-4" />
             </button>
