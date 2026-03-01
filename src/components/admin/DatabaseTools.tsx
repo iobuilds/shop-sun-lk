@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, FileDown, RotateCcw, Lock, ShieldCheck, Download } from "lucide-react";
+import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore } from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -131,7 +131,16 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     try {
       const data = await callBackupFn({ action: "download_url", file_name: fileName });
-      window.open(data.url, "_blank");
+      const response = await fetch(data.url);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (e: any) {
       toast({ title: "Download failed", description: e.message, variant: "destructive" });
     }
@@ -268,13 +277,13 @@ const DatabaseTools = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-3">
-                      <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.name)} title="Download">
-                        <FileDown className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.name)} title="Download" className="hover:bg-secondary/10 hover:text-secondary">
+                        <ArrowDownToLine className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setConfirmRestore(b.name)} title="Restore" disabled={restoring}>
-                        <Download className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" onClick={() => setConfirmRestore(b.name)} title="Restore" disabled={restoring} className="hover:bg-accent/10 hover:text-accent-foreground">
+                        <ArchiveRestore className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteBackup(b.name)} title="Delete">
+                      <Button variant="ghost" size="icon" onClick={() => deleteBackup(b.name)} title="Delete" className="hover:bg-destructive/10">
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
