@@ -450,6 +450,86 @@ export type Database = {
         }
         Relationships: []
       }
+      product_external_links: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          link_type: string
+          product_id: string
+          sort_order: number
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          link_type?: string
+          product_id: string
+          sort_order?: number
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          link_type?: string
+          product_id?: string
+          sort_order?: number
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_external_links_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_similar_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          relation_type: string
+          similar_product_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          relation_type?: string
+          similar_product_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          relation_type?: string
+          similar_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_similar_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_similar_items_similar_product_id_fkey"
+            columns: ["similar_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           attachments: Json | null
