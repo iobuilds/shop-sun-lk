@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
-const SENDER_ID = "TechLK";
+const SENDER_ID = "IO Builds";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
