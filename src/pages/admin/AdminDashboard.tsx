@@ -1447,6 +1447,7 @@ const AdminDashboard = () => {
                     <p className="text-xs text-muted-foreground">{(seoForm.meta_description || "").length}/160 characters</p>
                     <div><Label>Meta Keywords</Label><Input value={seoForm.meta_keywords || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_keywords: e.target.value })} placeholder="electronics, arduino, sensors, Sri Lanka" /></div>
                     <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://example.com/og-image.jpg" /></div>
+                    <div><Label>Favicon URL</Label><Input value={seoForm.favicon_url || ""} onChange={(e) => setSeoForm({ ...seoForm, favicon_url: e.target.value })} placeholder="https://example.com/favicon.ico" /><p className="text-xs text-muted-foreground mt-1">Site icon shown in browser tabs. Upload to storage and paste URL here.</p></div>
                   </div>
 
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">

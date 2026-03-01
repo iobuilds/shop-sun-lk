@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
@@ -7,7 +7,10 @@ import Footer from "@/components/Footer";
 import ContactForm from "@/components/ContactForm";
 
 const StaticPage = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug: paramSlug } = useParams<{ slug: string }>();
+  const location = useLocation();
+  // If accessed via /contact directly, default to "contact-us" slug
+  const slug = paramSlug || (location.pathname === "/contact" ? "contact-us" : undefined);
 
   const { data: page, isLoading } = useQuery({
     queryKey: ["page", slug],
