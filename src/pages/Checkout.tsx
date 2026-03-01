@@ -10,6 +10,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+// Fetch payment method settings
+const usePaymentMethodSettings = () => useQuery({
+  queryKey: ["payment-methods-settings"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "payment_methods").maybeSingle();
+    if (error) throw error;
+    return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+  },
+  staleTime: 5 * 60 * 1000,
+});
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Session } from "@supabase/supabase-js";
@@ -20,7 +31,10 @@ const Checkout = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState("stripe");
+  const { data: pmSettings } = usePaymentMethodSettings();
+  const stripeEnabled = pmSettings?.stripe_enabled !== false;
+  const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
+  const [paymentMethod, setPaymentMethod] = useState("");
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
@@ -56,6 +70,14 @@ const Checkout = () => {
   const discount = appliedCoupon?.discount || 0;
   const shipping = subtotal >= 5000 ? 0 : 350;
   const total = Math.max(0, subtotal - discount + shipping);
+
+  // Set default payment method based on enabled options
+  useEffect(() => {
+    if (!paymentMethod && pmSettings) {
+      if (stripeEnabled) setPaymentMethod("stripe");
+      else if (bankEnabled) setPaymentMethod("bank_transfer");
+    }
+  }, [pmSettings, stripeEnabled, bankEnabled, paymentMethod]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -195,22 +217,26 @@ const Checkout = () => {
                     <CreditCard className="w-5 h-5 text-secondary" /> Payment Method
                   </h2>
                   <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
-                    <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "stripe" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
-                      <RadioGroupItem value="stripe" />
-                      <CreditCard className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Credit / Debit Card</p>
-                        <p className="text-xs text-muted-foreground">Visa, MasterCard via Stripe</p>
-                      </div>
-                    </label>
-                    <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "bank_transfer" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
-                      <RadioGroupItem value="bank_transfer" />
-                      <Building2 className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Direct Bank Transfer</p>
-                        <p className="text-xs text-muted-foreground">Transfer to bank account & upload receipt</p>
-                      </div>
-                    </label>
+                    {stripeEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "stripe" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="stripe" />
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Credit / Debit Card</p>
+                          <p className="text-xs text-muted-foreground">Visa, MasterCard via Stripe</p>
+                        </div>
+                      </label>
+                    )}
+                    {bankEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "bank_transfer" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="bank_transfer" />
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Direct Bank Transfer</p>
+                          <p className="text-xs text-muted-foreground">Transfer to bank account & upload receipt</p>
+                        </div>
+                      </label>
+                    )}
                   </RadioGroup>
 
                   {/* Bank Details Preview when bank_transfer selected */}
