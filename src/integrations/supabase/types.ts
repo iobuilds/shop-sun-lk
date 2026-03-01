@@ -288,6 +288,39 @@ export type Database = {
           },
         ]
       }
+      db_backup_logs: {
+        Row: {
+          action: string
+          created_at: string
+          created_by: string | null
+          created_by_email: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          note: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          note?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_email?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          note?: string | null
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string | null
