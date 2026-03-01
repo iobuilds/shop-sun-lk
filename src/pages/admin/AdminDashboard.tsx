@@ -18,7 +18,7 @@ import ProductLinksManager from "@/components/admin/ProductLinksManager";
 type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs";
 
 interface ProductForm {
-  name: string; slug: string; description: string; price: string; discount_price: string;
+  name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
   sku: string; stock_quantity: string; category_id: string; images: string; is_active: boolean; is_featured: boolean;
   video_url: string; datasheet_url: string;
 }
@@ -43,7 +43,7 @@ interface ComboForm {
   images: string; is_active: boolean; is_featured: boolean; items: { product_id: string; quantity: string }[];
 }
 
-const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "" };
+const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", cost_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "" };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
@@ -371,7 +371,8 @@ const AdminDashboard = () => {
     setProductImagePreviews(imgs);
     setProductForm({
       name: p.name, slug: p.slug, description: p.description || "", price: String(p.price),
-      discount_price: p.discount_price ? String(p.discount_price) : "", sku: p.sku || "",
+      discount_price: p.discount_price ? String(p.discount_price) : "", cost_price: (p as any).cost_price ? String((p as any).cost_price) : "",
+      sku: p.sku || "",
       stock_quantity: String(p.stock_quantity || 0), category_id: p.category_id || "",
       images: imgs.join(", "), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false,
       video_url: (p as any).video_url || "", datasheet_url: (p as any).datasheet_url || "",
@@ -444,6 +445,7 @@ const AdminDashboard = () => {
       description: productForm.description || null,
       price: Number(productForm.price),
       discount_price: productForm.discount_price ? Number(productForm.discount_price) : null,
+      cost_price: productForm.cost_price ? Number(productForm.cost_price) : null,
       sku: productForm.sku || null,
       stock_quantity: Number(productForm.stock_quantity) || 0,
       category_id: productForm.category_id || null,
@@ -854,6 +856,8 @@ const AdminDashboard = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
+  const LOW_STOCK_THRESHOLD = 5;
+
   const reportData = useMemo(() => {
     if (!orders) return null;
     const totalSales = orders.length;
@@ -866,13 +870,17 @@ const AdminDashboard = () => {
       monthlyMap.set(key, (monthlyMap.get(key) || 0) + Number(o.total));
     });
     const monthlyRevenue = Array.from(monthlyMap.entries()).sort().slice(-6).map(([month, total]) => ({ month, total }));
-    const productSales = new Map<string, { name: string; qty: number; revenue: number }>();
+    const productSales = new Map<string, { name: string; qty: number; revenue: number; cost: number }>();
     orders.forEach(o => {
       (o.order_items as any[])?.forEach((item: any) => {
         const key = item.product_id;
-        const existing = productSales.get(key) || { name: item.products?.name || "Unknown", qty: 0, revenue: 0 };
+        const existing = productSales.get(key) || { name: item.products?.name || "Unknown", qty: 0, revenue: 0, cost: 0 };
         existing.qty += item.quantity;
         existing.revenue += Number(item.total_price);
+        // Find cost_price from products list
+        const prod = products?.find(p => p.id === item.product_id);
+        const costPrice = (prod as any)?.cost_price ? Number((prod as any).cost_price) : 0;
+        existing.cost += costPrice * item.quantity;
         productSales.set(key, existing);
       });
     });
@@ -881,8 +889,28 @@ const AdminDashboard = () => {
     orders.forEach(o => { paymentMethods.set(o.payment_method, (paymentMethods.get(o.payment_method) || 0) + 1); });
     const statusMap = new Map<string, number>();
     orders.forEach(o => { statusMap.set(o.status, (statusMap.get(o.status) || 0) + 1); });
-    return { totalSales, totalRevenue, pendingRevenue, monthlyRevenue, bestSellers, paymentMethods: Array.from(paymentMethods.entries()), statusBreakdown: Array.from(statusMap.entries()) };
-  }, [orders]);
+
+    // Profit calculation (only paid orders)
+    let totalCost = 0;
+    orders.filter(o => o.payment_status === "paid").forEach(o => {
+      (o.order_items as any[])?.forEach((item: any) => {
+        const prod = products?.find(p => p.id === item.product_id);
+        const costPrice = (prod as any)?.cost_price ? Number((prod as any).cost_price) : 0;
+        totalCost += costPrice * item.quantity;
+      });
+    });
+    const totalProfit = totalRevenue - totalCost;
+
+    // Stock data
+    const totalProducts = products?.length || 0;
+    const totalStockValue = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0) * Number(p.price), 0) || 0;
+    const totalStockCostValue = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0) * (Number((p as any).cost_price) || 0), 0) || 0;
+    const totalStockQty = products?.reduce((sum, p) => sum + (Number(p.stock_quantity) || 0), 0) || 0;
+    const lowStockProducts = products?.filter(p => (Number(p.stock_quantity) || 0) <= LOW_STOCK_THRESHOLD && p.is_active) || [];
+    const outOfStockProducts = products?.filter(p => (Number(p.stock_quantity) || 0) === 0 && p.is_active) || [];
+
+    return { totalSales, totalRevenue, pendingRevenue, monthlyRevenue, bestSellers, paymentMethods: Array.from(paymentMethods.entries()), statusBreakdown: Array.from(statusMap.entries()), totalProfit, totalCost, totalProducts, totalStockValue, totalStockCostValue, totalStockQty, lowStockProducts, outOfStockProducts };
+  }, [orders, products]);
 
   if (loading) {
     return (
@@ -1770,7 +1798,7 @@ const AdminDashboard = () => {
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Reports & Analytics</h2>
               {reportData ? (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="bg-card rounded-xl border border-border p-5">
                       <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
                       <p className="text-2xl font-bold font-display text-foreground">{reportData.totalSales}</p>
@@ -1789,7 +1817,73 @@ const AdminDashboard = () => {
                         Rs. {reportData.totalSales > 0 ? Math.round(reportData.totalRevenue / reportData.totalSales).toLocaleString() : 0}
                       </p>
                     </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Cost</p>
+                      <p className="text-2xl font-bold font-display text-foreground">Rs. {reportData.totalCost.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Profit (Paid Orders)</p>
+                      <p className={`text-2xl font-bold font-display ${reportData.totalProfit >= 0 ? "text-green-600" : "text-destructive"}`}>Rs. {reportData.totalProfit.toLocaleString()}</p>
+                      {reportData.totalRevenue > 0 && <p className="text-xs text-muted-foreground mt-1">{((reportData.totalProfit / reportData.totalRevenue) * 100).toFixed(1)}% margin</p>}
+                    </div>
                   </div>
+
+                  {/* Stock Overview */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Products</p>
+                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalProducts}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Stock Qty</p>
+                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalStockQty.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Selling)</p>
+                      <p className="text-2xl font-bold font-display text-secondary">Rs. {reportData.totalStockValue.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Cost)</p>
+                      <p className="text-2xl font-bold font-display text-foreground">Rs. {reportData.totalStockCostValue.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Low Stock & Out of Stock Alerts */}
+                  {(reportData.outOfStockProducts.length > 0 || reportData.lowStockProducts.length > 0) && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {reportData.outOfStockProducts.length > 0 && (
+                        <div className="bg-card rounded-xl border border-destructive/30 p-5">
+                          <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
+                            <Package className="w-4 h-4" /> Out of Stock ({reportData.outOfStockProducts.length})
+                          </h3>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {reportData.outOfStockProducts.map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between text-sm">
+                                <span className="text-foreground line-clamp-1">{p.name}</span>
+                                <span className="text-xs text-destructive font-medium px-2 py-0.5 bg-destructive/10 rounded-full">0 units</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {reportData.lowStockProducts.length > 0 && (
+                        <div className="bg-card rounded-xl border border-accent/30 p-5">
+                          <h3 className="font-semibold text-accent-foreground mb-4 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4" /> {"Low Stock \u2264"}{LOW_STOCK_THRESHOLD} ({reportData.lowStockProducts.length})
+                          </h3>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {reportData.lowStockProducts.map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between text-sm">
+                                <span className="text-foreground line-clamp-1">{p.name}</span>
+                                <span className="text-xs text-accent-foreground font-medium px-2 py-0.5 bg-accent/10 rounded-full">{p.stock_quantity} units</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {reportData.monthlyRevenue.length > 0 && (
                     <div className="bg-card rounded-xl border border-border p-5">
                       <h3 className="font-semibold text-foreground mb-4">Monthly Revenue</h3>
@@ -1998,7 +2092,8 @@ const AdminDashboard = () => {
               <div><Label>Price (Rs.) *</Label><Input type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></div>
               <div><Label>Original Price (Rs.)</Label><Input type="number" value={productForm.discount_price} onChange={(e) => setProductForm({ ...productForm, discount_price: e.target.value })} placeholder="Higher price" /></div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label>Cost Price (Rs.)</Label><Input type="number" value={productForm.cost_price} onChange={(e) => setProductForm({ ...productForm, cost_price: e.target.value })} placeholder="Your cost" /></div>
               <div><Label>SKU</Label><Input value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></div>
               <div><Label>Stock Quantity</Label><Input type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })} /></div>
             </div>
