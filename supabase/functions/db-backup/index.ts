@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const TABLES = [
+const ALL_TABLES = [
   "site_settings", "categories", "products", "banners", "promo_banners",
   "combo_packs", "combo_pack_items", "daily_deals", "pages", "coupons",
   "sms_templates", "profiles", "user_roles",
@@ -13,6 +13,63 @@ const TABLES = [
   "reviews", "wishlists", "contact_messages", "sms_logs",
   "product_external_links", "product_similar_items", "otp_verifications",
 ];
+
+const CONFIG_TABLES = [
+  "site_settings", "categories", "banners", "promo_banners",
+  "combo_packs", "combo_pack_items", "daily_deals", "pages",
+  "coupons", "sms_templates",
+];
+
+const STORAGE_BUCKETS = ["images", "db-backups"];
+
+function respond(body: any, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function fetchTables(client: any, tables: string[]) {
+  const result: Record<string, any[]> = {};
+  for (const table of tables) {
+    const { data, error } = await client.from(table).select("*");
+    if (error) { console.error(`Error fetching ${table}:`, error.message); result[table] = []; }
+    else { result[table] = data || []; }
+  }
+  return result;
+}
+
+function generateSqlDump(backup: Record<string, any[]>): string {
+  const lines: string[] = [
+    "-- Database SQL Dump",
+    `-- Generated at: ${new Date().toISOString()}`,
+    "-- Format: INSERT statements for all tables",
+    "",
+  ];
+
+  for (const [table, rows] of Object.entries(backup)) {
+    lines.push(`-- Table: ${table} (${rows.length} rows)`);
+    lines.push(`DELETE FROM public.${table} WHERE true;`);
+    lines.push("");
+
+    for (const row of rows) {
+      const cols = Object.keys(row);
+      const vals = cols.map((c) => {
+        const v = row[c];
+        if (v === null || v === undefined) return "NULL";
+        if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+        if (typeof v === "number") return String(v);
+        if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+        if (Array.isArray(v)) return `'{${v.map((i: any) => `"${String(i).replace(/"/g, '\\"')}"`).join(",")}}'`;
+        return `'${String(v).replace(/'/g, "''")}'`;
+      });
+      lines.push(`INSERT INTO public.${table} (${cols.join(", ")}) VALUES (${vals.join(", ")});`);
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -30,19 +87,13 @@ Deno.serve(async (req) => {
   // Scheduled backup from pg_cron - no user auth needed
   if (action === "scheduled_backup") {
     try {
-      const backup: Record<string, any[]> = {};
-      for (const table of TABLES) {
-        const { data, error } = await adminClient.from(table).select("*");
-        if (error) { console.error(`Error fetching ${table}:`, error.message); backup[table] = []; }
-        else { backup[table] = data || []; }
-      }
+      const backup = await fetchTables(adminClient, ALL_TABLES);
       const jsonStr = JSON.stringify(backup, null, 2);
       const blob = new Uint8Array(new TextEncoder().encode(jsonStr));
       const fileName = `scheduled-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
       const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, blob, { contentType: "application/json", upsert: false });
-      if (uploadError) {
-        return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
+      if (uploadError) return respond({ error: "Upload failed: " + uploadError.message }, 500);
+
       await adminClient.from("db_backup_logs").insert({ action: "backup", file_name: fileName, file_size: blob.length, created_by_email: "system (scheduled)" });
 
       // Clean up old scheduled backups - keep only the last 10
@@ -53,70 +104,96 @@ Deno.serve(async (req) => {
         await adminClient.storage.from("db-backups").remove(toDelete);
       }
 
-      return new Response(JSON.stringify({ success: true, file_name: fileName }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return respond({ success: true, file_name: fileName });
     } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return respond({ error: (e as Error).message }, 500);
     }
   }
 
   // All other actions require admin authentication
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  if (!authHeader) return respond({ error: "Unauthorized" }, 401);
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
   });
   const { data: { user }, error: userError } = await userClient.auth.getUser();
-  if (userError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  if (userError || !user) return respond({ error: "Unauthorized" }, 401);
 
   const { data: roleData } = await adminClient.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-  if (!roleData) {
-    return new Response(JSON.stringify({ error: "Admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
+  if (!roleData) return respond({ error: "Admin access required" }, 403);
 
+  // --- BACKUP (standard snapshot to storage) ---
   if (action === "backup") {
     try {
-      const backup: Record<string, any[]> = {};
-      for (const table of TABLES) {
-        const { data, error } = await adminClient.from(table).select("*");
-        if (error) {
-          console.error(`Error fetching ${table}:`, error.message);
-          backup[table] = [];
-        } else {
-          backup[table] = data || [];
-        }
-      }
-
+      const backup = await fetchTables(adminClient, ALL_TABLES);
       const jsonStr = JSON.stringify(backup, null, 2);
       const blob = new Uint8Array(new TextEncoder().encode(jsonStr));
       const fileName = `backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, blob, { contentType: "application/json", upsert: false });
+      if (uploadError) return respond({ error: "Upload failed: " + uploadError.message }, 500);
 
-      const { error: uploadError } = await adminClient.storage
-        .from("db-backups")
-        .upload(fileName, blob, { contentType: "application/json", upsert: false });
-
-      if (uploadError) {
-        return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      await adminClient.from("db_backup_logs").insert({
-        action: "backup",
-        file_name: fileName,
-        file_size: blob.length,
-        created_by: user.id,
-        created_by_email: user.email,
-      });
-
-      return new Response(JSON.stringify({ success: true, file_name: fileName, size: blob.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await adminClient.from("db_backup_logs").insert({ action: "backup", file_name: fileName, file_size: blob.length, created_by: user.id, created_by_email: user.email });
+      return respond({ success: true, file_name: fileName, size: blob.length });
     } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return respond({ error: (e as Error).message }, 500);
     }
   }
 
+  // --- DOWNLOAD CONFIG TABLES ONLY ---
+  if (action === "download_config") {
+    try {
+      const backup = await fetchTables(adminClient, CONFIG_TABLES);
+      return respond({ success: true, data: backup, type: "config" });
+    } catch (e) {
+      return respond({ error: (e as Error).message }, 500);
+    }
+  }
+
+  // --- DOWNLOAD FULL BACKUP + STORAGE MANIFEST ---
+  if (action === "download_full") {
+    try {
+      const backup = await fetchTables(adminClient, ALL_TABLES);
+
+      // Get storage file listings with signed URLs
+      const storageManifest: Record<string, any[]> = {};
+      for (const bucket of STORAGE_BUCKETS) {
+        const { data: files } = await adminClient.storage.from(bucket).list("", { limit: 1000, sortBy: { column: "created_at", order: "desc" } });
+        if (files && files.length > 0) {
+          const fileEntries = [];
+          for (const file of files) {
+            if (file.name === ".emptyFolderPlaceholder") continue;
+            const { data: urlData } = await adminClient.storage.from(bucket).createSignedUrl(file.name, 3600);
+            fileEntries.push({
+              name: file.name,
+              size: file.metadata?.size || null,
+              created_at: file.created_at,
+              mimetype: file.metadata?.mimetype || null,
+              signed_url: urlData?.signedUrl || null,
+            });
+          }
+          storageManifest[bucket] = fileEntries;
+        }
+      }
+
+      return respond({ success: true, data: backup, storage: storageManifest, type: "full" });
+    } catch (e) {
+      return respond({ error: (e as Error).message }, 500);
+    }
+  }
+
+  // --- DOWNLOAD SQL DUMP ---
+  if (action === "download_sql") {
+    try {
+      const backup = await fetchTables(adminClient, ALL_TABLES);
+      const sql = generateSqlDump(backup);
+      return respond({ success: true, sql, type: "sql" });
+    } catch (e) {
+      return respond({ error: (e as Error).message }, 500);
+    }
+  }
+
+  // --- RESTORE ---
   if (action === "restore") {
     try {
       const { file_name, data: uploadedData } = body;
@@ -125,20 +202,15 @@ Deno.serve(async (req) => {
       if (uploadedData) {
         backupData = uploadedData;
       } else if (file_name) {
-        const { data: fileData, error: dlError } = await adminClient.storage
-          .from("db-backups")
-          .download(file_name);
-        if (dlError || !fileData) {
-          return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+        const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
+        if (dlError || !fileData) return respond({ error: "File not found" }, 404);
         const text = await fileData.text();
         backupData = JSON.parse(text);
       } else {
-        return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return respond({ error: "No file_name or data provided" }, 400);
       }
 
-      // Delete in reverse order (child tables first)
-      const deleteOrder = [...TABLES].reverse();
+      const deleteOrder = [...ALL_TABLES].reverse();
       for (const table of deleteOrder) {
         if (backupData[table] !== undefined) {
           const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
@@ -146,8 +218,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Insert in order (parent tables first)
-      for (const table of TABLES) {
+      for (const table of ALL_TABLES) {
         const rows = backupData[table];
         if (rows && rows.length > 0) {
           for (let i = 0; i < rows.length; i += 100) {
@@ -158,51 +229,38 @@ Deno.serve(async (req) => {
         }
       }
 
-      await adminClient.from("db_backup_logs").insert({
-        action: "restore",
-        file_name: file_name || "uploaded-file",
-        created_by: user.id,
-        created_by_email: user.email,
-      });
-
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      await adminClient.from("db_backup_logs").insert({ action: "restore", file_name: file_name || "uploaded-file", created_by: user.id, created_by_email: user.email });
+      return respond({ success: true });
     } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return respond({ error: (e as Error).message }, 500);
     }
   }
 
+  // --- LIST ---
   if (action === "list") {
     const { data: files, error } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (error) return respond({ error: error.message }, 500);
     const { data: logs } = await adminClient.from("db_backup_logs").select("*").order("created_at", { ascending: false });
-    return new Response(JSON.stringify({ files: files || [], logs: logs || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return respond({ files: files || [], logs: logs || [] });
   }
 
+  // --- DELETE ---
   if (action === "delete") {
     const { file_name } = body;
-    if (!file_name) {
-      return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!file_name) return respond({ error: "file_name required" }, 400);
     const { error } = await adminClient.storage.from("db-backups").remove([file_name]);
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (error) return respond({ error: error.message }, 500);
+    return respond({ success: true });
   }
 
+  // --- DOWNLOAD URL ---
   if (action === "download_url") {
     const { file_name } = body;
-    if (!file_name) {
-      return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!file_name) return respond({ error: "file_name required" }, 400);
     const { data, error } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 300);
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-    return new Response(JSON.stringify({ url: data.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (error) return respond({ error: error.message }, 500);
+    return respond({ url: data.signedUrl });
   }
 
-  return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return respond({ error: "Invalid action" }, 400);
 });

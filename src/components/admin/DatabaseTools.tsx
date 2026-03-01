@@ -6,7 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore } from "lucide-react";
+import {
+  Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw,
+  Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore, Settings2,
+  HardDrive, FileCode2,
+} from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -23,6 +27,8 @@ interface BackupFile {
   metadata: { size?: number };
 }
 
+type DownloadType = "config" | "full" | "sql" | null;
+
 const DatabaseTools = () => {
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [logs, setLogs] = useState<BackupLog[]>([]);
@@ -30,15 +36,14 @@ const DatabaseTools = () => {
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadingType, setDownloadingType] = useState<DownloadType>(null);
 
-  // Password confirmation state
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [pendingAction, setPendingAction] = useState<{ type: "backup" | "restore" | "upload_restore"; payload?: any } | null>(null);
   const [verifying, setVerifying] = useState(false);
 
-  // Restore confirm state
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [confirmUploadRestore, setConfirmUploadRestore] = useState<any>(null);
 
@@ -65,7 +70,6 @@ const DatabaseTools = () => {
 
   useEffect(() => { fetchBackups(); }, []);
 
-  // Password verification
   const requestPasswordConfirmation = (actionType: "backup" | "restore" | "upload_restore", payload?: any) => {
     setPendingAction({ type: actionType, payload });
     setPassword("");
@@ -74,41 +78,19 @@ const DatabaseTools = () => {
   };
 
   const verifyPasswordAndExecute = async () => {
-    if (!password.trim()) {
-      setPasswordError("Please enter your password");
-      return;
-    }
+    if (!password.trim()) { setPasswordError("Please enter your password"); return; }
     setVerifying(true);
     setPasswordError("");
-
     try {
-      // Get current user email
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error("Unable to verify identity");
-
-      // Re-authenticate with password
-      const { error } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: password,
-      });
-
-      if (error) {
-        setPasswordError("Incorrect password. Please try again.");
-        setVerifying(false);
-        return;
-      }
-
+      const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
+      if (error) { setPasswordError("Incorrect password. Please try again."); setVerifying(false); return; }
       setPasswordDialog(false);
       setPassword("");
-
-      // Execute the pending action
-      if (pendingAction?.type === "backup") {
-        await executeCreateBackup();
-      } else if (pendingAction?.type === "restore") {
-        await executeRestore(pendingAction.payload);
-      } else if (pendingAction?.type === "upload_restore") {
-        await executeUploadRestore();
-      }
+      if (pendingAction?.type === "backup") await executeCreateBackup();
+      else if (pendingAction?.type === "restore") await executeRestore(pendingAction.payload);
+      else if (pendingAction?.type === "upload_restore") await executeUploadRestore();
     } catch (e: any) {
       setPasswordError(e.message);
     } finally {
@@ -126,6 +108,64 @@ const DatabaseTools = () => {
       toast({ title: "Backup failed", description: e.message, variant: "destructive" });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const triggerBrowserDownload = (content: string, fileName: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Download config tables only
+  const downloadConfig = async () => {
+    setDownloadingType("config");
+    try {
+      const data = await callBackupFn({ action: "download_config" });
+      const fileName = `config-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      triggerBrowserDownload(JSON.stringify(data.data, null, 2), fileName, "application/json");
+      toast({ title: "Config backup downloaded", description: fileName });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDownloadingType(null);
+    }
+  };
+
+  // Download full backup (all tables + storage manifest)
+  const downloadFull = async () => {
+    setDownloadingType("full");
+    try {
+      const data = await callBackupFn({ action: "download_full" });
+      const fullBackup = { tables: data.data, storage: data.storage, generated_at: new Date().toISOString() };
+      const fileName = `full-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      triggerBrowserDownload(JSON.stringify(fullBackup, null, 2), fileName, "application/json");
+      toast({ title: "Full backup downloaded", description: fileName });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDownloadingType(null);
+    }
+  };
+
+  // Download SQL dump
+  const downloadSql = async () => {
+    setDownloadingType("sql");
+    try {
+      const data = await callBackupFn({ action: "download_sql" });
+      const fileName = `sql-dump-${new Date().toISOString().replace(/[:.]/g, "-")}.sql`;
+      triggerBrowserDownload(data.sql, fileName, "text/sql");
+      toast({ title: "SQL dump downloaded", description: fileName });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDownloadingType(null);
     }
   };
 
@@ -211,6 +251,8 @@ const DatabaseTools = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const anyDownloading = !!downloadingType;
+
   return (
     <div className="space-y-6">
       {/* Info Banner */}
@@ -222,6 +264,65 @@ const DatabaseTools = () => {
         </div>
       </div>
 
+      {/* Download Options */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Download Backup</CardTitle>
+          <CardDescription>Choose the type of backup you want to download</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Config Only */}
+            <button
+              onClick={downloadConfig}
+              disabled={anyDownloading}
+              className="group relative flex flex-col items-center gap-3 rounded-xl border-2 border-border bg-muted/30 p-5 transition-all hover:border-secondary hover:bg-secondary/5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10 text-secondary transition-colors group-hover:bg-secondary/20">
+                {downloadingType === "config" ? <Loader2 className="w-6 h-6 animate-spin" /> : <Settings2 className="w-6 h-6" />}
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-foreground">Config Tables</p>
+                <p className="text-xs text-muted-foreground mt-1">Settings, categories, banners, pages, coupons, deals, SMS templates</p>
+              </div>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-secondary">JSON</span>
+            </button>
+
+            {/* Full Backup */}
+            <button
+              onClick={downloadFull}
+              disabled={anyDownloading}
+              className="group relative flex flex-col items-center gap-3 rounded-xl border-2 border-border bg-muted/30 p-5 transition-all hover:border-primary hover:bg-primary/5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+                {downloadingType === "full" ? <Loader2 className="w-6 h-6 animate-spin" /> : <HardDrive className="w-6 h-6" />}
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-foreground">Full Backup</p>
+                <p className="text-xs text-muted-foreground mt-1">All tables + storage file manifest with download links</p>
+              </div>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-primary">JSON + Storage</span>
+            </button>
+
+            {/* SQL Dump */}
+            <button
+              onClick={downloadSql}
+              disabled={anyDownloading}
+              className="group relative flex flex-col items-center gap-3 rounded-xl border-2 border-border bg-muted/30 p-5 transition-all hover:border-accent-foreground hover:bg-accent/10 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/30 text-accent-foreground transition-colors group-hover:bg-accent/50">
+                {downloadingType === "sql" ? <Loader2 className="w-6 h-6 animate-spin" /> : <FileCode2 className="w-6 h-6" />}
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-foreground">SQL Dump</p>
+                <p className="text-xs text-muted-foreground mt-1">Full SQL file with schema data as INSERT statements</p>
+              </div>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-accent-foreground">.SQL File</span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => requestPasswordConfirmation("backup")} disabled={creating || restoring}>
@@ -232,13 +333,7 @@ const DatabaseTools = () => {
           <Button variant="outline" disabled={restoring}>
             <Upload className="w-4 h-4 mr-2" /> Restore from File
           </Button>
-          <input
-            type="file"
-            accept=".json"
-            className="absolute inset-0 opacity-0 cursor-pointer"
-            onChange={handleUploadRestore}
-            disabled={restoring}
-          />
+          <input type="file" accept=".json" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadRestore} disabled={restoring} />
         </div>
         <Button variant="outline" onClick={fetchBackups} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
@@ -357,7 +452,7 @@ const DatabaseTools = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Restore Dialog (after password is verified, or for selecting file) */}
+      {/* Confirm Restore Dialog */}
       <Dialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
         <DialogContent>
           <DialogHeader>
@@ -370,13 +465,8 @@ const DatabaseTools = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmRestore(null)}>Cancel</Button>
             <Button variant="destructive" onClick={() => {
-              if (confirmRestore) {
-                setConfirmRestore(null);
-                requestPasswordConfirmation("restore", confirmRestore);
-              }
-            }}>
-              Continue
-            </Button>
+              if (confirmRestore) { setConfirmRestore(null); requestPasswordConfirmation("restore", confirmRestore); }
+            }}>Continue</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -392,11 +482,7 @@ const DatabaseTools = () => {
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmUploadRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => {
-              requestPasswordConfirmation("upload_restore");
-            }}>
-              Continue
-            </Button>
+            <Button variant="destructive" onClick={() => requestPasswordConfirmation("upload_restore")}>Continue</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
