@@ -29,6 +29,7 @@ const DatabaseTools = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   // Password confirmation state
   const [passwordDialog, setPasswordDialog] = useState(false);
@@ -129,6 +130,7 @@ const DatabaseTools = () => {
   };
 
   const downloadBackup = async (fileName: string) => {
+    setDownloading(fileName);
     try {
       const data = await callBackupFn({ action: "download_url", file_name: fileName });
       const response = await fetch(data.url);
@@ -143,6 +145,8 @@ const DatabaseTools = () => {
       URL.revokeObjectURL(url);
     } catch (e: any) {
       toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally {
+      setDownloading(null);
     }
   };
 
@@ -277,8 +281,8 @@ const DatabaseTools = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-3">
-                      <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.name)} title="Download" className="hover:bg-secondary/10 hover:text-secondary">
-                        <ArrowDownToLine className="w-4 h-4" />
+                      <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.name)} title="Download" disabled={downloading === b.name} className="hover:bg-secondary/10 hover:text-secondary">
+                        {downloading === b.name ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDownToLine className="w-4 h-4" />}
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => setConfirmRestore(b.name)} title="Restore" disabled={restoring} className="hover:bg-accent/10 hover:text-accent-foreground">
                         <ArchiveRestore className="w-4 h-4" />
