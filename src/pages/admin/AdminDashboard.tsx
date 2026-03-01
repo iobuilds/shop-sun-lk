@@ -322,12 +322,24 @@ const AdminDashboard = () => {
   const [smsLogPage, setSmsLogPage] = useState(0);
 
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [productStockFilter, setProductStockFilter] = useState("all");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
   const [reviewSearch, setReviewSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [smsLogSearch, setSmsLogSearch] = useState("");
 
-  const filteredProducts = products?.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredProducts = products?.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const stock = Number(p.stock_quantity) || 0;
+    const matchesStock = productStockFilter === "all" ? true
+      : productStockFilter === "out" ? stock === 0
+      : productStockFilter === "low" ? stock > 0 && stock <= lowStockThreshold
+      : productStockFilter === "in" ? stock > lowStockThreshold
+      : true;
+    const matchesCategory = productCategoryFilter === "all" || p.category_id === productCategoryFilter;
+    return matchesSearch && matchesStock && matchesCategory;
+  });
   const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
   const paginatedProducts = filteredProducts?.slice(productPage * ITEMS_PER_PAGE, (productPage + 1) * ITEMS_PER_PAGE);
 
@@ -997,7 +1009,31 @@ const AdminDashboard = () => {
                 <h2 className="text-xl font-bold font-display text-foreground">Products</h2>
                 <Button onClick={openAddProduct} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Product</Button>
               </div>
-              <Input placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="mb-4 max-w-sm" />
+              <div className="flex flex-wrap items-center gap-3 mb-4">
+                <Input placeholder="Search products..." value={search} onChange={(e) => { setSearch(e.target.value); setProductPage(0); }} className="max-w-sm" />
+                <Select value={productStockFilter} onValueChange={(v) => { setProductStockFilter(v); setProductPage(0); }}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Stock filter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stock</SelectItem>
+                    <SelectItem value="in">In Stock</SelectItem>
+                    <SelectItem value="low">Low Stock (≤{lowStockThreshold})</SelectItem>
+                    <SelectItem value="out">Out of Stock</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={productCategoryFilter} onValueChange={(v) => { setProductCategoryFilter(v); setProductPage(0); }}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories?.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="bg-card rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
