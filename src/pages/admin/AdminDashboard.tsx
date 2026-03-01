@@ -308,12 +308,16 @@ const AdminDashboard = () => {
   const [contactPage, setContactPage] = useState(0);
   const [smsLogPage, setSmsLogPage] = useState(0);
 
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [userSearch, setUserSearch] = useState("");
+
   const filteredProducts = products?.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
   const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
   const paginatedProducts = filteredProducts?.slice(productPage * ITEMS_PER_PAGE, (productPage + 1) * ITEMS_PER_PAGE);
 
-  const totalOrderPages = Math.ceil((orders?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedOrders = orders?.slice(orderPage * ITEMS_PER_PAGE, (orderPage + 1) * ITEMS_PER_PAGE);
+  const filteredOrders = orders?.filter((o) => orderStatusFilter === "all" || o.status === orderStatusFilter);
+  const totalOrderPages = Math.ceil((filteredOrders?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedOrders = filteredOrders?.slice(orderPage * ITEMS_PER_PAGE, (orderPage + 1) * ITEMS_PER_PAGE);
 
   const totalDealPages = Math.ceil((deals?.length || 0) / ITEMS_PER_PAGE);
   const paginatedDeals = deals?.slice(dealPage * ITEMS_PER_PAGE, (dealPage + 1) * ITEMS_PER_PAGE);
@@ -321,8 +325,9 @@ const AdminDashboard = () => {
   const totalCouponPages = Math.ceil((coupons?.length || 0) / ITEMS_PER_PAGE);
   const paginatedCoupons = coupons?.slice(couponPage * ITEMS_PER_PAGE, (couponPage + 1) * ITEMS_PER_PAGE);
 
-  const totalUserPages = Math.ceil((allProfiles?.length || 0) / ITEMS_PER_PAGE);
-  const paginatedUsers = allProfiles?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
+  const filteredUsers = allProfiles?.filter((p) => !userSearch || (p.full_name || "").toLowerCase().includes(userSearch.toLowerCase()) || (p.phone || "").includes(userSearch) || (p.city || "").toLowerCase().includes(userSearch.toLowerCase()));
+  const totalUserPages = Math.ceil((filteredUsers?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedUsers = filteredUsers?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
 
   const totalReviewPages = Math.ceil((allReviews?.length || 0) / ITEMS_PER_PAGE);
   const paginatedReviews = allReviews?.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
@@ -1035,7 +1040,20 @@ const AdminDashboard = () => {
           {/* ═══ Orders Tab ═══ */}
           {tab === "orders" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Orders</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Orders</h2>
+                <div className="flex items-center gap-2">
+                  <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrderPage(0); }}>
+                    <SelectTrigger className="h-8 text-xs w-36"><SelectValue placeholder="Filter by status" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => (
+                        <SelectItem key={s} value={s} className="capitalize text-xs">{s.charAt(0).toUpperCase() + s.slice(1)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               {orders && orders.length > 0 ? (
                 <div className="bg-card rounded-xl border border-border overflow-hidden">
                   <div className="overflow-x-auto">
@@ -1103,7 +1121,7 @@ const AdminDashboard = () => {
                   <p>No orders yet</p>
                 </div>
               )}
-              {renderPagination(orderPage, totalOrderPages, setOrderPage, orders?.length || 0)}
+              {renderPagination(orderPage, totalOrderPages, setOrderPage, filteredOrders?.length || 0)}
             </motion.div>
           )}
 
@@ -1383,7 +1401,13 @@ const AdminDashboard = () => {
           {/* ═══ Users Tab ═══ */}
           {tab === "users" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">Users</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Users</h2>
+                <div className="relative w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input placeholder="Search by name, phone, city..." value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); }} className="h-8 text-xs pl-8" />
+                </div>
+              </div>
               <div className="bg-card rounded-xl border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -1433,7 +1457,7 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
-              {renderPagination(userPage, totalUserPages, setUserPage, allProfiles?.length || 0)}
+              {renderPagination(userPage, totalUserPages, setUserPage, filteredUsers?.length || 0)}
             </motion.div>
           )}
 
