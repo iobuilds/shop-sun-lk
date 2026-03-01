@@ -40,6 +40,7 @@ const SEOHead = ({
   const defaultDescription = seoSettings?.meta_description || "TechLK - Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing, tools and more. Island-wide delivery.";
   const defaultKeywords = seoSettings?.meta_keywords || "electronics Sri Lanka, Arduino, sensors, components, TechLK, Colombo";
   const defaultOgImage = seoSettings?.og_image || "https://lovable.dev/opengraph-image-p98pqg.png";
+  const faviconUrl = seoSettings?.favicon_url || "/favicon.ico";
 
   const finalTitle = title
     ? (title.includes(storeName) ? title : `${title} | ${storeName}`)
@@ -64,6 +65,7 @@ const SEOHead = ({
   return (
     <Helmet>
       <title>{finalTitle}</title>
+      <link rel="icon" href={faviconUrl} />
       <meta name="description" content={finalDescription} />
       <meta name="keywords" content={finalKeywords} />
       {canonical && <link rel="canonical" href={canonical} />}
