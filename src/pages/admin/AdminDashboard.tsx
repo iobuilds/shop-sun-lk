@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,9 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
+import DatabaseTools from "@/components/admin/DatabaseTools";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "db_tools";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -339,6 +340,7 @@ const AdminDashboard = () => {
     { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
     { id: "stock" as Tab, label: "Stock", icon: Package, count: 0 },
+    { id: "db_tools" as Tab, label: "DB Tools", icon: Database, count: 0 },
   ];
 
   const ITEMS_PER_PAGE = 15;
@@ -2382,6 +2384,14 @@ const AdminDashboard = () => {
                   <p>Loading stock data...</p>
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {/* ═══ DB Tools Tab ═══ */}
+          {tab === "db_tools" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Database Tools</h2>
+              <DatabaseTools />
             </motion.div>
           )}
 
