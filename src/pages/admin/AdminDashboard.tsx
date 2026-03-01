@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +22,7 @@ interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
   sku: string; stock_quantity: string; category_id: string; images: string; is_active: boolean; is_featured: boolean;
   video_url: string; datasheet_url: string;
+  shipping_type: string; ships_from: string; delivery_eta: string;
 }
 interface CategoryForm {
   name: string; slug: string; description: string; image_url: string; sort_order: string; is_active: boolean;
@@ -42,15 +43,16 @@ interface CouponForm {
 interface ComboForm {
   name: string; slug: string; description: string; combo_price: string; original_price: string;
   images: string; is_active: boolean; is_featured: boolean; items: { product_id: string; quantity: string }[];
+  shipping_type: string; ships_from: string; delivery_eta: string;
 }
 
-const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", cost_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "" };
+const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", cost_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "", shipping_type: "local", ships_from: "", delivery_eta: "" };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 const emptyPage: PageForm = { title: "", slug: "", content: "", is_published: true };
 const emptyCoupon: CouponForm = { code: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "" };
-const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }] };
+const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_type: "local", ships_from: "", delivery_eta: "" };
 
 const AdminDashboard = () => {
   const { isAdmin, loading } = useAdminAuth();
@@ -412,6 +414,7 @@ const AdminDashboard = () => {
     setEditingProductId(p.id);
     const imgs = p.images || [];
     setProductImagePreviews(imgs);
+    const specs = (p as any).specifications || {};
     setProductForm({
       name: p.name, slug: p.slug, description: p.description || "", price: String(p.price),
       discount_price: p.discount_price ? String(p.discount_price) : "", cost_price: (p as any).cost_price ? String((p as any).cost_price) : "",
@@ -419,6 +422,9 @@ const AdminDashboard = () => {
       stock_quantity: String(p.stock_quantity || 0), category_id: p.category_id || "",
       images: imgs.join(", "), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false,
       video_url: (p as any).video_url || "", datasheet_url: (p as any).datasheet_url || "",
+      shipping_type: specs._shipping_type || "local",
+      ships_from: specs._ships_from || "",
+      delivery_eta: specs._delivery_eta || "",
     });
     setProductDialog(true);
   };
@@ -482,6 +488,16 @@ const AdminDashboard = () => {
   };
 
   const saveProduct = async () => {
+    // Merge shipping fields into specifications
+    const existingSpecs = editingProductId
+      ? ((products?.find(p => p.id === editingProductId) as any)?.specifications || {})
+      : {};
+    const mergedSpecs = {
+      ...existingSpecs,
+      _shipping_type: productForm.shipping_type || "local",
+      _ships_from: productForm.ships_from || null,
+      _delivery_eta: productForm.delivery_eta || null,
+    };
     const payload: any = {
       name: productForm.name,
       slug: productForm.slug || productForm.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
@@ -497,6 +513,7 @@ const AdminDashboard = () => {
       is_featured: productForm.is_featured,
       video_url: productForm.video_url || null,
       datasheet_url: productForm.datasheet_url || null,
+      specifications: mergedSpecs,
     };
     if (editingProductId) {
       const { error } = await supabase.from("products").update(payload).eq("id", editingProductId);
@@ -841,6 +858,9 @@ const AdminDashboard = () => {
       combo_price: String(c.combo_price), original_price: String(c.original_price),
       images: imgs.join(", "), is_active: c.is_active ?? true, is_featured: c.is_featured ?? false,
       items: (c.combo_pack_items || []).map((item: any) => ({ product_id: item.product_id, quantity: String(item.quantity) })),
+      shipping_type: (c as any).shipping_type || "local",
+      ships_from: (c as any).ships_from || "",
+      delivery_eta: (c as any).delivery_eta || "",
     });
     if (comboForm.items.length === 0) setComboForm(prev => ({ ...prev, items: [{ product_id: "", quantity: "1" }] }));
     setComboDialog(true);
@@ -2450,6 +2470,21 @@ const AdminDashboard = () => {
                 allProducts={(products || []).map((p) => ({ id: p.id, name: p.name }))}
               />
             )}
+            <div className="border-t border-border pt-4 space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2"><Truck className="w-4 h-4 text-secondary" /> Shipping / ප්‍රවාහනය</h4>
+              <div>
+                <Label>Shipping Source</Label>
+                <Select value={productForm.shipping_type} onValueChange={(v) => setProductForm({ ...productForm, shipping_type: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">🇱🇰 Local</SelectItem>
+                    <SelectItem value="overseas">🌍 Overseas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Ships From</Label><Input value={productForm.ships_from} onChange={(e) => setProductForm({ ...productForm, ships_from: e.target.value })} placeholder="e.g. Colombo, Sri Lanka" /></div>
+              <div><Label>Delivery ETA (after payment)</Label><Input value={productForm.delivery_eta} onChange={(e) => setProductForm({ ...productForm, delivery_eta: e.target.value })} placeholder="e.g. 2-4 Days or 7-14 Business Days" /></div>
+            </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2"><Switch checked={productForm.is_active} onCheckedChange={(v) => setProductForm({ ...productForm, is_active: v })} /><Label>Active</Label></div>
               <div className="flex items-center gap-2"><Switch checked={productForm.is_featured} onCheckedChange={(v) => setProductForm({ ...productForm, is_featured: v })} /><Label>Featured</Label></div>
@@ -2660,6 +2695,21 @@ const AdminDashboard = () => {
                 </div>
               ))}
               <Button variant="outline" size="sm" onClick={() => setComboForm({ ...comboForm, items: [...comboForm.items, { product_id: "", quantity: "1" }] })} className="gap-1 mt-1"><Plus className="w-3.5 h-3.5" /> Add Product</Button>
+            </div>
+            <div className="border-t border-border pt-4 space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">Shipping / ප්‍රවාහනය</h4>
+              <div>
+                <Label>Shipping Source</Label>
+                <Select value={comboForm.shipping_type} onValueChange={(v) => setComboForm({ ...comboForm, shipping_type: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="local">🇱🇰 Local</SelectItem>
+                    <SelectItem value="overseas">🌍 Overseas</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><Label>Ships From</Label><Input value={comboForm.ships_from} onChange={(e) => setComboForm({ ...comboForm, ships_from: e.target.value })} placeholder="e.g. Colombo, Sri Lanka" /></div>
+              <div><Label>Delivery ETA (after payment)</Label><Input value={comboForm.delivery_eta} onChange={(e) => setComboForm({ ...comboForm, delivery_eta: e.target.value })} placeholder="e.g. 2-4 Days or 7-14 Business Days" /></div>
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2"><Switch checked={comboForm.is_active} onCheckedChange={(v) => setComboForm({ ...comboForm, is_active: v })} /><Label>Active</Label></div>
