@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,8 +14,9 @@ import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
+import SalesAnalytics from "@/components/admin/SalesAnalytics";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -266,6 +267,20 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["admin-payment-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "payment_methods").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+    },
+  });
+
+  const [paymentMethodSettings, setPaymentMethodSettings] = useState<any>(null);
+  useEffect(() => {
+    if (paymentSettings && !paymentMethodSettings) setPaymentMethodSettings(paymentSettings);
+  }, [paymentSettings]);
+
   const [seoForm, setSeoForm] = useState<any>(null);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [bankForm, setBankForm] = useState<any>(null);
@@ -308,6 +323,8 @@ const AdminDashboard = () => {
     { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
     { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
     { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
+    { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
+    { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
     { id: "stock" as Tab, label: "Stock", icon: Package, count: 0 },
   ];
@@ -1840,13 +1857,83 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Payment Settings Tab ═══ */}
+          {tab === "payment_settings" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Payment Methods</h2>
+                <Button size="sm" className="gap-1.5" disabled={!paymentMethodSettings} onClick={async () => {
+                  const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "payment_methods").maybeSingle();
+                  if (existing) {
+                    const { error } = await supabase.from("site_settings" as any).update({ value: paymentMethodSettings, updated_at: new Date().toISOString() } as any).eq("key", "payment_methods");
+                    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  } else {
+                    const { error } = await supabase.from("site_settings" as any).insert({ key: "payment_methods", value: paymentMethodSettings } as any);
+                    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  }
+                  toast({ title: "Payment settings saved" });
+                  queryClient.invalidateQueries({ queryKey: ["admin-payment-settings"] });
+                  queryClient.invalidateQueries({ queryKey: ["payment-methods-settings"] });
+                }}>
+                  <Save className="w-4 h-4" /> Save
+                </Button>
+              </div>
+              {paymentMethodSettings ? (
+                <div className="space-y-4 max-w-lg">
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Credit / Debit Card (Stripe)</p>
+                          <p className="text-xs text-muted-foreground">Visa, MasterCard payments via Stripe</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={paymentMethodSettings.stripe_enabled}
+                        onCheckedChange={(v) => setPaymentMethodSettings({ ...paymentMethodSettings, stripe_enabled: v })}
+                      />
+                    </div>
+                  </div>
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Direct Bank Transfer</p>
+                          <p className="text-xs text-muted-foreground">Manual bank transfer with receipt upload</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={paymentMethodSettings.bank_transfer_enabled}
+                        onCheckedChange={(v) => setPaymentMethodSettings({ ...paymentMethodSettings, bank_transfer_enabled: v })}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">⚠️ At least one payment method must remain enabled. Disabled methods will not be shown on the checkout page.</p>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Settings className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading payment settings...</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ═══ Sales Tab ═══ */}
+          {tab === "sales" && (
+            <SalesAnalytics orders={orders || []} products={products || []} />
+          )}
+
           {/* ═══ Reports Tab ═══ */}
           {tab === "reports" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Reports & Analytics</h2>
               {reportData ? (
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Overview Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="bg-card rounded-xl border border-border p-5">
                       <p className="text-sm text-muted-foreground mb-1">Total Orders</p>
                       <p className="text-2xl font-bold font-display text-foreground">{reportData.totalSales}</p>
@@ -1865,17 +1952,98 @@ const AdminDashboard = () => {
                         Rs. {reportData.totalSales > 0 ? Math.round(reportData.totalRevenue / reportData.totalSales).toLocaleString() : 0}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Financial Summary */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-card rounded-xl border border-border p-5">
                       <p className="text-sm text-muted-foreground mb-1">Total Cost</p>
                       <p className="text-2xl font-bold font-display text-foreground">Rs. {reportData.totalCost.toLocaleString()}</p>
                     </div>
                     <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Profit (Paid Orders)</p>
-                      <p className={`text-2xl font-bold font-display ${reportData.totalProfit >= 0 ? "text-green-600" : "text-destructive"}`}>Rs. {reportData.totalProfit.toLocaleString()}</p>
+                      <p className="text-sm text-muted-foreground mb-1">Gross Profit</p>
+                      <p className={`text-2xl font-bold font-display ${reportData.totalProfit >= 0 ? "text-secondary" : "text-destructive"}`}>Rs. {reportData.totalProfit.toLocaleString()}</p>
                       {reportData.totalRevenue > 0 && <p className="text-xs text-muted-foreground mt-1">{((reportData.totalProfit / reportData.totalRevenue) * 100).toFixed(1)}% margin</p>}
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Discounts Given</p>
+                      <p className="text-2xl font-bold font-display text-foreground">
+                        Rs. {(orders?.filter(o => o.payment_status === "paid").reduce((s, o) => s + (Number(o.discount_amount) || 0), 0) || 0).toLocaleString()}
+                      </p>
                     </div>
                   </div>
 
+                  {/* Coupon Usage */}
+                  {(() => {
+                    const couponUsage = new Map<string, { count: number; totalDiscount: number }>();
+                    orders?.filter(o => o.coupon_code).forEach(o => {
+                      const existing = couponUsage.get(o.coupon_code!) || { count: 0, totalDiscount: 0 };
+                      existing.count += 1;
+                      existing.totalDiscount += Number(o.discount_amount) || 0;
+                      couponUsage.set(o.coupon_code!, existing);
+                    });
+                    if (couponUsage.size === 0) return null;
+                    return (
+                      <div className="bg-card rounded-xl border border-border p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Coupon Usage</h3>
+                        <div className="space-y-2">
+                          {Array.from(couponUsage.entries()).sort((a, b) => b[1].count - a[1].count).map(([code, data]) => (
+                            <div key={code} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono bg-muted px-2 py-0.5 rounded text-xs">{code}</span>
+                                <span className="text-muted-foreground">{data.count} uses</span>
+                              </div>
+                              <span className="text-foreground font-medium">-Rs. {data.totalDiscount.toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Category-wise Revenue */}
+                  {(() => {
+                    const catRevenue = new Map<string, { name: string; revenue: number; qty: number; cost: number }>();
+                    orders?.filter(o => o.payment_status === "paid").forEach(o => {
+                      (o.order_items as any[])?.forEach((item: any) => {
+                        const prod = products?.find(p => p.id === item.product_id);
+                        const catName = (prod as any)?.categories?.name || "Uncategorized";
+                        const catId = prod?.category_id || "none";
+                        const existing = catRevenue.get(catId) || { name: catName, revenue: 0, qty: 0, cost: 0 };
+                        existing.revenue += Number(item.total_price);
+                        existing.qty += item.quantity;
+                        existing.cost += (Number((prod as any)?.cost_price) || 0) * item.quantity;
+                        catRevenue.set(catId, existing);
+                      });
+                    });
+                    if (catRevenue.size === 0) return null;
+                    const catData = Array.from(catRevenue.values()).sort((a, b) => b.revenue - a.revenue);
+                    return (
+                      <div className="bg-card rounded-xl border border-border p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Revenue by Category</h3>
+                        <div className="space-y-3">
+                          {catData.map((c, i) => {
+                            const maxRev = Math.max(...catData.map(x => x.revenue));
+                            const pct = maxRev > 0 ? (c.revenue / maxRev) * 100 : 0;
+                            return (
+                              <div key={i} className="space-y-1">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-foreground font-medium">{c.name}</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-xs text-muted-foreground">{c.qty} items</span>
+                                    <span className="font-medium text-foreground">Rs. {c.revenue.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                                <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                  <div className="h-full bg-secondary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {reportData.monthlyRevenue.length > 0 && (
                     <div className="bg-card rounded-xl border border-border p-5">
@@ -1897,6 +2065,7 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                   )}
+
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-card rounded-xl border border-border p-5">
                       <h3 className="font-semibold text-foreground mb-4">Best Selling Products</h3>
@@ -1942,6 +2111,50 @@ const AdminDashboard = () => {
                           ))}
                         </div>
                       </div>
+
+                      {/* Customer Stats */}
+                      <div className="bg-card rounded-xl border border-border p-5">
+                        <h3 className="font-semibold text-foreground mb-4">Customer Stats</h3>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Total Customers</span>
+                            <span className="font-bold text-foreground">{allProfiles?.length || 0}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Customers with Orders</span>
+                            <span className="font-bold text-foreground">{new Set(orders?.map(o => o.user_id)).size}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Repeat Customers</span>
+                            <span className="font-bold text-foreground">
+                              {(() => {
+                                const userOrders = new Map<string, number>();
+                                orders?.forEach(o => userOrders.set(o.user_id, (userOrders.get(o.user_id) || 0) + 1));
+                                return Array.from(userOrders.values()).filter(c => c > 1).length;
+                              })()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Shipping Revenue */}
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <h3 className="font-semibold text-foreground mb-4">Shipping Summary</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Shipping Revenue</p>
+                        <p className="text-lg font-bold text-foreground">Rs. {(orders?.filter(o => o.payment_status === "paid").reduce((s, o) => s + Number(o.shipping_fee), 0) || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Free Shipping Orders</p>
+                        <p className="text-lg font-bold text-foreground">{orders?.filter(o => Number(o.shipping_fee) === 0).length || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Paid Shipping Orders</p>
+                        <p className="text-lg font-bold text-foreground">{orders?.filter(o => Number(o.shipping_fee) > 0).length || 0}</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1953,6 +2166,7 @@ const AdminDashboard = () => {
               )}
             </motion.div>
           )}
+
 
           {/* ═══ Stock Tab ═══ */}
           {tab === "stock" && (

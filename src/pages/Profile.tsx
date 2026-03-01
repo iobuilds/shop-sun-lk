@@ -347,17 +347,36 @@ const Profile = () => {
                           {order.payment_method === "bank_transfer" && (
                             <div className="mt-4 pt-4 border-t border-border">
                               {(order as any).receipt_url ? (
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <CheckCircle className="w-4 h-4 text-secondary" />
                                   <span className="text-sm text-secondary font-medium">Receipt uploaded</span>
-                                  <a
-                                    href={(order as any).receipt_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-muted-foreground underline hover:text-foreground ml-auto"
-                                  >
-                                    View receipt
-                                  </a>
+                                  <div className="flex items-center gap-2 ml-auto">
+                                    <a
+                                      href={(order as any).receipt_url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-muted-foreground underline hover:text-foreground"
+                                    >
+                                      View receipt
+                                    </a>
+                                    <label>
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium cursor-pointer hover:bg-muted transition-colors text-muted-foreground">
+                                        <Upload className="w-3 h-3" />
+                                        {uploadingReceipt === order.id ? "Uploading..." : "Re-upload"}
+                                      </span>
+                                      <input
+                                        type="file"
+                                        accept="image/*,.pdf"
+                                        className="hidden"
+                                        disabled={uploadingReceipt === order.id}
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleReceiptUpload(order.id, file);
+                                          e.target.value = "";
+                                        }}
+                                      />
+                                    </label>
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-3">
