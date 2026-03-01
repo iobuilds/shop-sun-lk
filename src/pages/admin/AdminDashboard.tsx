@@ -298,11 +298,59 @@ const AdminDashboard = () => {
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
   ];
 
+  const ITEMS_PER_PAGE = 15;
   const [productPage, setProductPage] = useState(0);
-  const PRODUCTS_PER_PAGE = 15;
+  const [orderPage, setOrderPage] = useState(0);
+  const [dealPage, setDealPage] = useState(0);
+  const [couponPage, setCouponPage] = useState(0);
+  const [userPage, setUserPage] = useState(0);
+  const [reviewPage, setReviewPage] = useState(0);
+  const [contactPage, setContactPage] = useState(0);
+  const [smsLogPage, setSmsLogPage] = useState(0);
+
   const filteredProducts = products?.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));
-  const totalProductPages = Math.ceil((filteredProducts?.length || 0) / PRODUCTS_PER_PAGE);
-  const paginatedProducts = filteredProducts?.slice(productPage * PRODUCTS_PER_PAGE, (productPage + 1) * PRODUCTS_PER_PAGE);
+  const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts?.slice(productPage * ITEMS_PER_PAGE, (productPage + 1) * ITEMS_PER_PAGE);
+
+  const totalOrderPages = Math.ceil((orders?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedOrders = orders?.slice(orderPage * ITEMS_PER_PAGE, (orderPage + 1) * ITEMS_PER_PAGE);
+
+  const totalDealPages = Math.ceil((deals?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedDeals = deals?.slice(dealPage * ITEMS_PER_PAGE, (dealPage + 1) * ITEMS_PER_PAGE);
+
+  const totalCouponPages = Math.ceil((coupons?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedCoupons = coupons?.slice(couponPage * ITEMS_PER_PAGE, (couponPage + 1) * ITEMS_PER_PAGE);
+
+  const totalUserPages = Math.ceil((allProfiles?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedUsers = allProfiles?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
+
+  const totalReviewPages = Math.ceil((allReviews?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedReviews = allReviews?.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
+
+  const totalContactPages = Math.ceil((contactMessages?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedContacts = contactMessages?.slice(contactPage * ITEMS_PER_PAGE, (contactPage + 1) * ITEMS_PER_PAGE);
+
+  const totalSmsLogPages = Math.ceil((smsLogs?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedSmsLogs = smsLogs?.slice(smsLogPage * ITEMS_PER_PAGE, (smsLogPage + 1) * ITEMS_PER_PAGE);
+
+  // Reusable pagination renderer
+  const renderPagination = (currentPage: number, totalPages: number, setPage: (p: number | ((prev: number) => number)) => void, totalItems: number) => {
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex items-center justify-between mt-4">
+        <p className="text-xs text-muted-foreground">
+          Showing {currentPage * ITEMS_PER_PAGE + 1}–{Math.min((currentPage + 1) * ITEMS_PER_PAGE, totalItems)} of {totalItems}
+        </p>
+        <div className="flex gap-1">
+          <Button variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage(p => p - 1)}>Previous</Button>
+          {Array.from({ length: totalPages }, (_, i) => (
+            <Button key={i} variant={currentPage === i ? "default" : "outline"} size="sm" onClick={() => setPage(i)} className="w-8 h-8 p-0">{i + 1}</Button>
+          )).slice(Math.max(0, currentPage - 2), currentPage + 3)}
+          <Button variant="outline" size="sm" disabled={currentPage >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next</Button>
+        </div>
+      </div>
+    );
+  };
 
   // ── Product CRUD ──
   const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setProductDialog(true); };
@@ -616,6 +664,22 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Review deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-reviews"] });
+  };
+
+  // ── SMS Log delete ──
+  const deleteSmsLog = async (id: string) => {
+    if (!confirm("Delete this SMS log?")) return;
+    const { error } = await supabase.from("sms_logs" as any).delete().eq("id", id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "SMS log deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-sms-logs"] });
+  };
+  const deleteAllSmsLogs = async () => {
+    if (!confirm("Delete ALL SMS logs? This cannot be undone.")) return;
+    const { error } = await supabase.from("sms_logs" as any).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "All SMS logs deleted" });
+    queryClient.invalidateQueries({ queryKey: ["admin-sms-logs"] });
   };
 
   // ── SEO Settings ──
@@ -933,21 +997,7 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
-              {/* Pagination */}
-              {totalProductPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <p className="text-xs text-muted-foreground">
-                    Showing {productPage * PRODUCTS_PER_PAGE + 1}–{Math.min((productPage + 1) * PRODUCTS_PER_PAGE, filteredProducts?.length || 0)} of {filteredProducts?.length || 0}
-                  </p>
-                  <div className="flex gap-1">
-                    <Button variant="outline" size="sm" disabled={productPage === 0} onClick={() => setProductPage(p => p - 1)}>Previous</Button>
-                    {Array.from({ length: totalProductPages }, (_, i) => (
-                      <Button key={i} variant={productPage === i ? "default" : "outline"} size="sm" onClick={() => setProductPage(i)} className="w-8 h-8 p-0">{i + 1}</Button>
-                    )).slice(Math.max(0, productPage - 2), productPage + 3)}
-                    <Button variant="outline" size="sm" disabled={productPage >= totalProductPages - 1} onClick={() => setProductPage(p => p + 1)}>Next</Button>
-                  </div>
-                </div>
-              )}
+              {renderPagination(productPage, totalProductPages, setProductPage, filteredProducts?.length || 0)}
             </motion.div>
           )}
 
@@ -1003,7 +1053,7 @@ const AdminDashboard = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map((o) => (
+                        {paginatedOrders?.map((o) => (
                           <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                             <td className="px-4 py-3 font-mono text-xs text-foreground">{o.id.slice(0, 8)}</td>
                             <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(o.created_at!).toLocaleDateString()}</td>
@@ -1053,6 +1103,7 @@ const AdminDashboard = () => {
                   <p>No orders yet</p>
                 </div>
               )}
+              {renderPagination(orderPage, totalOrderPages, setOrderPage, orders?.length || 0)}
             </motion.div>
           )}
 
@@ -1151,7 +1202,7 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {deals?.map((d) => {
+                      {paginatedDeals?.map((d) => {
                         const product = d.products as any;
                         const isExpired = new Date(d.ends_at) < new Date();
                         return (
@@ -1189,6 +1240,7 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
+              {renderPagination(dealPage, totalDealPages, setDealPage, deals?.length || 0)}
             </motion.div>
           )}
 
@@ -1292,7 +1344,7 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {coupons?.map((c: any) => {
+                      {paginatedCoupons?.map((c: any) => {
                         const isExpired = c.expires_at && new Date(c.expires_at) < new Date();
                         return (
                           <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -1324,6 +1376,7 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
+              {renderPagination(couponPage, totalCouponPages, setCouponPage, coupons?.length || 0)}
             </motion.div>
           )}
 
@@ -1345,7 +1398,7 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {allProfiles?.map((p) => {
+                      {paginatedUsers?.map((p) => {
                         const role = getUserRole(p.user_id);
                         const userOrders = orders?.filter(o => o.user_id === p.user_id) || [];
                         return (
@@ -1380,6 +1433,7 @@ const AdminDashboard = () => {
                   </table>
                 </div>
               </div>
+              {renderPagination(userPage, totalUserPages, setUserPage, allProfiles?.length || 0)}
             </motion.div>
           )}
 
@@ -1388,7 +1442,7 @@ const AdminDashboard = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Reviews Moderation</h2>
               <div className="space-y-3">
-                {allReviews?.map((r: any) => (
+                {paginatedReviews?.map((r: any) => (
                   <div key={r.id} className="bg-card rounded-xl border border-border p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -1422,6 +1476,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+              {renderPagination(reviewPage, totalReviewPages, setReviewPage, allReviews?.length || 0)}
             </motion.div>
           )}
 
@@ -1430,7 +1485,7 @@ const AdminDashboard = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Contact Messages</h2>
               <div className="space-y-4">
-                {contactMessages?.map((m: any) => (
+                {paginatedContacts?.map((m: any) => (
                   <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -1459,6 +1514,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+              {renderPagination(contactPage, totalContactPages, setContactPage, contactMessages?.length || 0)}
             </motion.div>
           )}
 
@@ -1824,7 +1880,12 @@ const AdminDashboard = () => {
           {/* ═══ SMS Logs Tab ═══ */}
           {tab === "sms_logs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <h2 className="text-xl font-bold font-display text-foreground mb-6">SMS Delivery Log</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">SMS Delivery Log</h2>
+                {smsLogs && smsLogs.length > 0 && (
+                  <Button variant="destructive" size="sm" className="gap-1" onClick={deleteAllSmsLogs}><Trash2 className="w-4 h-4" /> Clear All</Button>
+                )}
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead><tr className="border-b border-border text-left">
@@ -1833,9 +1894,10 @@ const AdminDashboard = () => {
                     <th className="px-3 py-2 text-muted-foreground font-medium">Template</th>
                     <th className="px-3 py-2 text-muted-foreground font-medium">Status</th>
                     <th className="px-3 py-2 text-muted-foreground font-medium">Message</th>
+                    <th className="px-3 py-2 text-muted-foreground font-medium">Actions</th>
                   </tr></thead>
                   <tbody>
-                    {smsLogs?.map((log: any) => (
+                    {paginatedSmsLogs?.map((log: any) => (
                       <tr key={log.id} className="border-b border-border/50 hover:bg-muted/30">
                         <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(log.created_at).toLocaleString()}
@@ -1850,6 +1912,9 @@ const AdminDashboard = () => {
                           </span>
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground max-w-xs truncate">{log.message}</td>
+                        <td className="px-3 py-2">
+                          <button onClick={() => deleteSmsLog(log.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1861,6 +1926,7 @@ const AdminDashboard = () => {
                   </div>
                 )}
               </div>
+              {renderPagination(smsLogPage, totalSmsLogPages, setSmsLogPage, smsLogs?.length || 0)}
             </motion.div>
           )}
         </main>
