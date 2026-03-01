@@ -15,7 +15,7 @@ import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 
-type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs";
+type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -309,6 +309,7 @@ const AdminDashboard = () => {
     { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
     { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
     { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
+    { id: "stock" as Tab, label: "Stock", icon: Package, count: 0 },
   ];
 
   const ITEMS_PER_PAGE = 15;
@@ -1875,93 +1876,6 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
-                  {/* Stock Overview */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Total Products</p>
-                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalProducts}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Total Stock Qty</p>
-                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalStockQty.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Selling)</p>
-                      <p className="text-2xl font-bold font-display text-secondary">Rs. {reportData.totalStockValue.toLocaleString()}</p>
-                    </div>
-                    <div className="bg-card rounded-xl border border-border p-5">
-                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Cost)</p>
-                      <p className="text-2xl font-bold font-display text-foreground">Rs. {reportData.totalStockCostValue.toLocaleString()}</p>
-                    </div>
-                  </div>
-
-                  {/* Low Stock Threshold Setting */}
-                  <div className="bg-card rounded-xl border border-border p-5">
-                    <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <Package className="w-4 h-4" /> Low Stock Threshold
-                    </h3>
-                    <div className="flex items-center gap-3">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={lowStockThreshold}
-                        onChange={e => setLowStockThreshold(Number(e.target.value) || 1)}
-                        className="w-24"
-                      />
-                      <span className="text-sm text-muted-foreground">Products with stock ≤ this value will be flagged as low stock</span>
-                      <Button size="sm" onClick={async () => {
-                        const val = { low_stock_threshold: lowStockThreshold };
-                        const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "stock_settings").maybeSingle();
-                        if (existing) {
-                          const { error } = await supabase.from("site_settings" as any).update({ value: val, updated_at: new Date().toISOString() } as any).eq("key", "stock_settings");
-                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-                        } else {
-                          const { error } = await supabase.from("site_settings" as any).insert({ key: "stock_settings", value: val } as any);
-                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-                        }
-                        toast({ title: "Threshold saved" });
-                        queryClient.invalidateQueries({ queryKey: ["admin-stock-settings"] });
-                      }}>
-                        <Save className="w-3 h-3 mr-1" /> Save
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Low Stock & Out of Stock Alerts */}
-                  {(reportData.outOfStockProducts.length > 0 || reportData.lowStockProducts.length > 0) && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                      {reportData.outOfStockProducts.length > 0 && (
-                        <div className="bg-card rounded-xl border border-destructive/30 p-5">
-                          <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
-                            <Package className="w-4 h-4" /> Out of Stock ({reportData.outOfStockProducts.length})
-                          </h3>
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {reportData.outOfStockProducts.map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between text-sm">
-                                <span className="text-foreground line-clamp-1">{p.name}</span>
-                                <span className="text-xs text-destructive font-medium px-2 py-0.5 bg-destructive/10 rounded-full">0 units</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {reportData.lowStockProducts.length > 0 && (
-                        <div className="bg-card rounded-xl border border-accent/30 p-5">
-                          <h3 className="font-semibold text-accent-foreground mb-4 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" /> {"Low Stock ≤"}{lowStockThreshold} ({reportData.lowStockProducts.length})
-                          </h3>
-                          <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {reportData.lowStockProducts.map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between text-sm">
-                                <span className="text-foreground line-clamp-1">{p.name}</span>
-                                <span className="text-xs text-accent-foreground font-medium px-2 py-0.5 bg-accent/10 rounded-full">{p.stock_quantity} units</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                   {reportData.monthlyRevenue.length > 0 && (
                     <div className="bg-card rounded-xl border border-border p-5">
@@ -2035,6 +1949,123 @@ const AdminDashboard = () => {
                 <div className="text-center py-16 text-muted-foreground">
                   <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-30" />
                   <p>Loading report data...</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* ═══ Stock Tab ═══ */}
+          {tab === "stock" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <h2 className="text-xl font-bold font-display text-foreground mb-6">Stock Management</h2>
+              {reportData ? (
+                <div className="space-y-6">
+                  {/* Stock Overview Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Products</p>
+                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalProducts}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Total Stock Qty</p>
+                      <p className="text-2xl font-bold font-display text-foreground">{reportData.totalStockQty.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Selling)</p>
+                      <p className="text-2xl font-bold font-display text-secondary">Rs. {reportData.totalStockValue.toLocaleString()}</p>
+                    </div>
+                    <div className="bg-card rounded-xl border border-border p-5">
+                      <p className="text-sm text-muted-foreground mb-1">Stock Value (Cost)</p>
+                      <p className="text-2xl font-bold font-display text-foreground">Rs. {reportData.totalStockCostValue.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Low Stock Threshold Setting */}
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                      <Package className="w-4 h-4" /> Low Stock Threshold
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Input
+                        type="number"
+                        min={1}
+                        value={lowStockThreshold}
+                        onChange={e => setLowStockThreshold(Number(e.target.value) || 1)}
+                        className="w-24"
+                      />
+                      <span className="text-sm text-muted-foreground">Products with stock ≤ this value will be flagged</span>
+                      <Button size="sm" onClick={async () => {
+                        const val = { low_stock_threshold: lowStockThreshold };
+                        const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "stock_settings").maybeSingle();
+                        if (existing) {
+                          const { error } = await supabase.from("site_settings" as any).update({ value: val, updated_at: new Date().toISOString() } as any).eq("key", "stock_settings");
+                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                        } else {
+                          const { error } = await supabase.from("site_settings" as any).insert({ key: "stock_settings", value: val } as any);
+                          if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                        }
+                        toast({ title: "Threshold saved" });
+                        queryClient.invalidateQueries({ queryKey: ["admin-stock-settings"] });
+                      }}>
+                        <Save className="w-3 h-3 mr-1" /> Save
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Out of Stock Products */}
+                  <div className="bg-card rounded-xl border border-destructive/30 p-5">
+                    <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
+                      <Package className="w-4 h-4" /> Out of Stock ({reportData.outOfStockProducts.length})
+                    </h3>
+                    {reportData.outOfStockProducts.length > 0 ? (
+                      <div className="space-y-2">
+                        {reportData.outOfStockProducts.map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
+                            <div className="flex items-center gap-3">
+                              <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-8 h-8 rounded object-cover" />
+                              <span className="text-foreground">{p.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-muted-foreground">{(p.categories as any)?.name || "—"}</span>
+                              <span className="text-xs text-destructive font-medium px-2 py-0.5 bg-destructive/10 rounded-full">0 units</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No out-of-stock products 🎉</p>
+                    )}
+                  </div>
+
+                  {/* Low Stock Products */}
+                  <div className="bg-card rounded-xl border border-accent/30 p-5">
+                    <h3 className="font-semibold text-accent-foreground mb-4 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" /> {"Low Stock ≤"}{lowStockThreshold} ({reportData.lowStockProducts.length})
+                    </h3>
+                    {reportData.lowStockProducts.length > 0 ? (
+                      <div className="space-y-2">
+                        {reportData.lowStockProducts.map((p: any) => (
+                          <div key={p.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border last:border-0">
+                            <div className="flex items-center gap-3">
+                              <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-8 h-8 rounded object-cover" />
+                              <span className="text-foreground">{p.name}</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-muted-foreground">{(p.categories as any)?.name || "—"}</span>
+                              <span className="text-xs text-accent-foreground font-medium px-2 py-0.5 bg-accent/10 rounded-full">{p.stock_quantity} units</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No low-stock products 🎉</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading stock data...</p>
                 </div>
               )}
             </motion.div>
