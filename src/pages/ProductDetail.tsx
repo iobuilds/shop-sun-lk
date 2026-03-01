@@ -142,6 +142,12 @@ const ProductDetail = () => {
   const datasheetUrl = (product as any).datasheet_url as string | null;
   const hasDocuments = !!videoUrl || !!datasheetUrl;
 
+  // Shipping info from specifications
+  const shippingType = specs?._shipping_type || "local";
+  const shipsFrom = specs?._ships_from || "Colombo, Sri Lanka";
+  const deliveryEta = specs?._delivery_eta || (shippingType === "overseas" ? "7-14 Days" : "2-4 Days");
+  const isLocal = shippingType === "local";
+
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
@@ -288,9 +294,11 @@ const ProductDetail = () => {
               {/* Shipping & Delivery Info */}
               <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-base">🇱🇰</span>
-                  <span className="font-medium text-foreground">Ships From: Colombo, Sri Lanka</span>
-                  <span className="ml-auto bg-secondary/10 text-secondary text-[10px] font-bold px-2 py-0.5 rounded-md">Local</span>
+                  <span className="text-base">{isLocal ? "🇱🇰" : "🌍"}</span>
+                  <span className="font-medium text-foreground">Ships From: {shipsFrom}</span>
+                  <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-md ${isLocal ? "bg-secondary/10 text-secondary" : "bg-accent/20 text-accent-foreground"}`}>
+                    {isLocal ? "Local" : "Overseas"}
+                  </span>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="text-center">
@@ -304,7 +312,7 @@ const ProductDetail = () => {
                   </div>
                   <div className="text-center">
                     <Clock className="w-5 h-5 text-secondary mx-auto mb-1" />
-                    <p className="text-xs font-semibold text-foreground">ETA: 2-4 Days</p>
+                    <p className="text-xs font-semibold text-foreground">ETA: {deliveryEta}</p>
                     <p className="text-[10px] text-muted-foreground">After payment</p>
                   </div>
                   <div className="text-center">
@@ -342,7 +350,7 @@ const ProductDetail = () => {
 
           {activeTab === "specs" && specs && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl">
-              {Object.entries(specs).map(([key, value], i, arr) => (
+              {Object.entries(specs).filter(([key]) => !key.startsWith("_")).map(([key, value], i, arr) => (
                 <div key={key} className={`flex justify-between py-3 text-sm ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
                   <span className="font-medium text-foreground">{key}</span>
                   <span className="text-muted-foreground">{value}</span>

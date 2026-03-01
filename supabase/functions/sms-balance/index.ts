@@ -20,8 +20,8 @@ serve(async (req) => {
   }
 
   try {
-    // Try text.lk profile/balance endpoint
-    const response = await fetch("https://app.text.lk/api/v3/profile", {
+    // Check SMS balance via text.lk balance endpoint
+    const response = await fetch("https://app.text.lk/api/v3/balance", {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${TEXTLK_API_KEY}`,
