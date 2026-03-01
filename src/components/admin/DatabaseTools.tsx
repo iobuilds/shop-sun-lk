@@ -216,72 +216,15 @@ const DatabaseTools = () => {
     }
   };
 
-  const parseSqlToJson = (sql: string): Record<string, any[]> => {
-    const result: Record<string, any[]> = {};
-    const insertRegex = /INSERT INTO public\.(\w+)\s*\(([^)]+)\)\s*VALUES\s*\((.+)\);/g;
-    let match;
-    while ((match = insertRegex.exec(sql)) !== null) {
-      const table = match[1];
-      const cols = match[2].split(",").map(c => c.trim());
-      const rawVals = match[3];
-
-      // Parse values respecting quoted strings
-      const vals: string[] = [];
-      let current = "";
-      let inQuote = false;
-      let depth = 0;
-      for (let i = 0; i < rawVals.length; i++) {
-        const ch = rawVals[i];
-        if (ch === "'" && !inQuote) { inQuote = true; current += ch; }
-        else if (ch === "'" && inQuote) {
-          if (rawVals[i + 1] === "'") { current += "''"; i++; }
-          else { inQuote = false; current += ch; }
-        }
-        else if (ch === "(" && !inQuote) { depth++; current += ch; }
-        else if (ch === ")" && !inQuote) { depth--; current += ch; }
-        else if (ch === "," && !inQuote && depth === 0) { vals.push(current.trim()); current = ""; }
-        else { current += ch; }
-      }
-      if (current.trim()) vals.push(current.trim());
-
-      const row: Record<string, any> = {};
-      cols.forEach((col, i) => {
-        let v = (vals[i] || "NULL").trim();
-        // Remove ::jsonb cast
-        if (v.endsWith("::jsonb")) v = v.slice(0, -7);
-        if (v === "NULL") row[col] = null;
-        else if (v === "TRUE") row[col] = true;
-        else if (v === "FALSE") row[col] = false;
-        else if (v.startsWith("'") && v.endsWith("'")) {
-          const str = v.slice(1, -1).replace(/''/g, "'");
-          // Try parsing as JSON for jsonb columns
-          try { row[col] = JSON.parse(str); } catch { row[col] = str; }
-        }
-        else if (!isNaN(Number(v))) row[col] = Number(v);
-        else row[col] = v;
-      });
-
-      if (!result[table]) result[table] = [];
-      result[table].push(row);
-    }
-    return result;
-  };
-
   const handleUploadRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
       const text = await file.text();
-      let data: Record<string, any[]>;
-      if (file.name.endsWith(".sql")) {
-        data = parseSqlToJson(text);
-        if (Object.keys(data).length === 0) throw new Error("No valid INSERT statements found in SQL file");
-      } else {
-        data = JSON.parse(text);
-      }
+      const data = JSON.parse(text);
       setConfirmUploadRestore(data);
-    } catch (err: any) {
-      toast({ title: "Invalid file", description: err.message || "Please upload a valid JSON or SQL backup file", variant: "destructive" });
+    } catch {
+      toast({ title: "Invalid file", description: "Please upload a valid JSON backup file", variant: "destructive" });
     }
     e.target.value = "";
   };
@@ -388,9 +331,9 @@ const DatabaseTools = () => {
         </Button>
         <div className="relative">
           <Button variant="outline" disabled={restoring}>
-            <Upload className="w-4 h-4 mr-2" /> Restore from File (JSON / SQL)
+            <Upload className="w-4 h-4 mr-2" /> Restore from File
           </Button>
-          <input type="file" accept=".json,.sql" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadRestore} disabled={restoring} />
+          <input type="file" accept=".json" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadRestore} disabled={restoring} />
         </div>
         <Button variant="outline" onClick={fetchBackups} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
