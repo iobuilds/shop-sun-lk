@@ -4,7 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2, Video, FileDown } from "lucide-react";
+import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2, Video, FileDown, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -255,19 +255,34 @@ const ProductDetail = () => {
                 <Button variant="outline" size="lg"><Share2 className="w-4 h-4" /></Button>
               </div>
 
-              {/* Benefits */}
-              <div className="grid grid-cols-3 gap-3 pt-4 border-t border-border">
-                {[
-                  { icon: Truck, label: "Free Shipping", sub: "Over Rs. 5,000" },
-                  { icon: Shield, label: "Warranty", sub: "6 months" },
-                  { icon: RotateCcw, label: "Returns", sub: "7-day policy" },
-                ].map((b) => (
-                  <div key={b.label} className="text-center">
-                    <b.icon className="w-5 h-5 text-secondary mx-auto mb-1" />
-                    <p className="text-xs font-semibold text-foreground">{b.label}</p>
-                    <p className="text-[10px] text-muted-foreground">{b.sub}</p>
+              {/* Shipping & Delivery Info */}
+              <div className="bg-muted/50 rounded-xl p-4 space-y-3 border border-border">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-base">🇱🇰</span>
+                  <span className="font-medium text-foreground">Ships From: Colombo, Sri Lanka</span>
+                  <span className="ml-auto bg-secondary/10 text-secondary text-[10px] font-bold px-2 py-0.5 rounded-md">Local</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center">
+                    <Truck className="w-5 h-5 text-secondary mx-auto mb-1" />
+                    <p className="text-xs font-semibold text-foreground">
+                      {product.price >= 5000 ? "Free Shipping" : "Rs. 350"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {product.price >= 5000 ? "Included" : "Delivery fee"}
+                    </p>
                   </div>
-                ))}
+                  <div className="text-center">
+                    <Clock className="w-5 h-5 text-secondary mx-auto mb-1" />
+                    <p className="text-xs font-semibold text-foreground">ETA: 2-4 Days</p>
+                    <p className="text-[10px] text-muted-foreground">After payment</p>
+                  </div>
+                  <div className="text-center">
+                    <Shield className="w-5 h-5 text-secondary mx-auto mb-1" />
+                    <p className="text-xs font-semibold text-foreground">Warranty</p>
+                    <p className="text-[10px] text-muted-foreground">6 months</p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
