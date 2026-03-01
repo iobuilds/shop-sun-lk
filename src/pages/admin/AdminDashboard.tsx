@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -318,30 +318,104 @@ const AdminDashboard = () => {
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
 
-  const tabs = [
-    { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
-    { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
-    { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: orders?.length || 0 },
-    { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
-    { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
-    { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
-    { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
-    { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
-    { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
-    { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
-    { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
-    { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
-    { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
-    { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
-    { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
-    { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
-    { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
-    { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
-    { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
-    { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
-    { id: "stock" as Tab, label: "Stock", icon: Package, count: 0 },
-    { id: "db_tools" as Tab, label: "DB Tools", icon: Database, count: 0 },
+  const lowStockCount = products?.filter(p => {
+    const stock = Number(p.stock_quantity) || 0;
+    return stock > 0 && stock <= (stockSettings?.low_stock_threshold || 5);
+  }).length || 0;
+
+  const pendingOrderCount = orders?.filter(o => o.status === "pending" || o.status === "confirmed").length || 0;
+
+  const sidebarGroups = [
+    {
+      label: "Catalog", icon: Package, defaultOpen: true,
+      items: [
+        { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
+        { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
+        { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
+        { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
+        { id: "stock" as Tab, label: "Stock", icon: Package, count: lowStockCount },
+      ],
+    },
+    {
+      label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true,
+      items: [
+        { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: pendingOrderCount },
+      ],
+    },
+    {
+      label: "Customers", icon: Users, defaultOpen: true,
+      items: [
+        { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
+        { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
+        { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
+      ],
+    },
+    {
+      label: "Marketing", icon: Megaphone, defaultOpen: false,
+      items: [
+        { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
+        { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
+        { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+        { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+      ],
+    },
+    {
+      label: "Payments & Finance", icon: CreditCard, defaultOpen: false,
+      items: [
+        { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
+        { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
+        { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
+      ],
+    },
+    {
+      label: "Content & Site", icon: Globe, defaultOpen: false,
+      items: [
+        { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
+        { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
+      ],
+    },
+    {
+      label: "SMS Center", icon: Send, defaultOpen: false,
+      items: [
+        { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
+        { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
+      ],
+    },
+    {
+      label: "Analytics & Reports", icon: TrendingUp, defaultOpen: false,
+      items: [
+        { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
+      ],
+    },
+    {
+      label: "System Tools", icon: Wrench, defaultOpen: false,
+      items: [
+        { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+      ],
+    },
   ];
+
+  // Flat list for mobile
+  const allTabs = sidebarGroups.flatMap(g => g.items);
+
+  // Track which groups are open
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    sidebarGroups.forEach(g => { initial[g.label] = g.defaultOpen; });
+    return initial;
+  });
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  // Auto-open the group containing the active tab
+  useEffect(() => {
+    const group = sidebarGroups.find(g => g.items.some(i => i.id === tab));
+    if (group && !openGroups[group.label]) {
+      setOpenGroups(prev => ({ ...prev, [group.label]: true }));
+    }
+  }, [tab]);
 
   const ITEMS_PER_PAGE = 15;
   const [productPage, setProductPage] = useState(0);
@@ -1072,28 +1146,43 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background">
       <div className="flex">
         {/* Sidebar */}
-        <aside className="w-64 min-h-screen bg-card border-r border-border p-6 hidden md:block sticky top-0 h-screen overflow-y-auto">
+        <aside className="w-64 min-h-screen bg-card border-r border-border p-4 hidden md:block sticky top-0 h-screen overflow-y-auto">
           <Link to="/">
             <h1 className="text-xl font-bold font-display text-foreground mb-1 flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-secondary" /> Admin Panel
             </h1>
           </Link>
-          <p className="text-xs text-muted-foreground mb-8">TechLK Management</p>
+          <p className="text-xs text-muted-foreground mb-6">TechLK Management</p>
           <nav className="space-y-1">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  tab === t.id ? "bg-secondary/10 text-secondary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                }`}
-              >
-                <span className="flex items-center gap-2"><t.icon className="w-4 h-4" />{t.label}</span>
-                {t.count > 0 && <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{t.count}</span>}
-              </button>
+            {sidebarGroups.map((group) => (
+              <div key={group.label}>
+                <button
+                  onClick={() => toggleGroup(group.label)}
+                  className="w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <span className="flex items-center gap-2"><group.icon className="w-3.5 h-3.5" />{group.label}</span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openGroups[group.label] ? "rotate-0" : "-rotate-90"}`} />
+                </button>
+                {openGroups[group.label] && (
+                  <div className="ml-2 space-y-0.5 mb-2">
+                    {group.items.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                          tab === t.id ? "bg-secondary/10 text-secondary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        <span className="flex items-center gap-2"><t.icon className="w-4 h-4" />{t.label}</span>
+                        {t.count > 0 && <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{t.count}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
-          <div className="mt-6 pt-6 border-t border-border">
+          <div className="mt-4 pt-4 border-t border-border">
             <button
               onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
               className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
@@ -1106,7 +1195,7 @@ const AdminDashboard = () => {
         <main className="flex-1 p-6 md:p-8">
           {/* Mobile tabs */}
           <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2">
-            {tabs.map((t) => (
+            {allTabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
