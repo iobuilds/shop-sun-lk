@@ -35,6 +35,28 @@ const StaticPage = () => {
     );
   }
 
+  // For contact page, show the form even if no DB page exists
+  if (!page && slug === "contact-us") {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="pt-36 pb-16">
+          <div className="container mx-auto px-4">
+            <div className="max-w-3xl mx-auto">
+              <h1 className="text-3xl font-bold font-display text-foreground mb-4">Contact Us</h1>
+              <p className="text-muted-foreground mb-8">Have a question or need help? Send us a message and we'll get back to you shortly.</p>
+              <div className="bg-card rounded-xl border border-border p-6">
+                <h2 className="text-xl font-bold font-display text-foreground mb-6">Send Us a Message</h2>
+                <ContactForm />
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   if (!page) {
     return (
       <div className="min-h-screen bg-background">
