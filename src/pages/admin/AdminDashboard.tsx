@@ -840,7 +840,7 @@ const AdminDashboard = () => {
             {tabs.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors ${
                   tab === t.id ? "bg-secondary/10 text-secondary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 }`}
@@ -866,7 +866,7 @@ const AdminDashboard = () => {
             {tabs.map((t) => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap ${
                   tab === t.id ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
                 }`}
@@ -1551,6 +1551,30 @@ const AdminDashboard = () => {
                     </div>
                     <div><Label>Short Description</Label><Textarea value={companyForm.description || ""} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} rows={2} placeholder="Brief description shown in footer" /></div>
                     <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 TechLK. All rights reserved." /></div>
+                    <div>
+                      <Label>Company Logo</Label>
+                      <div className="flex items-center gap-3 mt-1">
+                        {companyForm.logo_url && (
+                          <div className="relative group">
+                            <img src={companyForm.logo_url} alt="Logo" className="h-14 rounded border border-border object-contain bg-muted p-1" />
+                            <button type="button" onClick={() => setCompanyForm({ ...companyForm, logo_url: "" })} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
+                          <Upload className="w-4 h-4" />{uploading ? "Uploading..." : "Upload logo"}
+                          <input type="file" accept="image/*" onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploading(true);
+                            const url = await uploadFile(file, "logo");
+                            if (url) setCompanyForm((prev: any) => ({ ...prev, logo_url: url }));
+                            setUploading(false);
+                            e.target.value = "";
+                          }} className="hidden" disabled={uploading} />
+                        </label>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Recommended: PNG with transparent background, 200×60px or similar</p>
+                    </div>
                   </div>
 
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
