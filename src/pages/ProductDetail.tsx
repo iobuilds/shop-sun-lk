@@ -4,7 +4,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2, Video, FileDown, Clock } from "lucide-react";
+import { Star, ShoppingCart, Heart, ChevronLeft, ChevronRight, Minus, Plus, Truck, Shield, RotateCcw, Share2, Video, FileDown, Clock, ExternalLink, Link2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -65,6 +65,36 @@ const ProductDetail = () => {
       return data;
     },
     enabled: !!product?.id && !!product?.category_id,
+  });
+
+  // External links
+  const { data: externalLinks } = useQuery({
+    queryKey: ["product-external-links-public", product?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_external_links" as any)
+        .select("*")
+        .eq("product_id", product!.id)
+        .eq("is_active", true)
+        .order("sort_order");
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!product?.id,
+  });
+
+  // Similar products
+  const { data: similarProducts } = useQuery({
+    queryKey: ["product-similar-public", product?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("product_similar_items" as any)
+        .select("*, products:similar_product_id(id, name, slug, price, discount_price, images, rating, review_count)")
+        .eq("product_id", product!.id);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!product?.id,
   });
 
   const recentlyViewed = useRecentlyViewed(product || undefined);
@@ -387,6 +417,68 @@ const ProductDetail = () => {
             </motion.div>
           )}
         </div>
+
+        {/* International Links */}
+        {externalLinks && externalLinks.length > 0 && (
+          <div className="container mx-auto px-4 py-8 border-t border-border">
+            <h2 className="text-lg font-bold font-display text-foreground mb-4 flex items-center gap-2">
+              <ExternalLink className="w-5 h-5 text-secondary" /> International Links
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {externalLinks.map((link: any) => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-card border border-border rounded-xl hover:bg-muted transition-colors text-sm"
+                >
+                  <ExternalLink className="w-4 h-4 text-secondary" />
+                  <div>
+                    <p className="font-medium text-foreground">{link.label}</p>
+                    <p className="text-[10px] text-muted-foreground capitalize">{link.link_type}</p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Similar / Alternative Products */}
+        {similarProducts && similarProducts.length > 0 && (
+          <div className="container mx-auto px-4 py-8 border-t border-border">
+            <h2 className="text-lg font-bold font-display text-foreground mb-4 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-secondary" /> Similar Items / Alternatives
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              {similarProducts.map((item: any, i: number) => {
+                const sp = item.products;
+                if (!sp) return null;
+                return (
+                  <motion.div key={item.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
+                    <Link to={`/product/${sp.slug}`} className="group bg-card rounded-xl border border-border overflow-hidden block hover:shadow-md transition-shadow">
+                      <div className="relative overflow-hidden">
+                        <img src={sp.images?.[0] || "/placeholder.svg"} alt={sp.name} className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                        <span className="absolute top-2 left-2 bg-accent/80 text-accent-foreground text-[9px] font-bold px-2 py-0.5 rounded-md capitalize">{item.relation_type}</span>
+                      </div>
+                      <div className="p-3">
+                        <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1 min-h-[2.5rem] group-hover:text-secondary transition-colors">{sp.name}</h3>
+                        <div className="flex items-center gap-1 mb-1">
+                          <div className="flex">{[...Array(5)].map((_, j) => <Star key={j} className={`w-3 h-3 ${j < Math.floor(sp.rating || 0) ? "text-accent fill-accent" : "text-border"}`} />)}</div>
+                          <span className="text-[10px] text-muted-foreground">({sp.review_count || 0})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">Rs. {sp.price?.toLocaleString()}</span>
+                          {sp.discount_price && <span className="text-[11px] text-muted-foreground line-through">Rs. {sp.discount_price.toLocaleString()}</span>}
+                        </div>
+                      </div>
+                    </Link>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Related Products */}
         {relatedProducts && relatedProducts.length > 0 && (

@@ -14,6 +14,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import CategorySpecFilters from "@/components/CategorySpecFilters";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -32,6 +33,7 @@ const CategoryPage = () => {
   const [inStockOnly, setInStockOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
+  const [selectedSpecs, setSelectedSpecs] = useState<Record<string, string[]>>({});
   const PRODUCTS_PER_PAGE = 12;
 
   const { data: category, isLoading: catLoading } = useQuery({
@@ -96,6 +98,16 @@ const CategoryPage = () => {
       if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
       if (minRating > 0 && (p.rating || 0) < minRating) return false;
       if (inStockOnly && (p.stock_quantity || 0) <= 0) return false;
+      // Spec-based filtering
+      for (const [key, values] of Object.entries(selectedSpecs)) {
+        if (values.length === 0) continue;
+        const specs = p.specifications as Record<string, string> | null;
+        if (!specs) return false;
+        const matchedKey = Object.keys(specs).find(
+          (k) => k.toLowerCase() === key.toLowerCase()
+        );
+        if (!matchedKey || !values.includes(specs[matchedKey])) return false;
+      }
       return true;
     });
 
@@ -107,26 +119,28 @@ const CategoryPage = () => {
       default: break;
     }
     return result;
-  }, [products, sortBy, priceRange, minRating, inStockOnly]);
+  }, [products, sortBy, priceRange, minRating, inStockOnly, selectedSpecs]);
 
   // Reset pagination when filters/sort change
   useMemo(() => {
     setVisibleCount(PRODUCTS_PER_PAGE);
-  }, [sortBy, priceRange, minRating, inStockOnly]);
+  }, [sortBy, priceRange, minRating, inStockOnly, selectedSpecs]);
 
   const visibleProducts = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
 
+  const specFilterCount = Object.values(selectedSpecs).filter((v) => v.length > 0).length;
   const activeFilterCount = [
     priceRange[0] > 0 || priceRange[1] < maxPrice,
     minRating > 0,
     inStockOnly,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + specFilterCount;
 
   const clearFilters = () => {
     setPriceRange([0, maxPrice]);
     setMinRating(0);
     setInStockOnly(false);
+    setSelectedSpecs({});
   };
 
   const isLoading = catLoading || prodsLoading || (isComboPage && combosLoading);
@@ -282,6 +296,31 @@ const CategoryPage = () => {
             </Select>
           </div>
 
+          {/* Active spec filter chips */}
+          {specFilterCount > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {Object.entries(selectedSpecs).map(([key, values]) =>
+                values.map((val) => (
+                  <span
+                    key={`${key}-${val}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium"
+                  >
+                    {key}: {val}
+                    <button
+                      onClick={() => {
+                        const updated = values.filter((v) => v !== val);
+                        setSelectedSpecs((prev) => ({ ...prev, [key]: updated }));
+                      }}
+                      className="hover:text-foreground"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          )}
+
           <div className="flex gap-6">
             {/* Filter sidebar */}
             {showFilters && (
@@ -344,6 +383,17 @@ const CategoryPage = () => {
                     <Label className="text-sm font-medium text-foreground">In Stock Only</Label>
                     <Switch checked={inStockOnly} onCheckedChange={setInStockOnly} />
                   </div>
+
+                  {/* Category-specific spec filters */}
+                  {slug && products && (
+                    <CategorySpecFilters
+                      categorySlug={slug}
+                      products={products}
+                      selectedSpecs={selectedSpecs}
+                      onSpecChange={(key, values) => setSelectedSpecs((prev) => ({ ...prev, [key]: values }))}
+                      onClearAll={() => setSelectedSpecs({})}
+                    />
+                  )}
                 </div>
               </motion.aside>
             )}
@@ -395,6 +445,17 @@ const CategoryPage = () => {
                   <Label className="text-sm font-medium text-foreground">In Stock Only</Label>
                   <Switch checked={inStockOnly} onCheckedChange={setInStockOnly} />
                 </div>
+
+                {/* Category-specific spec filters (mobile) */}
+                {slug && products && (
+                  <CategorySpecFilters
+                    categorySlug={slug}
+                    products={products}
+                    selectedSpecs={selectedSpecs}
+                    onSpecChange={(key, values) => setSelectedSpecs((prev) => ({ ...prev, [key]: values }))}
+                    onClearAll={() => setSelectedSpecs({})}
+                  />
+                )}
               </motion.div>
             )}
 

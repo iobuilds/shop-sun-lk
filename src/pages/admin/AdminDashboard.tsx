@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import { motion } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
+import ProductLinksManager from "@/components/admin/ProductLinksManager";
 
 type Tab = "products" | "categories" | "orders" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "bank" | "sms_templates" | "sms_logs";
 
@@ -1778,6 +1779,13 @@ const AdminDashboard = () => {
               <div><Label>Datasheet / PDF URL</Label><Input value={productForm.datasheet_url} onChange={(e) => setProductForm({ ...productForm, datasheet_url: e.target.value })} placeholder="https://... datasheet PDF link එක" /></div>
               <p className="text-xs text-muted-foreground">සියලුම නිෂ්පාදන සඳහා මේවා අවශ්‍ය නොවේ. තිබේ නම් පමණක් එකතු කරන්න.</p>
             </div>
+            {/* International Links & Similar Products (only when editing) */}
+            {editingProductId && (
+              <ProductLinksManager
+                productId={editingProductId}
+                allProducts={(products || []).map((p) => ({ id: p.id, name: p.name }))}
+              />
+            )}
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2"><Switch checked={productForm.is_active} onCheckedChange={(v) => setProductForm({ ...productForm, is_active: v })} /><Label>Active</Label></div>
               <div className="flex items-center gap-2"><Switch checked={productForm.is_featured} onCheckedChange={(v) => setProductForm({ ...productForm, is_featured: v })} /><Label>Featured</Label></div>
