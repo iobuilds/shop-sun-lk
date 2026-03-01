@@ -1,1 +1,10 @@
 project_id = "rcefmfiqqqsfurkdljup"
+
+[functions.send-sms]
+verify_jwt = false
+
+[functions.verify-otp]
+verify_jwt = false
+
+[functions.send-order-sms]
+verify_jwt = false
