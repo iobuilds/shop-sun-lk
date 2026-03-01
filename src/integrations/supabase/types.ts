@@ -333,11 +333,61 @@ export type Database = {
           },
         ]
       }
+      order_status_history: {
+        Row: {
+          changed_by: string | null
+          courier_name: string | null
+          created_at: string
+          expected_delivery: string | null
+          id: string
+          note: string | null
+          order_id: string
+          status: string
+          tracking_link: string | null
+          tracking_number: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          courier_name?: string | null
+          created_at?: string
+          expected_delivery?: string | null
+          id?: string
+          note?: string | null
+          order_id: string
+          status: string
+          tracking_link?: string | null
+          tracking_number?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          courier_name?: string | null
+          created_at?: string
+          expected_delivery?: string | null
+          id?: string
+          note?: string | null
+          order_id?: string
+          status?: string
+          tracking_link?: string | null
+          tracking_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_status_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           coupon_code: string | null
+          courier_name: string | null
           created_at: string | null
+          delivery_note: string | null
           discount_amount: number
+          expected_delivery: string | null
           id: string
           notes: string | null
           payment_method: string
@@ -348,13 +398,18 @@ export type Database = {
           status: string
           subtotal: number
           total: number
+          tracking_link: string | null
+          tracking_number: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           coupon_code?: string | null
+          courier_name?: string | null
           created_at?: string | null
+          delivery_note?: string | null
           discount_amount?: number
+          expected_delivery?: string | null
           id?: string
           notes?: string | null
           payment_method?: string
@@ -365,13 +420,18 @@ export type Database = {
           status?: string
           subtotal?: number
           total?: number
+          tracking_link?: string | null
+          tracking_number?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           coupon_code?: string | null
+          courier_name?: string | null
           created_at?: string | null
+          delivery_note?: string | null
           discount_amount?: number
+          expected_delivery?: string | null
           id?: string
           notes?: string | null
           payment_method?: string
@@ -382,6 +442,8 @@ export type Database = {
           status?: string
           subtotal?: number
           total?: number
+          tracking_link?: string | null
+          tracking_number?: string | null
           updated_at?: string | null
           user_id?: string
         }
