@@ -24,13 +24,12 @@ serve(async (req) => {
   );
 
   try {
-    // Authenticate user
     const authHeader = req.headers.get("Authorization")!;
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError || !user?.email) throw new Error("Not authenticated");
 
-    const { items, shipping_address, payment_method, coupon_code } = await req.json();
+    const { items, shipping_address, payment_method, coupon_code, wallet_amount } = await req.json();
 
     if (!items || items.length === 0) throw new Error("Cart is empty");
 
@@ -38,13 +37,12 @@ serve(async (req) => {
     const productIds = items.map((i: any) => i.id);
     const { data: products, error: prodError } = await supabaseAdmin
       .from("products")
-      .select("id, name, price, stock_quantity, images")
+      .select("id, name, price, stock_quantity, images, category_id")
       .in("id", productIds);
     if (prodError) throw prodError;
 
     const productMap = new Map(products!.map((p: any) => [p.id, p]));
 
-    // Validate stock
     for (const item of items) {
       const product = productMap.get(item.id);
       if (!product) throw new Error(`Product ${item.id} not found`);
@@ -80,26 +78,88 @@ serve(async (req) => {
 
       if (couponError) throw couponError;
       if (!coupon) throw new Error("Invalid coupon code");
+      if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) throw new Error("Coupon not yet active");
       if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) throw new Error("Coupon expired");
       if (coupon.max_uses && coupon.used_count >= coupon.max_uses) throw new Error("Coupon usage limit reached");
       if (coupon.min_order_amount && subtotal < coupon.min_order_amount) throw new Error(`Minimum order Rs. ${coupon.min_order_amount} required`);
 
+      // Per-user limit check
+      if (coupon.per_user_limit) {
+        const { count } = await supabaseAdmin
+          .from("coupon_usage")
+          .select("*", { count: "exact", head: true })
+          .eq("coupon_id", coupon.id)
+          .eq("user_id", user.id);
+        if ((count || 0) >= coupon.per_user_limit) throw new Error("You have used this coupon the maximum times");
+      }
+
+      // Private coupon check
+      if (coupon.coupon_type === "private") {
+        const { data: profile } = await supabaseAdmin
+          .from("profiles").select("phone").eq("user_id", user.id).maybeSingle();
+        const userPhone = profile?.phone?.replace(/\s/g, "") || "";
+        const { data: assignment } = await supabaseAdmin
+          .from("coupon_assignments")
+          .select("id")
+          .eq("coupon_id", coupon.id)
+          .or(`phone.eq.${userPhone},user_id.eq.${user.id}`)
+          .maybeSingle();
+        if (!assignment) throw new Error("This coupon is not available for your account");
+      }
+
+      // Category scope
+      let eligible_subtotal = subtotal;
+      const validCategoryIds: string[] = coupon.valid_category_ids || [];
+      if (coupon.category_scope !== "all" && validCategoryIds.length > 0) {
+        let eligibleTotal = 0;
+        for (const item of items) {
+          const product = productMap.get(item.id);
+          if (!product) continue;
+          const catId = product.category_id;
+          let isEligible = coupon.category_scope === "selected"
+            ? validCategoryIds.includes(catId)
+            : !validCategoryIds.includes(catId);
+          if (isEligible) eligibleTotal += product.price * item.quantity;
+        }
+        if (eligibleTotal === 0) throw new Error("Coupon does not apply to items in cart");
+        eligible_subtotal = eligibleTotal;
+      }
+
       if (coupon.discount_type === "percentage") {
-        discount_amount = Math.round(subtotal * (coupon.discount_value / 100));
+        discount_amount = Math.round(eligible_subtotal * (coupon.discount_value / 100));
+        if (coupon.max_discount_cap && discount_amount > coupon.max_discount_cap) {
+          discount_amount = coupon.max_discount_cap;
+        }
       } else {
-        discount_amount = Math.min(coupon.discount_value, subtotal);
+        discount_amount = Math.min(coupon.discount_value, eligible_subtotal);
       }
       validated_coupon_code = coupon.code;
 
-      // Increment used_count
+      // Increment used_count and record usage
       await supabaseAdmin.from("coupons").update({ used_count: coupon.used_count + 1 }).eq("id", coupon.id);
     }
 
-    const shipping_fee = subtotal >= 5000 ? 0 : 350;
-    const total = Math.max(0, subtotal - discount_amount + shipping_fee);
+    // Wallet credit usage
+    let wallet_deduction = 0;
+    if (wallet_amount && wallet_amount > 0) {
+      const { data: wallet } = await supabaseAdmin
+        .from("wallets")
+        .select("id, balance")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (payment_method === "bank_transfer") {
-      // Create order directly for bank transfer
+      if (wallet && wallet.balance > 0) {
+        wallet_deduction = Math.min(wallet_amount, wallet.balance, subtotal - discount_amount);
+        if (wallet_deduction > 0) {
+          // Will deduct after order creation
+        }
+      }
+    }
+
+    const shipping_fee = subtotal >= 5000 ? 0 : 350;
+    const total = Math.max(0, subtotal - discount_amount - wallet_deduction + shipping_fee);
+
+    const createOrder = async (pm: string) => {
       const { data: order, error: orderError } = await supabaseAdmin
         .from("orders")
         .insert({
@@ -107,26 +167,50 @@ serve(async (req) => {
           subtotal,
           shipping_fee,
           total,
-          discount_amount,
+          discount_amount: discount_amount + wallet_deduction,
           coupon_code: validated_coupon_code,
-          payment_method: "bank_transfer",
+          payment_method: pm,
           payment_status: "pending",
           status: "pending",
           shipping_address: shipping_address || {},
+          notes: wallet_deduction > 0 ? `wallet_used:${wallet_deduction}` : null,
         })
         .select()
         .single();
       if (orderError) throw orderError;
 
-      // Insert order items (triggers stock reduction)
-      const itemsWithOrder = orderItems.map((oi: any) => ({
-        ...oi,
-        order_id: order.id,
-      }));
-      const { error: itemsError } = await supabaseAdmin
-        .from("order_items")
-        .insert(itemsWithOrder);
+      const itemsWithOrder = orderItems.map((oi: any) => ({ ...oi, order_id: order.id }));
+      const { error: itemsError } = await supabaseAdmin.from("order_items").insert(itemsWithOrder);
       if (itemsError) throw itemsError;
+
+      // Record coupon usage
+      if (validated_coupon_code && coupon_code) {
+        const { data: couponData } = await supabaseAdmin
+          .from("coupons").select("id").eq("code", validated_coupon_code).maybeSingle();
+        if (couponData) {
+          await supabaseAdmin.from("coupon_usage").insert({
+            coupon_id: couponData.id,
+            user_id: user.id,
+            order_id: order.id,
+          });
+        }
+      }
+
+      // Deduct wallet
+      if (wallet_deduction > 0) {
+        const { data: wallet } = await supabaseAdmin
+          .from("wallets").select("id").eq("user_id", user.id).maybeSingle();
+        if (wallet) {
+          await supabaseAdmin.from("wallet_transactions").insert({
+            wallet_id: wallet.id,
+            user_id: user.id,
+            amount: -wallet_deduction,
+            type: "debit",
+            reason: "Order payment",
+            order_id: order.id,
+          });
+        }
+      }
 
       // Fire notification (non-blocking)
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-order-notification`, {
@@ -135,6 +219,11 @@ serve(async (req) => {
         body: JSON.stringify({ type: "new_order", order_id: order.id, user_email: user.email }),
       }).catch(() => {});
 
+      return order;
+    };
+
+    if (payment_method === "bank_transfer") {
+      const order = await createOrder("bank_transfer");
       return new Response(
         JSON.stringify({ type: "bank_transfer", order_id: order.id }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
@@ -146,43 +235,12 @@ serve(async (req) => {
       apiVersion: "2025-08-27.basil",
     });
 
-    // Check for existing Stripe customer
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     let customerId: string | undefined;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-    }
+    if (customers.data.length > 0) customerId = customers.data[0].id;
 
-    // Create order with pending payment
-    const { data: order, error: orderError } = await supabaseAdmin
-      .from("orders")
-      .insert({
-        user_id: user.id,
-        subtotal,
-        shipping_fee,
-        total,
-        discount_amount,
-        coupon_code: validated_coupon_code,
-        payment_method: "stripe",
-        payment_status: "pending",
-        status: "pending",
-        shipping_address: shipping_address || {},
-      })
-      .select()
-      .single();
-    if (orderError) throw orderError;
+    const order = await createOrder("stripe");
 
-    // Insert order items (triggers stock reduction)
-    const itemsWithOrder = orderItems.map((oi: any) => ({
-      ...oi,
-      order_id: order.id,
-    }));
-    const { error: itemsError } = await supabaseAdmin
-      .from("order_items")
-      .insert(itemsWithOrder);
-    if (itemsError) throw itemsError;
-
-    // Create line items for Stripe
     const lineItems = items.map((item: any) => {
       const product = productMap.get(item.id)!;
       return {
@@ -198,7 +256,6 @@ serve(async (req) => {
       };
     });
 
-    // Add shipping as line item if applicable
     if (shipping_fee > 0) {
       lineItems.push({
         price_data: {
@@ -210,14 +267,16 @@ serve(async (req) => {
       });
     }
 
-    // Apply discount as Stripe coupon if applicable
     let discounts: any[] = [];
-    if (discount_amount > 0) {
+    const totalDiscount = discount_amount + wallet_deduction;
+    if (totalDiscount > 0) {
       const coupon = await stripe.coupons.create({
-        amount_off: discount_amount * 100,
+        amount_off: totalDiscount * 100,
         currency: "lkr",
         duration: "once",
-        name: `Coupon: ${validated_coupon_code}`,
+        name: wallet_deduction > 0
+          ? `Discount + Wallet Credit`
+          : `Coupon: ${validated_coupon_code}`,
       });
       discounts = [{ coupon: coupon.id }];
     }
@@ -233,18 +292,10 @@ serve(async (req) => {
       metadata: { order_id: order.id },
     });
 
-    // Store stripe session id on the order for verification
     await supabaseAdmin
       .from("orders")
-      .update({ notes: `stripe_session:${session.id}` })
+      .update({ notes: `stripe_session:${session.id}${wallet_deduction > 0 ? `,wallet_used:${wallet_deduction}` : ""}` })
       .eq("id", order.id);
-
-    // Fire notification (non-blocking)
-    fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-order-notification`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
-      body: JSON.stringify({ type: "new_order", order_id: order.id, user_email: user.email }),
-    }).catch(() => {});
 
     return new Response(
       JSON.stringify({ type: "stripe", url: session.url, order_id: order.id }),

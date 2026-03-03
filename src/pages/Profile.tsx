@@ -10,11 +10,63 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
-type ProfileTab = "details" | "orders" | "address" | "messages";
+type ProfileTab = "details" | "orders" | "address" | "messages" | "wallet";
+
+const WalletSection = ({ userId }: { userId: string }) => {
+  const { data: wallet } = useQuery({
+    queryKey: ["user-wallet", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("wallets" as any).select("*").eq("user_id", userId).maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!userId,
+  });
+  const { data: transactions } = useQuery({
+    queryKey: ["user-wallet-transactions", wallet?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("wallet_transactions" as any).select("*").eq("wallet_id", wallet!.id).order("created_at", { ascending: false }).limit(20);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!wallet?.id,
+  });
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-4">
+        <div className="bg-secondary/10 rounded-xl px-6 py-4">
+          <p className="text-xs text-muted-foreground">Balance</p>
+          <p className="text-2xl font-bold text-secondary">Rs. {Number(wallet?.balance || 0).toLocaleString()}</p>
+        </div>
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-foreground mb-3">Transaction History</h3>
+        {transactions && transactions.length > 0 ? (
+          <div className="space-y-2">
+            {transactions.map((t: any) => (
+              <div key={t.id} className="flex items-center gap-3 p-3 rounded-lg border border-border">
+                {Number(t.amount) >= 0 ? <ArrowUpCircle className="w-4 h-4 text-secondary shrink-0" /> : <ArrowDownCircle className="w-4 h-4 text-destructive shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-foreground">{t.reason}</p>
+                  <p className="text-[10px] text-muted-foreground">{new Date(t.created_at).toLocaleString()}</p>
+                </div>
+                <span className={`font-bold text-sm ${Number(t.amount) >= 0 ? "text-secondary" : "text-destructive"}`}>
+                  {Number(t.amount) >= 0 ? "+" : ""}Rs. {Math.abs(Number(t.amount)).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4">No transactions yet</p>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -234,6 +286,7 @@ const Profile = () => {
   const tabs = [
     { id: "details" as ProfileTab, label: "Account Details", icon: User },
     { id: "orders" as ProfileTab, label: "Order History", icon: Package },
+    { id: "wallet" as ProfileTab, label: "Wallet", icon: Wallet },
     { id: "messages" as ProfileTab, label: "Messages", icon: MessageSquare },
     { id: "address" as ProfileTab, label: "Address", icon: MapPin },
   ];
@@ -433,6 +486,16 @@ const Profile = () => {
                       )}
                     </div>
                   )}
+                </motion.div>
+              )}
+
+              {/* Wallet */}
+              {tab === "wallet" && session?.user?.id && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="bg-card rounded-xl border border-border p-6">
+                    <h2 className="text-lg font-bold font-display text-foreground mb-5 flex items-center gap-2"><Wallet className="w-5 h-5 text-secondary" /> Wallet</h2>
+                    <WalletSection userId={session.user.id} />
+                  </div>
                 </motion.div>
               )}
 
