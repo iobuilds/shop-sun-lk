@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
@@ -89,17 +89,6 @@ const Profile = () => {
     enabled: !!session?.user?.id,
   });
 
-  // SMS Balance
-  const { data: smsBalance } = useQuery({
-    queryKey: ["sms-balance"],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("sms-balance");
-      if (error) return null;
-      return data;
-    },
-    staleTime: 300000, // 5 min cache
-    enabled: !!session?.user?.id,
-  });
 
   const handleSave = async () => {
     if (!session) return;
@@ -213,20 +202,6 @@ const Profile = () => {
               {/* Account Details */}
               {tab === "details" && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                  {/* SMS Balance Card */}
-                  <div className="bg-card rounded-xl border border-border p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-secondary/10 flex items-center justify-center">
-                      <MessageSquare className="w-6 h-6 text-secondary" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">SMS Credits Remaining</p>
-                      <p className="text-2xl font-bold text-foreground">
-                        {smsBalance?.balance !== null && smsBalance?.balance !== undefined
-                          ? Number(smsBalance.balance).toLocaleString()
-                          : "Unlimited"}
-                      </p>
-                    </div>
-                  </div>
 
                   <div className="bg-card rounded-xl border border-border p-6">
                     <h2 className="text-lg font-bold font-display text-foreground mb-5">Account Details</h2>
