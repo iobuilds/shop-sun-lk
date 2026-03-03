@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Link } from "react-router-dom";
@@ -62,6 +62,7 @@ const AdminDashboard = () => {
   const [tab, setTab] = useState<Tab>("products");
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const [productDialog, setProductDialog] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -1315,65 +1316,151 @@ const AdminDashboard = () => {
     return role?.role || "user";
   };
 
+  const activeTabData = allTabs.find(t => t.id === tab);
+  const activeGroupData = sidebarGroups.find(g => g.items.some(i => i.id === tab));
+
   return (
     <div className="min-h-screen bg-background">
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-64 min-h-screen bg-card border-r border-border p-4 hidden md:block sticky top-0 h-screen overflow-y-auto">
-          <Link to="/">
-            <h1 className="text-xl font-bold font-display text-foreground mb-1 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-secondary" /> Admin Panel
-            </h1>
-          </Link>
-          <p className="text-xs text-muted-foreground mb-6">TechLK Management</p>
-          <nav className="space-y-1">
-            {sidebarGroups.map((group) => (
-              <div key={group.label}>
-                <button
-                  onClick={() => toggleGroup(group.label)}
-                  className="w-full flex items-center justify-between px-2 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <span className="flex items-center gap-2"><group.icon className="w-3.5 h-3.5" />{group.label}</span>
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${openGroups[group.label] ? "rotate-0" : "-rotate-90"}`} />
-                </button>
-                {openGroups[group.label] && (
-                  <div className="ml-2 space-y-0.5 mb-2">
-                    {group.items.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
-                          tab === t.id ? "bg-secondary/10 text-secondary font-medium" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                        }`}
-                      >
-                        <span className="flex items-center gap-2"><t.icon className="w-4 h-4" />{t.label}</span>
-                        {t.count > 0 && <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{t.count}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </nav>
-          <div className="mt-4 pt-4 border-t border-border">
-            <button
-              onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              <LogOut className="w-4 h-4" /> Sign Out
+      {/* ═══ Top Navbar ═══ */}
+      <header className="sticky top-0 z-40 h-14 bg-card/95 backdrop-blur-md border-b border-border flex items-center px-4 md:px-6 gap-4 shadow-sm">
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="hidden md:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+        >
+          <Menu className="w-4.5 h-4.5" />
+        </button>
+        <Link to="/" className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+            <span className="text-secondary-foreground font-bold text-sm font-display">T</span>
+          </div>
+          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">TechLK</span>
+        </Link>
+        <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
+          <span>/</span>
+          <span className="text-foreground font-medium">{activeGroupData?.label}</span>
+          <span>/</span>
+          <span className="text-secondary font-semibold">{activeTabData?.label}</span>
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          {pendingOrderCount > 0 && (
+            <button onClick={() => { setTab("orders"); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/10 text-accent-foreground text-xs font-medium hover:bg-accent/20 transition-colors">
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Orders</span>
+              <span className="w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">{pendingOrderCount}</span>
             </button>
+          )}
+          {unreadContacts > 0 && (
+            <button onClick={() => { setTab("contacts"); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary/10 text-secondary text-xs font-medium hover:bg-secondary/20 transition-colors">
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Messages</span>
+              <span className="w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">{unreadContacts}</span>
+            </button>
+          )}
+          <Link to="/" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+            <Eye className="w-3.5 h-3.5" /> <span className="hidden sm:inline">View Store</span>
+          </Link>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); window.location.href = "/"; }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Sign Out</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="flex">
+        {/* ═══ Sidebar ═══ */}
+        <aside className={`hidden md:flex flex-col sticky top-14 h-[calc(100vh-3.5rem)] bg-card border-r border-border overflow-y-auto transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-64"}`}>
+          <div className={`p-3 ${sidebarCollapsed ? "px-2" : "px-4"}`}>
+            {!sidebarCollapsed && (
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-3 px-2">Navigation</p>
+            )}
+            <nav className="space-y-0.5">
+              {sidebarGroups.map((group) => (
+                <div key={group.label} className="mb-1">
+                  {sidebarCollapsed ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      {group.items.map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                          title={t.label}
+                          className={`relative w-10 h-10 flex items-center justify-center rounded-lg transition-all ${
+                            tab === t.id
+                              ? "bg-secondary/15 text-secondary shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                          }`}
+                        >
+                          <t.icon className="w-4.5 h-4.5" />
+                          {t.count > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[8px] font-bold flex items-center justify-center">{t.count > 99 ? "99" : t.count}</span>
+                          )}
+                        </button>
+                      ))}
+                      <div className="w-6 h-px bg-border my-1" />
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => toggleGroup(group.label)}
+                        className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+                      >
+                        <span className="flex items-center gap-2"><group.icon className="w-3 h-3" />{group.label}</span>
+                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${openGroups[group.label] ? "rotate-0" : "-rotate-90"}`} />
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {openGroups[group.label] && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="ml-1 space-y-0.5 mb-1.5 mt-0.5">
+                              {group.items.map((t) => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-all ${
+                                    tab === t.id
+                                      ? "bg-secondary/12 text-secondary font-semibold shadow-sm border border-secondary/10"
+                                      : "text-muted-foreground hover:text-foreground hover:bg-muted/70"
+                                  }`}
+                                >
+                                  <span className="flex items-center gap-2.5">
+                                    <t.icon className={`w-4 h-4 ${tab === t.id ? "text-secondary" : ""}`} />
+                                    {t.label}
+                                  </span>
+                                  {t.count > 0 && (
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                      tab === t.id ? "bg-secondary/20 text-secondary" : "bg-muted text-muted-foreground"
+                                    }`}>{t.count}</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </>
+                  )}
+                </div>
+              ))}
+            </nav>
           </div>
         </aside>
 
-        <main className="flex-1 p-6 md:p-8">
+        <main className="flex-1 p-4 md:p-8 min-w-0">
           {/* Mobile tabs */}
-          <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2">
+          <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 -mx-4 px-4">
             {allTabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap ${
-                  tab === t.id ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm whitespace-nowrap transition-all ${
+                  tab === t.id ? "bg-secondary text-secondary-foreground shadow-md" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 <t.icon className="w-4 h-4" /> {t.label}
