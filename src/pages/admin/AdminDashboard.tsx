@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -645,6 +645,33 @@ const AdminDashboard = () => {
     toast({ title: "Product deleted" });
     setSelectedProducts(prev => { const n = new Set(prev); n.delete(id); return n; });
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+  };
+
+  const duplicateProduct = async (p: any) => {
+    const specs = p.specifications || {};
+    const payload: any = {
+      name: `${p.name} (Copy)`,
+      slug: `${p.slug}-copy-${Date.now()}`,
+      description: p.description || null,
+      price: p.price,
+      discount_price: p.discount_price || null,
+      cost_price: p.cost_price || null,
+      sku: null,
+      stock_quantity: p.stock_quantity || 0,
+      category_id: p.category_id || null,
+      images: p.images || [],
+      is_active: false,
+      is_featured: false,
+      video_url: p.video_url || null,
+      datasheet_url: p.datasheet_url || null,
+      specifications: specs,
+      attachments: p.attachments || [],
+    };
+    const { data, error } = await supabase.from("products").insert(payload).select().single();
+    if (error) { toast({ title: "Duplicate failed", description: error.message, variant: "destructive" }); return; }
+    toast({ title: "Product duplicated", description: "Opens in edit mode as Inactive draft." });
+    await queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    openEditProduct(data);
   };
 
   const toggleProductSelection = (id: string) => {
@@ -1384,8 +1411,9 @@ const AdminDashboard = () => {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1">
-                              <button onClick={() => openEditProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => openEditProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => duplicateProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </td>
                         </tr>
