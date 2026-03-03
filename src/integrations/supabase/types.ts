@@ -273,9 +273,85 @@ export type Database = {
         }
         Relationships: []
       }
+      coupon_assignments: {
+        Row: {
+          coupon_id: string
+          created_at: string
+          id: string
+          phone: string
+          used: boolean
+          user_id: string | null
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string
+          id?: string
+          phone: string
+          used?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string
+          id?: string
+          phone?: string
+          used?: boolean
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_assignments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_usage: {
+        Row: {
+          coupon_id: string
+          id: string
+          order_id: string | null
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          coupon_id: string
+          id?: string
+          order_id?: string | null
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          coupon_id?: string
+          id?: string
+          order_id?: string | null
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_usage_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupons: {
         Row: {
+          category_scope: string
           code: string
+          coupon_type: string
           created_at: string
           description: string | null
           discount_type: string
@@ -283,12 +359,19 @@ export type Database = {
           expires_at: string | null
           id: string
           is_active: boolean
+          max_discount_cap: number | null
           max_uses: number | null
           min_order_amount: number | null
+          name: string | null
+          per_user_limit: number | null
+          starts_at: string | null
           used_count: number
+          valid_category_ids: string[] | null
         }
         Insert: {
+          category_scope?: string
           code: string
+          coupon_type?: string
           created_at?: string
           description?: string | null
           discount_type?: string
@@ -296,12 +379,19 @@ export type Database = {
           expires_at?: string | null
           id?: string
           is_active?: boolean
+          max_discount_cap?: number | null
           max_uses?: number | null
           min_order_amount?: number | null
+          name?: string | null
+          per_user_limit?: number | null
+          starts_at?: string | null
           used_count?: number
+          valid_category_ids?: string[] | null
         }
         Update: {
+          category_scope?: string
           code?: string
+          coupon_type?: string
           created_at?: string
           description?: string | null
           discount_type?: string
@@ -309,9 +399,14 @@ export type Database = {
           expires_at?: string | null
           id?: string
           is_active?: boolean
+          max_discount_cap?: number | null
           max_uses?: number | null
           min_order_amount?: number | null
+          name?: string | null
+          per_user_limit?: number | null
+          starts_at?: string | null
           used_count?: number
+          valid_category_ids?: string[] | null
         }
         Relationships: []
       }
@@ -1013,6 +1108,81 @@ export type Database = {
           created_at?: string | null
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      wallet_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          order_id: string | null
+          reason: string
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_id?: string | null
+          reason: string
+          type?: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          order_id?: string | null
+          reason?: string
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wallet_transactions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wallet_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      wallets: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []

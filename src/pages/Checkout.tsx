@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
@@ -50,8 +50,9 @@ const Checkout = () => {
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; description?: string } | null>(null);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; description?: string; category_message?: string } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [useWallet, setUseWallet] = useState(false);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -79,13 +80,25 @@ const Checkout = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Wallet balance
+  const { data: walletData } = useQuery({
+    queryKey: ["checkout-wallet", session?.user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("wallets" as any).select("balance").eq("user_id", session!.user.id).maybeSingle();
+      return data as any;
+    },
+    enabled: !!session?.user?.id,
+  });
+  const walletBalance = Number(walletData?.balance || 0);
+
   const discount = appliedCoupon?.discount || 0;
   const localFee = shipSettings?.local_fee ?? 350;
   const overseasFee = shipSettings?.overseas_fee ?? 1500;
   const freeThreshold = shipSettings?.free_shipping_threshold ?? 5000;
   const hasOverseas = items.some(item => (item as any).specifications?._shipping_type === "overseas");
   const shipping = hasOverseas ? overseasFee : (subtotal >= freeThreshold ? 0 : localFee);
-  const total = Math.max(0, subtotal - discount + shipping);
+  const walletCredit = useWallet ? Math.min(walletBalance, Math.max(0, subtotal - discount + shipping)) : 0;
+  const total = Math.max(0, subtotal - discount - walletCredit + shipping);
 
   // Set default payment method based on enabled options
   useEffect(() => {
@@ -129,11 +142,11 @@ const Checkout = () => {
     setValidatingCoupon(true);
     try {
       const { data, error } = await supabase.functions.invoke("validate-coupon", {
-        body: { code: couponCode, subtotal },
+        body: { code: couponCode, subtotal, cart_items: items.map(i => ({ id: i.id, quantity: i.quantity })) },
       });
       if (error) throw error;
       if (!data.valid) throw new Error(data.error);
-      setAppliedCoupon({ code: data.code, discount: data.discount, description: data.description });
+      setAppliedCoupon({ code: data.code, discount: data.discount, description: data.description, category_message: data.category_message });
       toast.success(`Coupon applied! You save Rs. ${data.discount.toLocaleString()}`);
     } catch (err: any) {
       toast.error(err.message || "Invalid coupon");
@@ -175,6 +188,7 @@ const Checkout = () => {
           shipping_address: form,
           payment_method: paymentMethod,
           coupon_code: appliedCoupon?.code || null,
+          wallet_amount: walletCredit > 0 ? walletCredit : null,
         },
       });
 
@@ -339,6 +353,20 @@ const Checkout = () => {
                     )}
                   </div>
 
+                  {/* Wallet Credit */}
+                  {walletBalance > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <label className="flex items-center justify-between cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <Wallet className="w-4 h-4 text-secondary" />
+                          <span className="text-sm font-medium text-foreground">Use Wallet Credit</span>
+                          <span className="text-xs text-muted-foreground">(Rs. {walletBalance.toLocaleString()})</span>
+                        </div>
+                        <input type="checkbox" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} className="rounded" />
+                      </label>
+                    </div>
+                  )}
+
                   <div className="border-t border-border pt-3 space-y-2 text-sm">
                     <div className="flex justify-between text-muted-foreground">
                       <span>Subtotal</span>
@@ -348,6 +376,15 @@ const Checkout = () => {
                       <div className="flex justify-between text-secondary">
                         <span>Discount</span>
                         <span>-Rs. {discount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {appliedCoupon?.category_message && (
+                      <p className="text-[10px] text-amber-600">{appliedCoupon.category_message}</p>
+                    )}
+                    {walletCredit > 0 && (
+                      <div className="flex justify-between text-secondary">
+                        <span>Wallet Credit</span>
+                        <span>-Rs. {walletCredit.toLocaleString()}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-muted-foreground">

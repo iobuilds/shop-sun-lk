@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,9 @@ import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
 import DatabaseTools from "@/components/admin/DatabaseTools";
+import WalletManager from "@/components/admin/WalletManager";
 
-type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools";
+type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -39,8 +40,11 @@ interface PageForm {
   title: string; slug: string; content: string; is_published: boolean;
 }
 interface CouponForm {
-  code: string; description: string; discount_type: string; discount_value: string;
+  code: string; name: string; description: string; discount_type: string; discount_value: string;
   min_order_amount: string; max_uses: string; is_active: boolean; expires_at: string;
+  coupon_type: string; max_discount_cap: string; per_user_limit: string; starts_at: string;
+  category_scope: string; valid_category_ids: string[];
+  assigned_phones: string;
 }
 interface ComboForm {
   name: string; slug: string; description: string; combo_price: string; original_price: string;
@@ -53,7 +57,7 @@ const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 const emptyPage: PageForm = { title: "", slug: "", content: "", is_published: true };
-const emptyCoupon: CouponForm = { code: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "" };
+const emptyCoupon: CouponForm = { code: "", name: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "", coupon_type: "public", max_discount_cap: "", per_user_limit: "", starts_at: "", category_scope: "all", valid_category_ids: [], assigned_phones: "" };
 const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_type: "local", ships_from: "", delivery_eta: "" };
 
 const AdminDashboard = () => {
@@ -436,6 +440,7 @@ const AdminDashboard = () => {
       label: "Payments & Finance", icon: CreditCard, defaultOpen: false,
       items: [
         { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
+        { id: "wallet" as Tab, label: "User Wallets", icon: Wallet, count: 0 },
         { id: "shipping_settings" as Tab, label: "Shipping Charges", icon: Truck, count: 0 },
         { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
         { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
@@ -904,12 +909,29 @@ const AdminDashboard = () => {
   const openAddCoupon = () => { setEditingCouponId(null); setCouponForm(emptyCoupon); setCouponDialog(true); };
   const openEditCoupon = (c: any) => {
     setEditingCouponId(c.id);
-    setCouponForm({ code: c.code, description: c.description || "", discount_type: c.discount_type, discount_value: String(c.discount_value), min_order_amount: c.min_order_amount ? String(c.min_order_amount) : "", max_uses: c.max_uses ? String(c.max_uses) : "", is_active: c.is_active ?? true, expires_at: c.expires_at ? new Date(c.expires_at).toISOString().slice(0, 16) : "" });
+    setCouponForm({
+      code: c.code, name: c.name || "", description: c.description || "", discount_type: c.discount_type,
+      discount_value: String(c.discount_value), min_order_amount: c.min_order_amount ? String(c.min_order_amount) : "",
+      max_uses: c.max_uses ? String(c.max_uses) : "", is_active: c.is_active ?? true,
+      expires_at: c.expires_at ? new Date(c.expires_at).toISOString().slice(0, 16) : "",
+      coupon_type: c.coupon_type || "public", max_discount_cap: c.max_discount_cap ? String(c.max_discount_cap) : "",
+      per_user_limit: c.per_user_limit ? String(c.per_user_limit) : "",
+      starts_at: c.starts_at ? new Date(c.starts_at).toISOString().slice(0, 16) : "",
+      category_scope: c.category_scope || "all", valid_category_ids: c.valid_category_ids || [],
+      assigned_phones: "",
+    });
+    // Load assignments for private coupons
+    if (c.coupon_type === "private") {
+      supabase.from("coupon_assignments" as any).select("phone").eq("coupon_id", c.id).then(({ data }) => {
+        if (data) setCouponForm(prev => ({ ...prev, assigned_phones: (data as any[]).map((a: any) => a.phone).join(", ") }));
+      });
+    }
     setCouponDialog(true);
   };
   const saveCoupon = async () => {
-    const payload = {
+    const payload: any = {
       code: couponForm.code.toUpperCase().trim(),
+      name: couponForm.name || null,
       description: couponForm.description || null,
       discount_type: couponForm.discount_type,
       discount_value: Number(couponForm.discount_value) || 0,
@@ -917,15 +939,33 @@ const AdminDashboard = () => {
       max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : null,
       is_active: couponForm.is_active,
       expires_at: couponForm.expires_at ? new Date(couponForm.expires_at).toISOString() : null,
+      coupon_type: couponForm.coupon_type,
+      max_discount_cap: couponForm.max_discount_cap ? Number(couponForm.max_discount_cap) : null,
+      per_user_limit: couponForm.per_user_limit ? Number(couponForm.per_user_limit) : null,
+      starts_at: couponForm.starts_at ? new Date(couponForm.starts_at).toISOString() : null,
+      category_scope: couponForm.category_scope,
+      valid_category_ids: couponForm.category_scope !== "all" ? couponForm.valid_category_ids : [],
     };
+    let couponId = editingCouponId;
     if (editingCouponId) {
       const { error } = await supabase.from("coupons").update(payload).eq("id", editingCouponId);
       if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
       toast({ title: "Coupon updated" });
     } else {
-      const { error } = await supabase.from("coupons").insert(payload);
+      const { data, error } = await supabase.from("coupons").insert(payload).select().single();
       if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+      couponId = data.id;
       toast({ title: "Coupon created" });
+    }
+    // Handle private coupon assignments
+    if (couponForm.coupon_type === "private" && couponId && couponForm.assigned_phones.trim()) {
+      // Clear existing assignments
+      await supabase.from("coupon_assignments" as any).delete().eq("coupon_id", couponId);
+      const phones = couponForm.assigned_phones.split(",").map(p => p.trim()).filter(Boolean);
+      if (phones.length > 0) {
+        const assignments = phones.map(phone => ({ coupon_id: couponId, phone: phone.replace(/\s/g, "") }));
+        await supabase.from("coupon_assignments" as any).insert(assignments);
+      }
     }
     setCouponDialog(false);
     queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
@@ -2003,8 +2043,9 @@ const AdminDashboard = () => {
                     <thead>
                       <tr className="border-b border-border bg-muted/50">
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Code</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Type</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Discount</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Min Order</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Scope</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Usage</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Expires</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -2016,11 +2057,20 @@ const AdminDashboard = () => {
                         const isExpired = c.expires_at && new Date(c.expires_at) < new Date();
                         return (
                           <tr key={c.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                            <td className="px-4 py-3 font-mono font-bold text-foreground">{c.code}</td>
+                            <td className="px-4 py-3">
+                              <p className="font-mono font-bold text-foreground">{c.code}</p>
+                              {c.name && <p className="text-xs text-muted-foreground">{c.name}</p>}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.coupon_type === "private" ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"}`}>
+                                {c.coupon_type === "private" ? <><Lock className="w-3 h-3 inline mr-0.5" />Private</> : "Public"}
+                              </span>
+                            </td>
                             <td className="px-4 py-3 text-foreground">
                               {c.discount_type === "percentage" ? `${c.discount_value}%` : `Rs. ${Number(c.discount_value).toLocaleString()}`}
+                              {c.max_discount_cap && <span className="text-xs text-muted-foreground ml-1">(max Rs.{Number(c.max_discount_cap).toLocaleString()})</span>}
                             </td>
-                            <td className="px-4 py-3 text-muted-foreground">{c.min_order_amount ? `Rs. ${Number(c.min_order_amount).toLocaleString()}` : "—"}</td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground capitalize">{c.category_scope === "all" ? "All" : c.category_scope}</td>
                             <td className="px-4 py-3 text-muted-foreground">{c.used_count}{c.max_uses ? ` / ${c.max_uses}` : ""}</td>
                             <td className="px-4 py-3 text-muted-foreground text-xs">{c.expires_at ? new Date(c.expires_at).toLocaleDateString() : "Never"}</td>
                             <td className="px-4 py-3">
@@ -2038,13 +2088,23 @@ const AdminDashboard = () => {
                         );
                       })}
                       {(!coupons || coupons.length === 0) && (
-                        <tr><td colSpan={7} className="text-center py-16 text-muted-foreground"><Ticket className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No coupons yet</p></td></tr>
+                        <tr><td colSpan={8} className="text-center py-16 text-muted-foreground"><Ticket className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No coupons yet</p></td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               </div>
               {renderPagination(couponPage, totalCouponPages, setCouponPage, coupons?.length || 0)}
+            </motion.div>
+          )}
+
+          {/* ═══ Wallet Management Tab ═══ */}
+          {tab === "wallet" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">User Wallets</h2>
+              </div>
+              <WalletManager profiles={allProfiles || []} />
             </motion.div>
           )}
 
@@ -3272,14 +3332,45 @@ const AdminDashboard = () => {
 
       {/* ═══ Coupon Dialog ═══ */}
       <Dialog open={couponDialog} onOpenChange={setCouponDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingCouponId ? "Edit Coupon" : "Add Coupon"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div><Label>Code *</Label><Input value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} placeholder="SAVE20" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Code *</Label><Input value={couponForm.code} onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} placeholder="SAVE20" /></div>
+              <div><Label>Internal Name</Label><Input value={couponForm.name} onChange={(e) => setCouponForm({ ...couponForm, name: e.target.value })} placeholder="Summer Sale 20%" /></div>
+            </div>
             <div><Label>Description</Label><Input value={couponForm.description} onChange={(e) => setCouponForm({ ...couponForm, description: e.target.value })} placeholder="20% off your order" /></div>
+
+            {/* Coupon Type */}
+            <div>
+              <Label>Coupon Access</Label>
+              <Select value={couponForm.coupon_type} onValueChange={(v) => setCouponForm({ ...couponForm, coupon_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public">Public (Anyone)</SelectItem>
+                  <SelectItem value="private">Private (Assigned Users)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Private: Phone assignments */}
+            {couponForm.coupon_type === "private" && (
+              <div>
+                <Label>Assigned Phone Numbers</Label>
+                <Textarea
+                  value={couponForm.assigned_phones}
+                  onChange={(e) => setCouponForm({ ...couponForm, assigned_phones: e.target.value })}
+                  placeholder="+94771234567, +94779876543"
+                  rows={2}
+                  className="text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Comma-separated phone numbers</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Type</Label>
+                <Label>Discount Type</Label>
                 <Select value={couponForm.discount_type} onValueChange={(v) => setCouponForm({ ...couponForm, discount_type: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -3290,11 +3381,57 @@ const AdminDashboard = () => {
               </div>
               <div><Label>{couponForm.discount_type === "percentage" ? "Discount %" : "Amount (Rs.)"}</Label><Input type="number" value={couponForm.discount_value} onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })} /></div>
             </div>
+
+            {couponForm.discount_type === "percentage" && (
+              <div><Label>Max Discount Cap (Rs.)</Label><Input type="number" value={couponForm.max_discount_cap} onChange={(e) => setCouponForm({ ...couponForm, max_discount_cap: e.target.value })} placeholder="No cap" /></div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Min Order (Rs.)</Label><Input type="number" value={couponForm.min_order_amount} onChange={(e) => setCouponForm({ ...couponForm, min_order_amount: e.target.value })} placeholder="0" /></div>
-              <div><Label>Max Uses</Label><Input type="number" value={couponForm.max_uses} onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })} placeholder="Unlimited" /></div>
+              <div><Label>Max Uses (Total)</Label><Input type="number" value={couponForm.max_uses} onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })} placeholder="Unlimited" /></div>
             </div>
-            <div><Label>Expires At</Label><Input type="datetime-local" value={couponForm.expires_at} onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })} /></div>
+            <div><Label>Per-User Limit</Label><Input type="number" value={couponForm.per_user_limit} onChange={(e) => setCouponForm({ ...couponForm, per_user_limit: e.target.value })} placeholder="Unlimited" /></div>
+
+            {/* Category Scope */}
+            <div>
+              <Label>Category Scope</Label>
+              <Select value={couponForm.category_scope} onValueChange={(v) => setCouponForm({ ...couponForm, category_scope: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="selected">Selected Categories Only</SelectItem>
+                  <SelectItem value="excluded">Exclude Selected Categories</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {couponForm.category_scope !== "all" && (
+              <div>
+                <Label>{couponForm.category_scope === "selected" ? "Valid Categories" : "Excluded Categories"}</Label>
+                <div className="max-h-32 overflow-y-auto border border-border rounded-md p-2 space-y-1.5">
+                  {categories?.map((cat: any) => (
+                    <label key={cat.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={couponForm.valid_category_ids.includes(cat.id)}
+                        onCheckedChange={(checked) => {
+                          setCouponForm(prev => ({
+                            ...prev,
+                            valid_category_ids: checked
+                              ? [...prev.valid_category_ids, cat.id]
+                              : prev.valid_category_ids.filter(id => id !== cat.id)
+                          }));
+                        }}
+                      />
+                      <span className="text-foreground">{cat.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Starts At</Label><Input type="datetime-local" value={couponForm.starts_at} onChange={(e) => setCouponForm({ ...couponForm, starts_at: e.target.value })} /></div>
+              <div><Label>Expires At</Label><Input type="datetime-local" value={couponForm.expires_at} onChange={(e) => setCouponForm({ ...couponForm, expires_at: e.target.value })} /></div>
+            </div>
             <div className="flex items-center gap-2"><Switch checked={couponForm.is_active} onCheckedChange={(v) => setCouponForm({ ...couponForm, is_active: v })} /><Label>Active</Label></div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setCouponDialog(false)}>Cancel</Button>
