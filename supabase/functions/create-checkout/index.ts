@@ -222,6 +222,16 @@ serve(async (req) => {
       return order;
     };
 
+    // Free order (coupon + wallet covers everything)
+    if (total === 0) {
+      const order = await createOrder("wallet");
+      await supabaseAdmin.from("orders").update({ payment_status: "paid" }).eq("id", order.id);
+      return new Response(
+        JSON.stringify({ type: "free", order_id: order.id }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     if (payment_method === "bank_transfer") {
       const order = await createOrder("bank_transfer");
       return new Response(

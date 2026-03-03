@@ -10,11 +10,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
-type ProfileTab = "details" | "orders" | "address" | "messages" | "wallet";
+type ProfileTab = "details" | "orders" | "address" | "messages" | "wallet" | "coupons";
 
 const WalletSection = ({ userId }: { userId: string }) => {
   const { data: wallet } = useQuery({
@@ -62,6 +62,171 @@ const WalletSection = ({ userId }: { userId: string }) => {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground py-4">No transactions yet</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const MyCouponsSection = ({ userId, userPhone }: { userId: string; userPhone: string }) => {
+  const cleanPhone = userPhone?.replace(/\s/g, "") || "";
+
+  // Fetch private coupons assigned to this user
+  const { data: assignments } = useQuery({
+    queryKey: ["my-coupon-assignments", userId, cleanPhone],
+    queryFn: async () => {
+      let query = supabase
+        .from("coupon_assignments" as any)
+        .select("*, coupons(*)")
+        .order("created_at", { ascending: false });
+
+      // Match by user_id OR phone
+      if (cleanPhone) {
+        query = query.or(`user_id.eq.${userId},phone.eq.${cleanPhone}`);
+      } else {
+        query = query.eq("user_id", userId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!userId,
+  });
+
+  // Fetch public coupons
+  const { data: publicCoupons } = useQuery({
+    queryKey: ["public-coupons"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("coupons" as any)
+        .select("*")
+        .eq("is_active", true)
+        .eq("coupon_type", "public");
+      if (error) throw error;
+      return data as any[];
+    },
+  });
+
+  // Fetch user's coupon usage counts
+  const { data: usageCounts } = useQuery({
+    queryKey: ["my-coupon-usage", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("coupon_usage" as any)
+        .select("coupon_id")
+        .eq("user_id", userId);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data as any[])?.forEach((u: any) => {
+        counts[u.coupon_id] = (counts[u.coupon_id] || 0) + 1;
+      });
+      return counts;
+    },
+    enabled: !!userId,
+  });
+
+  // Fetch category names for display
+  const { data: categories } = useQuery({
+    queryKey: ["all-categories-names"],
+    queryFn: async () => {
+      const { data } = await supabase.from("categories").select("id, name");
+      return data || [];
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+  const catMap = new Map(categories?.map((c: any) => [c.id, c.name]) || []);
+
+  const getCouponStatus = (coupon: any) => {
+    if (!coupon?.is_active) return "inactive";
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return "expired";
+    if (coupon.starts_at && new Date(coupon.starts_at) > new Date()) return "upcoming";
+    if (coupon.max_uses && coupon.used_count >= coupon.max_uses) return "used_up";
+    const userUses = usageCounts?.[coupon.id] || 0;
+    if (coupon.per_user_limit && userUses >= coupon.per_user_limit) return "used_up";
+    return "active";
+  };
+
+  const statusBadge = (status: string) => {
+    switch (status) {
+      case "active": return <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-secondary/10 text-secondary">Active</span>;
+      case "expired": return <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-destructive/10 text-destructive">Expired</span>;
+      case "used_up": return <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Used Up</span>;
+      case "upcoming": return <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent text-accent-foreground">Upcoming</span>;
+      default: return <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Inactive</span>;
+    }
+  };
+
+  const renderCouponCard = (coupon: any, isPrivate = false) => {
+    const status = getCouponStatus(coupon);
+    const validCats = (coupon.valid_category_ids || []).map((id: string) => catMap.get(id)).filter(Boolean);
+    const userUses = usageCounts?.[coupon.id] || 0;
+
+    return (
+      <div key={coupon.id + (isPrivate ? "-priv" : "")} className={`rounded-xl border p-4 ${status === "active" ? "border-secondary/30 bg-card" : "border-border bg-muted/30 opacity-70"}`}>
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2">
+            {isPrivate ? <BadgeCheck className="w-4 h-4 text-secondary shrink-0" /> : <Percent className="w-4 h-4 text-muted-foreground shrink-0" />}
+            <code className="text-sm font-bold text-foreground bg-muted px-2 py-0.5 rounded select-all">{coupon.code}</code>
+          </div>
+          {statusBadge(status)}
+        </div>
+        <p className="text-sm font-semibold text-foreground">
+          {coupon.discount_type === "percentage"
+            ? `${coupon.discount_value}% off`
+            : `Rs. ${Number(coupon.discount_value).toLocaleString()} off`}
+          {coupon.max_discount_cap && coupon.discount_type === "percentage" && (
+            <span className="text-xs text-muted-foreground font-normal"> (max Rs. {Number(coupon.max_discount_cap).toLocaleString()})</span>
+          )}
+        </p>
+        {coupon.description && <p className="text-xs text-muted-foreground mt-1">{coupon.description}</p>}
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {coupon.min_order_amount > 0 && <p>Min order: Rs. {Number(coupon.min_order_amount).toLocaleString()}</p>}
+          {coupon.category_scope !== "all" && validCats.length > 0 && (
+            <p>{coupon.category_scope === "selected" ? "Valid for" : "Excludes"}: {validCats.join(", ")}</p>
+          )}
+          {coupon.starts_at && <p>From: {new Date(coupon.starts_at).toLocaleDateString()}</p>}
+          {coupon.expires_at && <p>Until: {new Date(coupon.expires_at).toLocaleDateString()}</p>}
+          {coupon.per_user_limit && <p>Uses: {userUses}/{coupon.per_user_limit}</p>}
+        </div>
+      </div>
+    );
+  };
+
+  const privateCoupons = assignments?.map((a: any) => a.coupons).filter(Boolean) || [];
+  const activePubCoupons = publicCoupons?.filter((c: any) => getCouponStatus(c) === "active" || getCouponStatus(c) === "upcoming") || [];
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-card rounded-xl border border-border p-6">
+        <h2 className="text-lg font-bold font-display text-foreground mb-5 flex items-center gap-2">
+          <Tag className="w-5 h-5 text-secondary" /> My Coupons
+        </h2>
+
+        {/* Private / Assigned */}
+        {privateCoupons.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+              <BadgeCheck className="w-3.5 h-3.5 text-secondary" /> Assigned to You
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {privateCoupons.map((c: any) => renderCouponCard(c, true))}
+            </div>
+          </div>
+        )}
+
+        {/* Public */}
+        {activePubCoupons.length > 0 && (
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-3">Available Coupons</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {activePubCoupons.map((c: any) => renderCouponCard(c))}
+            </div>
+          </div>
+        )}
+
+        {privateCoupons.length === 0 && activePubCoupons.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4">No coupons available right now</p>
         )}
       </div>
     </div>
@@ -286,6 +451,7 @@ const Profile = () => {
   const tabs = [
     { id: "details" as ProfileTab, label: "Account Details", icon: User },
     { id: "orders" as ProfileTab, label: "Order History", icon: Package },
+    { id: "coupons" as ProfileTab, label: "My Coupons", icon: Tag },
     { id: "wallet" as ProfileTab, label: "Wallet", icon: Wallet },
     { id: "messages" as ProfileTab, label: "Messages", icon: MessageSquare },
     { id: "address" as ProfileTab, label: "Address", icon: MapPin },
@@ -486,6 +652,13 @@ const Profile = () => {
                       )}
                     </div>
                   )}
+                </motion.div>
+              )}
+
+              {/* My Coupons */}
+              {tab === "coupons" && session?.user?.id && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <MyCouponsSection userId={session.user.id} userPhone={profile?.phone || ""} />
                 </motion.div>
               )}
 

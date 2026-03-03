@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
@@ -197,7 +197,9 @@ const Checkout = () => {
 
       clearCart();
 
-      if (data.type === "stripe" && data.url) {
+      if (data.type === "free") {
+        navigate(`/order-success?order_id=${data.order_id}&method=free`);
+      } else if (data.type === "stripe" && data.url) {
         window.location.href = data.url;
       } else if (data.type === "bank_transfer") {
         navigate(`/order-success?order_id=${data.order_id}&method=bank`);
@@ -397,9 +399,11 @@ const Checkout = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" className="w-full gap-2" size="lg" disabled={submitting}>
+                  <Button type="submit" className="w-full gap-2" size="lg" disabled={submitting || (total > 0 && !paymentMethod)}>
                     {submitting ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+                    ) : total === 0 ? (
+                      <><CheckCircle className="w-4 h-4" /> Place Order (Fully Covered)</>
                     ) : paymentMethod === "stripe" ? (
                       <><CreditCard className="w-4 h-4" /> Pay Rs. {total.toLocaleString()}</>
                     ) : (
