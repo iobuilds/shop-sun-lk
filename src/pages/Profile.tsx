@@ -270,7 +270,7 @@ const Profile = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading, isError: profileError } = useQuery({
     queryKey: ["profile", session?.user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -502,26 +502,41 @@ const Profile = () => {
               {/* Account Details */}
               {tab === "details" && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-
                   <div className="bg-card rounded-xl border border-border p-6">
                     <h2 className="text-lg font-bold font-display text-foreground mb-5">Account Details</h2>
-                    <div className="space-y-4 max-w-md">
-                      <div>
-                        <Label>Email</Label>
-                        <Input value={session?.user?.email || ""} disabled className="bg-muted" />
+                    {profileLoading ? (
+                      <div className="space-y-4 max-w-md">
+                        {[1,2,3].map(i => <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />)}
                       </div>
-                      <div>
-                        <Label>Full Name</Label>
-                        <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Your full name" />
+                    ) : profileError ? (
+                      <p className="text-sm text-destructive">Failed to load profile data. Please try again.</p>
+                    ) : (
+                      <div className="space-y-4 max-w-md">
+                        <div>
+                          <Label>Email</Label>
+                          <Input value={session?.user?.email || ""} disabled className="bg-muted" />
+                        </div>
+                        <div>
+                          <Label>Full Name</Label>
+                          <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Your full name" />
+                        </div>
+                        <div>
+                          <Label>Phone</Label>
+                          <Input
+                            value={form.phone}
+                            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                            placeholder="+94 7X XXX XXXX"
+                            disabled={!!profile?.phone_verified}
+                          />
+                          {profile?.phone_verified && (
+                            <p className="text-[10px] text-secondary mt-1 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Verified — contact support to change</p>
+                          )}
+                        </div>
+                        <Button onClick={handleSave} disabled={saving}>
+                          {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Saving...</> : "Save Changes"}
+                        </Button>
                       </div>
-                      <div>
-                        <Label>Phone</Label>
-                        <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+94 7X XXX XXXX" />
-                      </div>
-                      <Button onClick={handleSave} disabled={saving}>
-                        {saving ? "Saving..." : "Save Changes"}
-                      </Button>
-                    </div>
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -530,29 +545,44 @@ const Profile = () => {
               {tab === "address" && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card rounded-xl border border-border p-6">
                   <h2 className="text-lg font-bold font-display text-foreground mb-5">Shipping Address</h2>
-                  <div className="space-y-4 max-w-md">
-                    <div>
-                      <Label>Address Line 1</Label>
-                      <Input value={form.address_line1} onChange={(e) => setForm({ ...form, address_line1: e.target.value })} placeholder="Street address" />
+                  {profileLoading ? (
+                    <div className="space-y-4 max-w-md">
+                      {[1,2,3,4].map(i => <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />)}
                     </div>
-                    <div>
-                      <Label>Address Line 2</Label>
-                      <Input value={form.address_line2} onChange={(e) => setForm({ ...form, address_line2: e.target.value })} placeholder="Apartment, suite, etc." />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>City</Label>
-                        <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Colombo" />
+                  ) : profileError ? (
+                    <p className="text-sm text-destructive">Failed to load address data. Please try again.</p>
+                  ) : (
+                    <>
+                      {!form.address_line1 && !form.city && !form.postal_code && (
+                        <div className="mb-4 p-3 rounded-lg bg-muted/50 border border-border">
+                          <p className="text-sm text-muted-foreground flex items-center gap-2"><MapPin className="w-4 h-4" /> No address saved yet. Fill in your details below.</p>
+                        </div>
+                      )}
+                      <div className="space-y-4 max-w-md">
+                        <div>
+                          <Label>Address Line 1</Label>
+                          <Input value={form.address_line1} onChange={(e) => setForm({ ...form, address_line1: e.target.value })} placeholder="Street address" />
+                        </div>
+                        <div>
+                          <Label>Address Line 2</Label>
+                          <Input value={form.address_line2} onChange={(e) => setForm({ ...form, address_line2: e.target.value })} placeholder="Apartment, suite, etc." />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label>City</Label>
+                            <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Colombo" />
+                          </div>
+                          <div>
+                            <Label>Postal Code</Label>
+                            <Input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} placeholder="00100" />
+                          </div>
+                        </div>
+                        <Button onClick={handleSave} disabled={saving}>
+                          {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Saving...</> : "Save Address"}
+                        </Button>
                       </div>
-                      <div>
-                        <Label>Postal Code</Label>
-                        <Input value={form.postal_code} onChange={(e) => setForm({ ...form, postal_code: e.target.value })} placeholder="00100" />
-                      </div>
-                    </div>
-                    <Button onClick={handleSave} disabled={saving}>
-                      {saving ? "Saving..." : "Save Address"}
-                    </Button>
-                  </div>
+                    </>
+                  )}
                 </motion.div>
               )}
 
