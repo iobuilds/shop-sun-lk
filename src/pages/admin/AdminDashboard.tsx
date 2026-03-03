@@ -264,6 +264,46 @@ const AdminDashboard = () => {
     },
   });
 
+  // Admin conversations
+  const { data: adminConversations } = useQuery({
+    queryKey: ["admin-conversations"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations" as any)
+        .select("*, profiles!inner(full_name, phone)")
+        .order("updated_at", { ascending: false });
+      if (error) {
+        // fallback without join if profiles join fails
+        const { data: d2, error: e2 } = await supabase
+          .from("conversations" as any)
+          .select("*")
+          .order("updated_at", { ascending: false });
+        if (e2) throw e2;
+        return d2 as any[];
+      }
+      return data as any[];
+    },
+  });
+
+  const [adminSelectedConvo, setAdminSelectedConvo] = useState<string | null>(null);
+  const [adminReplyText, setAdminReplyText] = useState("");
+  const [adminSendingReply, setAdminSendingReply] = useState(false);
+
+  const { data: adminConvoMessages } = useQuery({
+    queryKey: ["admin-convo-messages", adminSelectedConvo],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversation_messages" as any)
+        .select("*")
+        .eq("conversation_id", adminSelectedConvo!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!adminSelectedConvo,
+    refetchInterval: 5000,
+  });
+
   const { data: companySettings } = useQuery({
     queryKey: ["admin-company"],
     queryFn: async () => {
@@ -897,6 +937,31 @@ const AdminDashboard = () => {
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Message deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
+  };
+
+  // ── Admin conversation reply ──
+  const sendAdminReply = async () => {
+    if (!adminReplyText.trim() || !adminSelectedConvo) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    setAdminSendingReply(true);
+    try {
+      const { error } = await supabase.from("conversation_messages" as any).insert({
+        conversation_id: adminSelectedConvo,
+        sender_id: session.user.id,
+        sender_type: "admin",
+        message: adminReplyText.trim(),
+      });
+      if (error) throw error;
+      setAdminReplyText("");
+      queryClient.invalidateQueries({ queryKey: ["admin-convo-messages", adminSelectedConvo] });
+      queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
+      toast({ title: "Reply sent" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setAdminSendingReply(false);
+    }
   };
 
   // ── Order status ──
@@ -2002,43 +2067,103 @@ const AdminDashboard = () => {
           {tab === "contacts" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold font-display text-foreground">Contact Messages</h2>
-                <div className="relative w-56">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                  <Input placeholder="Search by name, email, subject..." value={contactSearch} onChange={(e) => { setContactSearch(e.target.value); setContactPage(0); }} className="h-8 text-xs pl-8" />
-                </div>
-              </div>
-              <div className="space-y-4">
-                {paginatedContacts?.map((m: any) => (
-                  <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-foreground">{m.subject}</h3>
-                          {!m.is_read && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">New</span>}
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">From: {m.name} ({m.email})</p>
-                        <p className="text-sm text-foreground whitespace-pre-wrap">{m.message}</p>
-                        <p className="text-xs text-muted-foreground mt-2">{new Date(m.created_at).toLocaleString()}</p>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        {!m.is_read && (
-                          <button onClick={() => markAsRead(m.id)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Mark as read"><Check className="w-3.5 h-3.5" /></button>
-                        )}
-                        <a href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Reply"><Mail className="w-3.5 h-3.5" /></a>
-                        <button onClick={() => deleteContact(m.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {(!contactMessages || contactMessages.length === 0) && (
-                  <div className="text-center py-16 text-muted-foreground">
-                    <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No messages yet</p>
-                  </div>
+                <h2 className="text-xl font-bold font-display text-foreground">
+                  {adminSelectedConvo ? "Conversation" : "Messages"}
+                </h2>
+                {adminSelectedConvo && (
+                  <Button variant="outline" size="sm" onClick={() => setAdminSelectedConvo(null)}>← Back to list</Button>
                 )}
               </div>
-              {renderPagination(contactPage, totalContactPages, setContactPage, filteredContacts?.length || 0)}
+
+              {adminSelectedConvo ? (
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                  <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
+                    {adminConvoMessages?.map((m: any) => (
+                      <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[70%] rounded-xl px-4 py-2.5 text-sm ${
+                          m.sender_type === "admin" ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground"
+                        }`}>
+                          <p className="text-[10px] font-medium mb-1 opacity-70">{m.sender_type === "admin" ? "You" : "Customer"}</p>
+                          <p className="whitespace-pre-wrap">{m.message}</p>
+                          <p className={`text-[10px] mt-1 opacity-60`}>
+                            {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!adminConvoMessages || adminConvoMessages.length === 0) && (
+                      <p className="text-center text-muted-foreground text-sm py-8">No messages in this conversation</p>
+                    )}
+                  </div>
+                  <div className="p-3 border-t border-border flex gap-2">
+                    <Input placeholder="Type your reply..." value={adminReplyText} onChange={(e) => setAdminReplyText(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} className="flex-1" />
+                    <Button onClick={sendAdminReply} disabled={adminSendingReply || !adminReplyText.trim()} size="sm" className="gap-1.5">
+                      <Send className="w-3.5 h-3.5" /> Reply
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Conversations */}
+                  {adminConversations && adminConversations.length > 0 && (
+                    <div className="space-y-3 mb-6">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Conversations</h3>
+                      {adminConversations.map((c: any) => (
+                        <button key={c.id} onClick={() => setAdminSelectedConvo(c.id)}
+                          className="w-full text-left bg-card rounded-xl border border-border p-4 hover:bg-muted/30 transition-colors">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {c.profiles?.full_name || "User"} • {new Date(c.updated_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Legacy contact messages */}
+                  {paginatedContacts && paginatedContacts.length > 0 && (
+                    <>
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Guest Messages</h3>
+                      {paginatedContacts.map((m: any) => (
+                        <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h3 className="font-semibold text-foreground">{m.subject}</h3>
+                                {!m.is_read && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">New</span>}
+                              </div>
+                              <p className="text-sm text-muted-foreground mb-2">From: {m.name} ({m.email})</p>
+                              <p className="text-sm text-foreground whitespace-pre-wrap">{m.message}</p>
+                              <p className="text-xs text-muted-foreground mt-2">{new Date(m.created_at).toLocaleString()}</p>
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              {!m.is_read && (
+                                <button onClick={() => markAsRead(m.id)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Mark as read"><Check className="w-3.5 h-3.5" /></button>
+                              )}
+                              <a href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Reply"><Mail className="w-3.5 h-3.5" /></a>
+                              <button onClick={() => deleteContact(m.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {(!contactMessages || contactMessages.length === 0) && (!adminConversations || adminConversations.length === 0) && (
+                    <div className="text-center py-16 text-muted-foreground">
+                      <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                      <p>No messages yet</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!adminSelectedConvo && renderPagination(contactPage, totalContactPages, setContactPage, filteredContacts?.length || 0)}
             </motion.div>
           )}
 

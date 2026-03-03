@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,14 +6,15 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
-type ProfileTab = "details" | "orders" | "address";
+type ProfileTab = "details" | "orders" | "address" | "messages";
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -24,6 +25,10 @@ const Profile = () => {
   const [tab, setTab] = useState<ProfileTab>((searchParams.get("tab") as ProfileTab) || "details");
   const [saving, setSaving] = useState(false);
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
+  const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -89,6 +94,58 @@ const Profile = () => {
     enabled: !!session?.user?.id,
   });
 
+  // Conversations query
+  const { data: conversations } = useQuery({
+    queryKey: ["user-conversations", session?.user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversations" as any)
+        .select("*")
+        .eq("user_id", session!.user.id)
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!session?.user?.id,
+  });
+
+  // Messages for selected conversation
+  const { data: convoMessages } = useQuery({
+    queryKey: ["convo-messages", selectedConvo],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("conversation_messages" as any)
+        .select("*")
+        .eq("conversation_id", selectedConvo!)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!selectedConvo,
+    refetchInterval: 5000,
+  });
+
+  // Mark messages as read when viewing
+  useEffect(() => {
+    if (selectedConvo && convoMessages && session?.user) {
+      const unreadAdminMsgs = convoMessages.filter((m: any) => m.sender_type === "admin" && !m.is_read);
+      if (unreadAdminMsgs.length > 0) {
+        const ids = unreadAdminMsgs.map((m: any) => m.id);
+        supabase
+          .from("conversation_messages" as any)
+          .update({ is_read: true })
+          .in("id", ids)
+          .then(() => {
+            queryClient.invalidateQueries({ queryKey: ["convo-messages", selectedConvo] });
+          });
+      }
+    }
+  }, [convoMessages, selectedConvo]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [convoMessages]);
 
   const handleSave = async () => {
     if (!session) return;
@@ -151,9 +208,33 @@ const Profile = () => {
     );
   }
 
+  const sendReply = async () => {
+    if (!newMessage.trim() || !selectedConvo || !session?.user) return;
+    setSendingMessage(true);
+    try {
+      const { error } = await supabase
+        .from("conversation_messages" as any)
+        .insert({
+          conversation_id: selectedConvo,
+          sender_id: session.user.id,
+          sender_type: "user",
+          message: newMessage.trim(),
+        });
+      if (error) throw error;
+      setNewMessage("");
+      queryClient.invalidateQueries({ queryKey: ["convo-messages", selectedConvo] });
+      queryClient.invalidateQueries({ queryKey: ["user-conversations"] });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
   const tabs = [
     { id: "details" as ProfileTab, label: "Account Details", icon: User },
     { id: "orders" as ProfileTab, label: "Order History", icon: Package },
+    { id: "messages" as ProfileTab, label: "Messages", icon: MessageSquare },
     { id: "address" as ProfileTab, label: "Address", icon: MapPin },
   ];
 
@@ -256,7 +337,106 @@ const Profile = () => {
                 </motion.div>
               )}
 
-              {/* Orders */}
+              {/* Messages */}
+              {tab === "messages" && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  {selectedConvo ? (
+                    <div className="bg-card rounded-xl border border-border overflow-hidden">
+                      {/* Thread header */}
+                      <div className="p-4 border-b border-border flex items-center gap-3">
+                        <button onClick={() => setSelectedConvo(null)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <div>
+                          <h3 className="font-semibold text-foreground text-sm">
+                            {conversations?.find((c: any) => c.id === selectedConvo)?.subject || "Conversation"}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {conversations?.find((c: any) => c.id === selectedConvo)?.status === "closed" ? "Closed" : "Open"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Messages */}
+                      <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+                        {convoMessages?.map((m: any) => (
+                          <div key={m.id} className={`flex ${m.sender_type === "user" ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[75%] rounded-xl px-4 py-2.5 text-sm ${
+                              m.sender_type === "user"
+                                ? "bg-secondary text-secondary-foreground"
+                                : "bg-muted text-foreground"
+                            }`}>
+                              <p className="whitespace-pre-wrap">{m.message}</p>
+                              <p className={`text-[10px] mt-1 ${m.sender_type === "user" ? "text-secondary-foreground/60" : "text-muted-foreground"}`}>
+                                {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                        {(!convoMessages || convoMessages.length === 0) && (
+                          <p className="text-center text-muted-foreground text-sm py-8">No messages yet</p>
+                        )}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Reply box */}
+                      {conversations?.find((c: any) => c.id === selectedConvo)?.status !== "closed" && (
+                        <div className="p-3 border-t border-border flex gap-2">
+                          <Input
+                            placeholder="Type your reply..."
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+                            className="flex-1"
+                          />
+                          <Button onClick={sendReply} disabled={sendingMessage || !newMessage.trim()} size="icon">
+                            <Send className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <h2 className="text-lg font-bold font-display text-foreground mb-5">Messages</h2>
+                      {conversations && conversations.length > 0 ? (
+                        <div className="space-y-3">
+                          {conversations.map((c: any) => (
+                            <button
+                              key={c.id}
+                              onClick={() => setSelectedConvo(c.id)}
+                              className="w-full text-left bg-card rounded-xl border border-border p-4 hover:bg-muted/30 transition-colors"
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {new Date(c.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                  </p>
+                                </div>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"
+                                }`}>
+                                  {c.status}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="bg-card rounded-xl border border-border p-12 text-center">
+                          <MessageSquare className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+                          <p className="text-muted-foreground mb-4">No messages yet</p>
+                          <Link to="/contact">
+                            <Button variant="outline" size="sm">Contact Us</Button>
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+
+
               {tab === "orders" && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <h2 className="text-lg font-bold font-display text-foreground mb-5">Order History</h2>
