@@ -265,6 +265,16 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: smsBalance } = useQuery({
+    queryKey: ["admin-sms-balance"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("sms-balance");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 300000,
+  });
+
   // Admin conversations
   const { data: adminConversations } = useQuery({
     queryKey: ["admin-conversations"],
@@ -2956,6 +2966,20 @@ const AdminDashboard = () => {
                 }}><Plus className="w-4 h-4" /> Add Template</Button>
               </div>
               <p className="text-sm text-muted-foreground mb-4">Placeholders: {"{{customer_name}}, {{order_id}}, {{total}}, {{status}}, {{tracking_info}}, {{eta}}, {{OTP5}}"}</p>
+              {/* SMS Balance Card */}
+              <div className="bg-card rounded-xl border border-border p-4 mb-6 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 text-secondary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground font-medium">SMS Balance</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {smsBalance?.balance !== null && smsBalance?.balance !== undefined
+                      ? `Rs. ${Number(smsBalance.balance).toLocaleString()}`
+                      : "—"}
+                  </p>
+                </div>
+              </div>
               <div className="space-y-3">
                 {smsTemplates?.map((t: any) => (
                   <div key={t.id} className="bg-card rounded-xl border border-border p-4">
