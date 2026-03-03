@@ -21,6 +21,17 @@ const usePaymentMethodSettings = () => useQuery({
   },
   staleTime: 5 * 60 * 1000,
 });
+
+// Fetch shipping settings
+const useShippingSettings = () => useQuery({
+  queryKey: ["shipping-settings"],
+  queryFn: async () => {
+    const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "shipping_settings").maybeSingle();
+    if (error) throw error;
+    return (data as any)?.value as any || { local_fee: 350, overseas_fee: 1500, free_shipping_threshold: 5000 };
+  },
+  staleTime: 5 * 60 * 1000,
+});
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Session } from "@supabase/supabase-js";
@@ -32,6 +43,7 @@ const Checkout = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { data: pmSettings } = usePaymentMethodSettings();
+  const { data: shipSettings } = useShippingSettings();
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -68,7 +80,11 @@ const Checkout = () => {
   });
 
   const discount = appliedCoupon?.discount || 0;
-  const shipping = subtotal >= 5000 ? 0 : 350;
+  const localFee = shipSettings?.local_fee ?? 350;
+  const overseasFee = shipSettings?.overseas_fee ?? 1500;
+  const freeThreshold = shipSettings?.free_shipping_threshold ?? 5000;
+  const hasOverseas = items.some(item => (item as any).specifications?._shipping_type === "overseas");
+  const shipping = hasOverseas ? overseasFee : (subtotal >= freeThreshold ? 0 : localFee);
   const total = Math.max(0, subtotal - discount + shipping);
 
   // Set default payment method based on enabled options

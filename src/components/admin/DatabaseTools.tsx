@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore } from "lucide-react";
+import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame } from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -30,17 +30,19 @@ const DatabaseTools = () => {
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [cleaning, setCleaning] = useState(false);
 
   // Password confirmation state
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "restore" | "upload_restore"; payload?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "restore" | "upload_restore" | "cleanup"; payload?: any } | null>(null);
   const [verifying, setVerifying] = useState(false);
 
   // Restore confirm state
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
   const [confirmUploadRestore, setConfirmUploadRestore] = useState<any>(null);
+  const [confirmCleanup, setConfirmCleanup] = useState(false);
 
   const callBackupFn = async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -66,7 +68,7 @@ const DatabaseTools = () => {
   useEffect(() => { fetchBackups(); }, []);
 
   // Password verification
-  const requestPasswordConfirmation = (actionType: "backup" | "restore" | "upload_restore", payload?: any) => {
+  const requestPasswordConfirmation = (actionType: "backup" | "restore" | "upload_restore" | "cleanup", payload?: any) => {
     setPendingAction({ type: actionType, payload });
     setPassword("");
     setPasswordError("");
@@ -82,11 +84,9 @@ const DatabaseTools = () => {
     setPasswordError("");
 
     try {
-      // Get current user email
       const { data: { user } } = await supabase.auth.getUser();
       if (!user?.email) throw new Error("Unable to verify identity");
 
-      // Re-authenticate with password
       const { error } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: password,
@@ -101,13 +101,14 @@ const DatabaseTools = () => {
       setPasswordDialog(false);
       setPassword("");
 
-      // Execute the pending action
       if (pendingAction?.type === "backup") {
         await executeCreateBackup();
       } else if (pendingAction?.type === "restore") {
         await executeRestore(pendingAction.payload);
       } else if (pendingAction?.type === "upload_restore") {
         await executeUploadRestore();
+      } else if (pendingAction?.type === "cleanup") {
+        await executeCleanup();
       }
     } catch (e: any) {
       setPasswordError(e.message);
@@ -204,6 +205,31 @@ const DatabaseTools = () => {
     }
   };
 
+  const executeCleanup = async () => {
+    setCleaning(true);
+    setConfirmCleanup(false);
+    try {
+      const res = await supabase.functions.invoke("db-cleanup", {});
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data;
+      const failed = data.results?.filter((r: any) => r.status === "failed") || [];
+      if (failed.length > 0) {
+        toast({
+          title: "Cleanup completed with errors",
+          description: `${data.results.length - failed.length} tables cleared, ${failed.length} failed: ${failed.map((f: any) => f.table).join(", ")}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Database cleaned", description: data.message });
+      }
+      fetchBackups();
+    } catch (e: any) {
+      toast({ title: "Cleanup failed", description: e.message, variant: "destructive" });
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   const formatSize = (bytes: number | null | undefined) => {
     if (!bytes) return "—";
     if (bytes < 1024) return `${bytes} B`;
@@ -224,12 +250,12 @@ const DatabaseTools = () => {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-3">
-        <Button onClick={() => requestPasswordConfirmation("backup")} disabled={creating || restoring}>
+        <Button onClick={() => requestPasswordConfirmation("backup")} disabled={creating || restoring || cleaning}>
           {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
           {creating ? "Creating Snapshot..." : "Create Snapshot"}
         </Button>
         <div className="relative">
-          <Button variant="outline" disabled={restoring}>
+          <Button variant="outline" disabled={restoring || cleaning}>
             <Upload className="w-4 h-4 mr-2" /> Restore from File
           </Button>
           <input
@@ -237,13 +263,36 @@ const DatabaseTools = () => {
             accept=".json"
             className="absolute inset-0 opacity-0 cursor-pointer"
             onChange={handleUploadRestore}
-            disabled={restoring}
+            disabled={restoring || cleaning}
           />
         </div>
         <Button variant="outline" onClick={fetchBackups} disabled={loading}>
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
         </Button>
       </div>
+
+      {/* Database Cleanup */}
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-destructive">
+            <Flame className="w-4 h-4" /> Database Cleanup
+          </CardTitle>
+          <CardDescription>
+            Wipe all data (products, orders, categories, deals, coupons, etc.) while keeping user accounts and roles intact. This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            variant="destructive"
+            onClick={() => setConfirmCleanup(true)}
+            disabled={cleaning || restoring || creating}
+            className="gap-2"
+          >
+            {cleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
+            {cleaning ? "Cleaning..." : "Full Database Cleanup"}
+          </Button>
+        </CardContent>
+      </Card>
 
       {restoring && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
@@ -304,7 +353,7 @@ const DatabaseTools = () => {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Activity Log</CardTitle>
-          <CardDescription>Backup and restore history</CardDescription>
+          <CardDescription>Backup, restore, and cleanup history</CardDescription>
         </CardHeader>
         <CardContent>
           {logs.length === 0 ? (
@@ -313,7 +362,7 @@ const DatabaseTools = () => {
             <div className="space-y-1.5">
               {logs.slice(0, 20).map((l) => (
                 <div key={l.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-border last:border-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${l.action === "backup" ? "bg-secondary/10 text-secondary" : "bg-accent/10 text-accent-foreground"}`}>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${l.action === "backup" ? "bg-secondary/10 text-secondary" : l.action === "cleanup" ? "bg-destructive/10 text-destructive" : "bg-accent/10 text-accent-foreground"}`}>
                     {l.action}
                   </span>
                   <span className="text-muted-foreground truncate flex-1">{l.file_name}</span>
@@ -333,7 +382,7 @@ const DatabaseTools = () => {
             <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Confirm Your Identity</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Enter your admin password to {pendingAction?.type === "backup" ? "create a backup" : "restore the database"}.
+            Enter your admin password to {pendingAction?.type === "backup" ? "create a backup" : pendingAction?.type === "cleanup" ? "clean the database" : "restore the database"}.
           </p>
           <div className="space-y-2">
             <Label>Password</Label>
@@ -349,7 +398,7 @@ const DatabaseTools = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPasswordDialog(false); setPendingAction(null); }}>Cancel</Button>
-            <Button onClick={verifyPasswordAndExecute} disabled={verifying}>
+            <Button onClick={verifyPasswordAndExecute} disabled={verifying} variant={pendingAction?.type === "cleanup" ? "destructive" : "default"}>
               {verifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
               Confirm
             </Button>
@@ -357,7 +406,7 @@ const DatabaseTools = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Restore Dialog (after password is verified, or for selecting file) */}
+      {/* Confirm Restore Dialog */}
       <Dialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
         <DialogContent>
           <DialogHeader>
@@ -396,6 +445,43 @@ const DatabaseTools = () => {
               requestPasswordConfirmation("upload_restore");
             }}>
               Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Cleanup Dialog */}
+      <Dialog open={confirmCleanup} onOpenChange={setConfirmCleanup}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Flame className="w-5 h-5 text-destructive" /> Full Database Cleanup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              This will <strong className="text-destructive">permanently delete ALL data</strong> including:
+            </p>
+            <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
+              <li>All products, categories, and combo packs</li>
+              <li>All orders and order history</li>
+              <li>All coupons, deals, and promotions</li>
+              <li>All banners, pages, and site settings</li>
+              <li>All reviews, wishlists, contacts</li>
+              <li>All SMS logs and templates</li>
+            </ul>
+            <p className="text-sm font-medium text-foreground">
+              ✅ User accounts and roles will be preserved.
+            </p>
+            <div className="bg-destructive/10 text-destructive text-sm rounded-lg p-3 font-medium">
+              ⚠️ This action cannot be undone. Create a backup first!
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCleanup(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => {
+              setConfirmCleanup(false);
+              requestPasswordConfirmation("cleanup");
+            }}>
+              <Flame className="w-4 h-4 mr-2" /> Proceed with Cleanup
             </Button>
           </DialogFooter>
         </DialogContent>

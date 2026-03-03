@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +18,7 @@ import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
 import DatabaseTools from "@/components/admin/DatabaseTools";
 
-type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "db_tools";
+type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -66,6 +67,11 @@ const AdminDashboard = () => {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [productForm, setProductForm] = useState<ProductForm>(emptyProduct);
   const [productImagePreviews, setProductImagePreviews] = useState<string[]>([]);
+
+  // Bulk selection state
+  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const [categoryDialog, setCategoryDialog] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -289,10 +295,24 @@ const AdminDashboard = () => {
     },
   });
 
+  const { data: shippingSettings } = useQuery({
+    queryKey: ["admin-shipping-settings"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "shipping_settings").maybeSingle();
+      if (error) throw error;
+      return (data as any)?.value as any || { local_fee: 350, overseas_fee: 1500, free_shipping_threshold: 5000 };
+    },
+  });
+
   const [paymentMethodSettings, setPaymentMethodSettings] = useState<any>(null);
   useEffect(() => {
     if (paymentSettings && !paymentMethodSettings) setPaymentMethodSettings(paymentSettings);
   }, [paymentSettings]);
+
+  const [shippingForm, setShippingForm] = useState<any>(null);
+  useEffect(() => {
+    if (shippingSettings && !shippingForm) setShippingForm(shippingSettings);
+  }, [shippingSettings]);
 
   const [seoForm, setSeoForm] = useState<any>(null);
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
@@ -365,6 +385,7 @@ const AdminDashboard = () => {
       label: "Payments & Finance", icon: CreditCard, defaultOpen: false,
       items: [
         { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
+        { id: "shipping_settings" as Tab, label: "Shipping Charges", icon: Truck, count: 0 },
         { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
         { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
       ],
@@ -622,7 +643,65 @@ const AdminDashboard = () => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Product deleted" });
+    setSelectedProducts(prev => { const n = new Set(prev); n.delete(id); return n; });
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+  };
+
+  const toggleProductSelection = (id: string) => {
+    setSelectedProducts(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  };
+
+  const toggleSelectAllProducts = () => {
+    if (!paginatedProducts) return;
+    const allOnPage = paginatedProducts.map(p => p.id);
+    const allSelected = allOnPage.every(id => selectedProducts.has(id));
+    if (allSelected) {
+      setSelectedProducts(prev => {
+        const n = new Set(prev);
+        allOnPage.forEach(id => n.delete(id));
+        return n;
+      });
+    } else {
+      setSelectedProducts(prev => {
+        const n = new Set(prev);
+        allOnPage.forEach(id => n.add(id));
+        return n;
+      });
+    }
+  };
+
+  const bulkDeleteProducts = async () => {
+    setBulkDeleting(true);
+    setConfirmBulkDelete(false);
+    let deleted = 0;
+    let failed = 0;
+    const failedNames: string[] = [];
+    for (const id of selectedProducts) {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) {
+        failed++;
+        const p = products?.find(p => p.id === id);
+        failedNames.push(p?.name || id.slice(0, 8));
+      } else {
+        deleted++;
+      }
+    }
+    setSelectedProducts(new Set());
+    setBulkDeleting(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+    if (failed > 0) {
+      toast({
+        title: `Deleted ${deleted}, failed ${failed}`,
+        description: `Could not delete: ${failedNames.join(", ")}`,
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: `${deleted} products deleted successfully` });
+    }
   };
 
   // ── Category CRUD ──
@@ -1215,7 +1294,19 @@ const AdminDashboard = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold font-display text-foreground">Products</h2>
-                <Button onClick={openAddProduct} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Product</Button>
+                <div className="flex items-center gap-2">
+                  {selectedProducts.size > 0 && (
+                    <>
+                      <span className="text-sm text-muted-foreground font-medium">Selected: {selectedProducts.size}</span>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedProducts(new Set())}>Clear</Button>
+                      <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => setConfirmBulkDelete(true)} disabled={bulkDeleting}>
+                        {bulkDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        Delete ({selectedProducts.size})
+                      </Button>
+                    </>
+                  )}
+                  <Button onClick={openAddProduct} size="sm" className="gap-1.5"><Plus className="w-4 h-4" /> Add Product</Button>
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-3 mb-4">
                 <Input placeholder="Search products..." value={search} onChange={(e) => { setSearch(e.target.value); setProductPage(0); }} className="max-w-sm" />
@@ -1247,6 +1338,12 @@ const AdminDashboard = () => {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/50">
+                        <th className="px-4 py-3 w-10">
+                          <Checkbox
+                            checked={paginatedProducts && paginatedProducts.length > 0 && paginatedProducts.every(p => selectedProducts.has(p.id))}
+                            onCheckedChange={toggleSelectAllProducts}
+                          />
+                        </th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Product</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">SKU</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Price</th>
@@ -1257,7 +1354,13 @@ const AdminDashboard = () => {
                     </thead>
                     <tbody>
                       {paginatedProducts?.map((p) => (
-                        <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                        <tr key={p.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${selectedProducts.has(p.id) ? "bg-secondary/5" : ""}`}>
+                          <td className="px-4 py-3">
+                            <Checkbox
+                              checked={selectedProducts.has(p.id)}
+                              onCheckedChange={() => toggleProductSelection(p.id)}
+                            />
+                          </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-10 h-10 rounded-lg object-cover" />
@@ -2179,7 +2282,57 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {/* ═══ Sales Tab ═══ */}
+          {/* ═══ Shipping Settings Tab ═══ */}
+          {tab === "shipping_settings" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Shipping Charges</h2>
+                <Button size="sm" className="gap-1.5" disabled={!shippingForm} onClick={async () => {
+                  const { data: existing } = await supabase.from("site_settings" as any).select("id").eq("key", "shipping_settings").maybeSingle();
+                  if (existing) {
+                    const { error } = await supabase.from("site_settings" as any).update({ value: shippingForm, updated_at: new Date().toISOString() } as any).eq("key", "shipping_settings");
+                    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  } else {
+                    const { error } = await supabase.from("site_settings" as any).insert({ key: "shipping_settings", value: shippingForm } as any);
+                    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+                  }
+                  toast({ title: "Shipping settings saved" });
+                  queryClient.invalidateQueries({ queryKey: ["admin-shipping-settings"] });
+                  queryClient.invalidateQueries({ queryKey: ["shipping-settings"] });
+                }}>
+                  <Save className="w-4 h-4" /> Save
+                </Button>
+              </div>
+              {shippingForm ? (
+                <div className="space-y-4 max-w-lg">
+                  <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium">Local Shipping Fee (Rs.)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Applied to products marked as "Local" shipping</p>
+                      <Input type="number" value={shippingForm.local_fee} onChange={(e) => setShippingForm({ ...shippingForm, local_fee: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Overseas Shipping Fee (Rs.)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Applied to products marked as "Overseas" shipping</p>
+                      <Input type="number" value={shippingForm.overseas_fee} onChange={(e) => setShippingForm({ ...shippingForm, overseas_fee: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Free Shipping Threshold (Rs.)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">Orders above this amount get free local shipping</p>
+                      <Input type="number" value={shippingForm.free_shipping_threshold} onChange={(e) => setShippingForm({ ...shippingForm, free_shipping_threshold: Number(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">💡 If cart has any overseas product, overseas fee is used. Otherwise local fee applies. Free shipping threshold only applies to local shipping.</p>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Truck className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>Loading shipping settings...</p>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {tab === "sales" && (
             <SalesAnalytics orders={orders || []} products={products || []} />
           )}
@@ -3174,6 +3327,23 @@ const AdminDashboard = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5" /> Delete {selectedProducts.size} products?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete <strong>{selectedProducts.size} products</strong>. Products linked to active orders may fail to delete.</p>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={bulkDeleteProducts} disabled={bulkDeleting}>
+              {bulkDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete {selectedProducts.size} Products
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
