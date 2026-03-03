@@ -18,6 +18,7 @@ import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
 import DatabaseTools from "@/components/admin/DatabaseTools";
 import WalletManager from "@/components/admin/WalletManager";
+import UserDetailDialog from "@/components/admin/UserDetailDialog";
 
 type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet";
 
@@ -112,6 +113,11 @@ const AdminDashboard = () => {
   });
   const [orderStatusHistory, setOrderStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // User detail dialog
+  const [userDetailOpen, setUserDetailOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserRole, setSelectedUserRole] = useState("user");
 
   // Promo banners state
   const [promoDialog, setPromoDialog] = useState(false);
@@ -2136,7 +2142,7 @@ const AdminDashboard = () => {
                         const role = getUserRole(p.user_id);
                         const userOrders = orders?.filter(o => o.user_id === p.user_id) || [];
                         return (
-                          <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                          <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedUserId(p.user_id); setSelectedUserRole(role); setUserDetailOpen(true); }}>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-sm">
@@ -2168,6 +2174,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
               {renderPagination(userPage, totalUserPages, setUserPage, filteredUsers?.length || 0)}
+              <UserDetailDialog open={userDetailOpen} onOpenChange={setUserDetailOpen} userId={selectedUserId} userRole={selectedUserRole} />
             </motion.div>
           )}
 
