@@ -151,30 +151,77 @@ const ProductDetail = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title={`${product.name} | TechLK`}
-        description={product.description?.slice(0, 160) || `Buy ${product.name} at TechLK Sri Lanka`}
-        keywords={`${product.name}, ${category?.name || "electronics"}, buy online, Sri Lanka, TechLK`}
+        title={`${product.name} — Buy Online | TechLK Sri Lanka`}
+        description={
+          product.description?.slice(0, 155) ||
+          `Buy ${product.name} online at TechLK Sri Lanka. ${category?.name || "Electronics"} at best prices. Island-wide delivery. Rs. ${product.price.toLocaleString()}.`
+        }
+        keywords={`${product.name}, buy ${product.name}, ${category?.name || "electronics"}, ${product.sku || ""}, online store Sri Lanka, TechLK, best price, ${category?.name || ""} Sri Lanka`.replace(/, ,/g, ",")}
         canonical={`${window.location.origin}/product/${product.slug}`}
         ogImage={images[0] !== "/placeholder.svg" ? images[0] : undefined}
         ogType="product"
         jsonLd={{
           "@context": "https://schema.org",
-          "@type": "Product",
-          name: product.name,
-          description: product.description,
-          image: images[0],
-          sku: product.sku,
-          offers: {
-            "@type": "Offer",
-            price: product.price,
-            priceCurrency: "LKR",
-            availability: (product.stock_quantity || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-          },
-          aggregateRating: product.review_count ? {
-            "@type": "AggregateRating",
-            ratingValue: product.rating,
-            reviewCount: product.review_count,
-          } : undefined,
+          "@graph": [
+            {
+              "@type": "Product",
+              "@id": `${window.location.origin}/product/${product.slug}#product`,
+              name: product.name,
+              description: product.description || `Buy ${product.name} online at TechLK Sri Lanka`,
+              image: images.filter((img: string) => img !== "/placeholder.svg"),
+              sku: product.sku || product.id,
+              url: `${window.location.origin}/product/${product.slug}`,
+              brand: {
+                "@type": "Brand",
+                name: specs?.Brand || specs?.brand || "TechLK",
+              },
+              category: category?.name || "Electronics",
+              offers: {
+                "@type": "Offer",
+                price: product.price,
+                priceCurrency: "LKR",
+                availability: (product.stock_quantity || 0) > 0
+                  ? "https://schema.org/InStock"
+                  : "https://schema.org/OutOfStock",
+                seller: {
+                  "@type": "Organization",
+                  name: "TechLK",
+                  url: window.location.origin,
+                },
+                url: `${window.location.origin}/product/${product.slug}`,
+                priceValidUntil: new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0],
+                itemCondition: "https://schema.org/NewCondition",
+                shippingDetails: {
+                  "@type": "OfferShippingDetails",
+                  shippingDestination: {
+                    "@type": "DefinedRegion",
+                    addressCountry: "LK",
+                  },
+                },
+              },
+              ...(product.review_count && product.review_count > 0
+                ? {
+                    aggregateRating: {
+                      "@type": "AggregateRating",
+                      ratingValue: product.rating,
+                      reviewCount: product.review_count,
+                      bestRating: 5,
+                      worstRating: 1,
+                    },
+                  }
+                : {}),
+            },
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: window.location.origin },
+                ...(category
+                  ? [{ "@type": "ListItem", position: 2, name: category.name, item: `${window.location.origin}/category/${category.slug}` }]
+                  : []),
+                { "@type": "ListItem", position: category ? 3 : 2, name: product.name },
+              ],
+            },
+          ],
         }}
       />
       <Navbar />

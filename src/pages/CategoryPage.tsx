@@ -148,10 +148,37 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title={`${category?.name || "Category"} | TechLK`}
-        description={category?.description || `Browse ${category?.name || "products"} at TechLK Sri Lanka`}
-        keywords={`${category?.name || ""}, electronics, Sri Lanka, TechLK`}
+        title={`${category?.name || "Category"} — Buy Online | TechLK Sri Lanka`}
+        description={category?.description || `Browse ${category?.name || "products"} at TechLK — Sri Lanka's leading electronics supplier. Best prices, island-wide delivery.`}
+        keywords={`${category?.name || ""}, buy ${category?.name || "electronics"} Sri Lanka, electronics, components, TechLK, best price, online store`}
         canonical={`${window.location.origin}/category/${slug}`}
+        jsonLd={{
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "CollectionPage",
+              name: `${category?.name || "Category"} — TechLK`,
+              description: category?.description || `Browse ${category?.name || "products"} at TechLK Sri Lanka`,
+              url: `${window.location.origin}/category/${slug}`,
+            },
+            ...(filtered && filtered.length > 0 ? [{
+              "@type": "ItemList",
+              itemListElement: filtered.slice(0, 20).map((p: any, i: number) => ({
+                "@type": "ListItem",
+                position: i + 1,
+                url: `${window.location.origin}/product/${p.slug}`,
+                name: p.name,
+              })),
+            }] : []),
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: window.location.origin },
+                { "@type": "ListItem", position: 2, name: category?.name || "Category" },
+              ],
+            },
+          ],
+        }}
       />
       <Navbar />
       <main className="pt-[136px] md:pt-[160px]">

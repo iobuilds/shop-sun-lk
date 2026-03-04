@@ -10,6 +10,7 @@ interface SEOHeadProps {
   ogImage?: string;
   ogType?: string;
   jsonLd?: Record<string, any>;
+  noindex?: boolean;
 }
 
 const SEOHead = ({
@@ -20,6 +21,7 @@ const SEOHead = ({
   ogImage,
   ogType = "website",
   jsonLd,
+  noindex = false,
 }: SEOHeadProps) => {
   const { data: seoSettings } = useQuery({
     queryKey: ["site-seo-settings"],
@@ -68,6 +70,11 @@ const SEOHead = ({
       <link rel="icon" href={faviconUrl} />
       <meta name="description" content={finalDescription} />
       <meta name="keywords" content={finalKeywords} />
+      {noindex ? (
+        <meta name="robots" content="noindex, nofollow" />
+      ) : (
+        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+      )}
       {canonical && <link rel="canonical" href={canonical} />}
       <meta property="og:title" content={finalTitle} />
       <meta property="og:description" content={finalDescription} />
