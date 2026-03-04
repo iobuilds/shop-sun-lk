@@ -21,6 +21,7 @@ import SalesAnalytics from "@/components/admin/SalesAnalytics";
 import DatabaseTools from "@/components/admin/DatabaseTools";
 import WalletManager from "@/components/admin/WalletManager";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
+import AdminOrderDetailDialog from "@/components/admin/AdminOrderDetailDialog";
 
 type Tab = "products" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet";
 
@@ -1256,26 +1257,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     }
   }, []);
 
-  const openOrderDetail = async (order: any) => {
+  const openOrderDetail = (order: any) => {
     setSelectedOrder(order);
-    setOrderDeliveryForm({
-      status: order.status || "pending",
-      tracking_number: (order as any).tracking_number || "",
-      courier_name: (order as any).courier_name || "",
-      tracking_link: (order as any).tracking_link || "",
-      expected_delivery: (order as any).expected_delivery || "",
-      delivery_note: "",
-    });
     setOrderDetailDialog(true);
-    // Load status history
-    setLoadingHistory(true);
-    const { data } = await supabase
-      .from("order_status_history" as any)
-      .select("*")
-      .eq("order_id", order.id)
-      .order("created_at", { ascending: true });
-    setOrderStatusHistory((data as any[]) || []);
-    setLoadingHistory(false);
   };
 
   const saveOrderDeliveryUpdate = async () => {
@@ -1974,7 +1958,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
-                                <button onClick={() => openOrderDetail(o)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Manage delivery"><Truck className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => openOrderDetail(o)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="View order details"><Eye className="w-3.5 h-3.5" /></button>
                                 <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
                             </td>
@@ -4038,104 +4022,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           </div>
         </DialogContent>
       </Dialog>
-      {/* ═══ Order Detail / Delivery Management Dialog ═══ */}
-      <Dialog open={orderDetailDialog} onOpenChange={setOrderDetailDialog}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Order Delivery Management</DialogTitle></DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-6">
-              {/* Order Summary */}
-              <div className="bg-muted/50 rounded-lg p-4 border border-border">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-mono font-bold text-foreground">#{selectedOrder.id.slice(0, 8).toUpperCase()}</p>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${
-                    selectedOrder.status === "delivered" ? "bg-secondary/10 text-secondary" :
-                    selectedOrder.status === "cancelled" ? "bg-destructive/10 text-destructive" :
-                    "bg-accent/10 text-accent-foreground"
-                  }`}>{selectedOrder.status?.replace(/_/g, " ")}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">Total: Rs. {selectedOrder.total?.toLocaleString()} • {new Date(selectedOrder.created_at!).toLocaleDateString()}</p>
-              </div>
-
-              {/* Status Update */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="flex items-center gap-1.5 mb-1.5"><Clock className="w-3.5 h-3.5" /> Order Status</Label>
-                  <Select value={orderDeliveryForm.status} onValueChange={(v) => setOrderDeliveryForm(f => ({ ...f, status: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
-                        <SelectItem key={s} value={s} className="capitalize">{s.replace(/_/g, " ")}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="flex items-center gap-1.5 mb-1.5"><CalendarDays className="w-3.5 h-3.5" /> Expected Delivery</Label>
-                  <Input value={orderDeliveryForm.expected_delivery} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, expected_delivery: e.target.value }))} placeholder="e.g. 7-14 business days" />
-                </div>
-              </div>
-
-              {/* Tracking Details */}
-              <div>
-                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5"><Truck className="w-4 h-4" /> Tracking Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label>Tracking Number</Label>
-                    <Input value={orderDeliveryForm.tracking_number} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, tracking_number: e.target.value }))} placeholder="TRK123456" />
-                  </div>
-                  <div>
-                    <Label>Courier Name</Label>
-                    <Input value={orderDeliveryForm.courier_name} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, courier_name: e.target.value }))} placeholder="DHL, FedEx..." />
-                  </div>
-                  <div>
-                    <Label>Tracking Link</Label>
-                    <Input value={orderDeliveryForm.tracking_link} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, tracking_link: e.target.value }))} placeholder="https://..." />
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Note */}
-              <div>
-                <Label className="flex items-center gap-1.5 mb-1.5"><StickyNote className="w-3.5 h-3.5" /> Delivery Note (visible to customer)</Label>
-                <Textarea value={orderDeliveryForm.delivery_note} onChange={(e) => setOrderDeliveryForm(f => ({ ...f, delivery_note: e.target.value }))} rows={2} placeholder="e.g. Delay due to weather, address verification needed..." />
-              </div>
-
-              {/* Save */}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setOrderDetailDialog(false)}>Cancel</Button>
-                <Button onClick={saveOrderDeliveryUpdate}><Save className="w-4 h-4 mr-1.5" /> Save & Update</Button>
-              </div>
-
-              {/* Status History Timeline */}
-              <div>
-                <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5"><Clock className="w-4 h-4" /> Status Timeline</h3>
-                {loadingHistory ? (
-                  <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
-                ) : orderStatusHistory.length > 0 ? (
-                  <div className="space-y-0 relative ml-3">
-                    <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-border" />
-                    {orderStatusHistory.map((h: any, i: number) => (
-                      <div key={h.id} className="flex gap-3 relative pb-4">
-                        <div className={`w-2.5 h-2.5 rounded-full mt-1.5 shrink-0 z-10 ${i === orderStatusHistory.length - 1 ? "bg-secondary" : "bg-muted-foreground/40"}`} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground capitalize">{h.status?.replace(/_/g, " ")}</p>
-                          <p className="text-xs text-muted-foreground">{new Date(h.created_at).toLocaleString()}</p>
-                          {h.note && <p className="text-xs text-foreground mt-0.5 bg-muted/50 rounded px-2 py-1">{h.note}</p>}
-                          {h.tracking_number && <p className="text-xs text-muted-foreground mt-0.5">Tracking: {h.tracking_number}{h.courier_name ? ` (${h.courier_name})` : ""}</p>}
-                          {h.expected_delivery && <p className="text-xs text-muted-foreground">ETA: {h.expected_delivery}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">No status history recorded yet</p>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* ═══ Order Detail Dialog ═══ */}
+      <AdminOrderDetailDialog
+        open={orderDetailDialog}
+        onOpenChange={setOrderDetailDialog}
+        order={selectedOrder}
+        companySettings={companySettings}
+      />
 
       {/* Bulk Delete Confirmation Dialog */}
       <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
