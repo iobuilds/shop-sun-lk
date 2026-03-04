@@ -697,23 +697,25 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const totalUserPages = Math.ceil((filteredUsers?.length || 0) / ITEMS_PER_PAGE);
   const paginatedUsers = filteredUsers?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
 
-  // User management actions
+  // User management actions — returns { success, data, error }
   const callUserManagement = async (action: string, target_user_id: string, extra: any = {}) => {
     setUserActionLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("admin-user-management", {
         body: { action, target_user_id, ...extra },
       });
-      if (res.error) throw new Error(res.error.message);
-      if (res.data?.error) throw new Error(res.data.error);
+      const errorMsg = res.error?.message || res.data?.error;
+      if (errorMsg) {
+        toast({ title: "Action Failed", description: errorMsg, variant: "destructive" });
+        return { success: false, error: errorMsg };
+      }
       toast({ title: "Success", description: res.data?.message || "Action completed" });
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
-      return res.data;
+      return { success: true, data: res.data };
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
-      throw e;
+      return { success: false, error: e.message };
     } finally {
       setUserActionLoading(false);
     }
@@ -733,11 +735,12 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
-    try {
-      await callUserManagement("delete", deleteTarget.id);
+    const result = await callUserManagement("delete", deleteTarget.id);
+    if (result?.success) {
       setDeleteDialog(false);
       setDeleteTarget(null);
-    } catch {}
+    }
+    // If failed (e.g. user has orders), dialog stays open and toast shows error
   };
 
   const handleRoleChange = async (newRole?: string) => {
