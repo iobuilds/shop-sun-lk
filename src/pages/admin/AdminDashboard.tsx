@@ -137,6 +137,43 @@ const AdminDashboard = () => {
   const [userStatusFilter, setUserStatusFilter] = useState("all");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
 
+  // LCSC import state
+  const [lcscPartNumber, setLcscPartNumber] = useState("");
+  const [lcscLoading, setLcscLoading] = useState(false);
+
+  const fetchFromLcsc = async () => {
+    if (!lcscPartNumber.trim()) return;
+    setLcscLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("lcsc-import", {
+        body: { partNumber: lcscPartNumber.trim() },
+      });
+      if (error || !data?.success) {
+        toast({ title: "LCSC fetch failed", description: data?.error || error?.message || "Part not found", variant: "destructive" });
+        return;
+      }
+      const d = data.data;
+      setProductForm((prev) => ({
+        ...prev,
+        name: d.name || prev.name,
+        sku: d.sku || prev.sku,
+        description: d.description || prev.description,
+        datasheet_url: d.datasheet_url || prev.datasheet_url,
+        images: d.images?.join(",") || prev.images,
+        slug: (d.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+      }));
+      if (d.images?.length) setProductImagePreviews(d.images.slice(0, 5));
+      toast({
+        title: "✅ LCSC data imported",
+        description: `${d.name} — Set price, stock & category to complete.`,
+      });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLcscLoading(false);
+    }
+  };
+
   // Promo banners state
   const [promoDialog, setPromoDialog] = useState(false);
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
@@ -820,7 +857,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   };
 
   // ── Product CRUD ──
-  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setProductDialog(true); };
+  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setLcscPartNumber(""); setProductDialog(true); };
   const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
     const imgs = p.images || [];
@@ -3595,6 +3632,35 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingProductId ? "Edit Product" : "Add Product"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {/* LCSC Auto-Import */}
+            {!editingProductId && (
+              <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <Search className="w-4 h-4 text-secondary" />
+                  LCSC Auto-Import
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter LCSC Part No. (e.g. C93216)"
+                    value={lcscPartNumber}
+                    onChange={(e) => setLcscPartNumber(e.target.value.trim())}
+                    onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={fetchFromLcsc}
+                    disabled={lcscLoading || !lcscPartNumber}
+                    className="shrink-0"
+                  >
+                    {lcscLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                    {lcscLoading ? "Fetching..." : "Fetch"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Paste an LCSC part number to auto-fill product details. Set price & stock manually.</p>
+              </div>
+            )}
             <div><Label>Name *</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product name" /></div>
             <div><Label>Slug</Label><Input value={productForm.slug} onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })} placeholder="auto-generated-from-name" /></div>
             <div>
