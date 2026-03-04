@@ -704,7 +704,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       const res = await supabase.functions.invoke("admin-user-management", {
         body: { action, target_user_id, ...extra },
       });
-      const errorMsg = res.error?.message || res.data?.error;
+      // When edge function returns 4xx, supabase-js puts a generic message in res.error
+      // and the actual JSON body in res.data. Prefer res.data.error for user-friendly message.
+      const errorMsg = res.data?.error || res.error?.message;
       if (errorMsg) {
         toast({ title: "Action Failed", description: errorMsg, variant: "destructive" });
         return { success: false, error: errorMsg };
