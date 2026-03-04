@@ -79,6 +79,14 @@ serve(async (req) => {
     // Send SMS to admins if new order and API key exists
     const TEXTLK_API_KEY = Deno.env.get("TEXTLK_API_KEY");
     if (type === "new_order" && TEXTLK_API_KEY && adminPhones.length > 0) {
+      // Fetch template from DB
+      const { data: template } = await supabaseAdmin
+        .from("sms_templates")
+        .select("*")
+        .eq("template_key", "admin_new_order")
+        .eq("is_active", true)
+        .maybeSingle();
+
       const shortOrderId = order.id.slice(0, 8).toUpperCase();
       const customerName = customerProfile?.full_name || "Customer";
       const itemCount = order.order_items?.length || 0;
@@ -88,7 +96,18 @@ serve(async (req) => {
         .join(", ");
       const moreItems = itemCount > 3 ? ` +${itemCount - 3} more` : "";
 
-      const message = `🛒 New Order #${shortOrderId}\nCustomer: ${customerName}\nItems: ${itemNames}${moreItems}\nTotal: Rs.${order.total?.toLocaleString()}\nPayment: ${order.payment_method}\n\nCheck admin dashboard for details.`;
+      let message: string;
+      if (template?.message_template) {
+        message = template.message_template
+          .replace(/{{order_id}}/g, shortOrderId)
+          .replace(/{{customer_name}}/g, customerName)
+          .replace(/{{items}}/g, `${itemNames}${moreItems}`)
+          .replace(/{{total}}/g, String(order.total?.toLocaleString() || "0"))
+          .replace(/{{payment_method}}/g, order.payment_method || "N/A");
+      } else {
+        // Fallback if template not found or disabled
+        message = `🛒 New Order #${shortOrderId}\nCustomer: ${customerName}\nItems: ${itemNames}${moreItems}\nTotal: Rs.${order.total?.toLocaleString()}\nPayment: ${order.payment_method}\n\nCheck admin dashboard for details.`;
+      }
 
       for (const phone of adminPhones) {
         try {
@@ -109,7 +128,6 @@ serve(async (req) => {
           const smsResult = await smsRes.json();
           console.log(`Admin SMS to ${phone}:`, smsResult?.status || "unknown");
 
-          // Log the SMS
           await supabaseAdmin.from("sms_logs").insert({
             phone,
             message,
