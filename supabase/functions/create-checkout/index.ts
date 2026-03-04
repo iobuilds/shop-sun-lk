@@ -156,7 +156,36 @@ serve(async (req) => {
       }
     }
 
-    const shipping_fee = subtotal >= 5000 ? 0 : 350;
+    // Fetch shipping settings from DB (single source of truth)
+    const { data: shippingSettingsRow } = await supabaseAdmin
+      .from("site_settings")
+      .select("value")
+      .eq("key", "shipping_settings")
+      .maybeSingle();
+    const shipSettings = shippingSettingsRow?.value as { local_fee?: number; overseas_fee?: number; free_shipping_threshold?: number } | null;
+    const localFee = shipSettings?.local_fee ?? 350;
+    const overseasFee = shipSettings?.overseas_fee ?? 1500;
+    const freeThreshold = shipSettings?.free_shipping_threshold ?? 5000;
+
+    // Check if any cart item is overseas
+    const { data: cartProductSpecs } = await supabaseAdmin
+      .from("products")
+      .select("id, specifications")
+      .in("id", productIds);
+    const hasOverseas = (cartProductSpecs || []).some((p: any) => {
+      const specs = p.specifications || {};
+      return specs._shipping_type === "overseas";
+    });
+
+    let shipping_fee: number;
+    if (hasOverseas) {
+      shipping_fee = overseasFee;
+    } else if (subtotal >= freeThreshold) {
+      shipping_fee = 0;
+    } else {
+      shipping_fee = localFee;
+    }
+
     const payable_before_wallet = subtotal + shipping_fee - discount_amount;
     // If coupon exceeds payable, calculate extra credit for wallet
     let coupon_wallet_credit = 0;
