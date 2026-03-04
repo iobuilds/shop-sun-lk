@@ -7,6 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
+const SENDER_ID = "IO Builds";
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,21 +31,39 @@ serve(async (req) => {
       .single();
     if (orderError) throw orderError;
 
-    // Fetch admin emails
+    // Fetch customer profile
+    const { data: customerProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("full_name, phone")
+      .eq("user_id", order.user_id)
+      .maybeSingle();
+
+    // Fetch admin user IDs
     const { data: adminRoles } = await supabaseAdmin
       .from("user_roles")
       .select("user_id")
       .eq("role", "admin");
 
     const adminEmails: string[] = [];
+    const adminPhones: string[] = [];
+
     if (adminRoles) {
       for (const role of adminRoles) {
+        // Get admin email
         const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(role.user_id);
         if (user?.email) adminEmails.push(user.email);
+
+        // Get admin phone from profile
+        const { data: adminProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("phone")
+          .eq("user_id", role.user_id)
+          .maybeSingle();
+        if (adminProfile?.phone) adminPhones.push(adminProfile.phone);
       }
     }
 
-    // Log the notification (in production, integrate with an email service)
+    // Log the notification
     const notification = {
       type,
       order_id,
@@ -53,11 +74,55 @@ serve(async (req) => {
       items_count: order.order_items?.length || 0,
       timestamp: new Date().toISOString(),
     };
-
     console.log("📧 Order notification:", JSON.stringify(notification));
 
-    // Store notification for admin dashboard
-    // For now we log it. In production, integrate Resend/SendGrid here.
+    // Send SMS to admins if new order and API key exists
+    const TEXTLK_API_KEY = Deno.env.get("TEXTLK_API_KEY");
+    if (type === "new_order" && TEXTLK_API_KEY && adminPhones.length > 0) {
+      const shortOrderId = order.id.slice(0, 8).toUpperCase();
+      const customerName = customerProfile?.full_name || "Customer";
+      const itemCount = order.order_items?.length || 0;
+      const itemNames = (order.order_items || [])
+        .slice(0, 3)
+        .map((i: any) => i.products?.name || "Item")
+        .join(", ");
+      const moreItems = itemCount > 3 ? ` +${itemCount - 3} more` : "";
+
+      const message = `🛒 New Order #${shortOrderId}\nCustomer: ${customerName}\nItems: ${itemNames}${moreItems}\nTotal: Rs.${order.total?.toLocaleString()}\nPayment: ${order.payment_method}\n\nCheck admin dashboard for details.`;
+
+      for (const phone of adminPhones) {
+        try {
+          const smsRes = await fetch(TEXTLK_API_URL, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${TEXTLK_API_KEY}`,
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+            },
+            body: JSON.stringify({
+              recipient: phone,
+              sender_id: SENDER_ID,
+              type: "plain",
+              message,
+            }),
+          });
+          const smsResult = await smsRes.json();
+          console.log(`Admin SMS to ${phone}:`, smsResult?.status || "unknown");
+
+          // Log the SMS
+          await supabaseAdmin.from("sms_logs").insert({
+            phone,
+            message,
+            template_key: "admin_new_order",
+            status: smsResult?.status === "success" ? "sent" : "failed",
+            provider_response: smsResult,
+            order_id,
+          });
+        } catch (smsErr) {
+          console.error(`Failed to send admin SMS to ${phone}:`, smsErr);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, notification }),
