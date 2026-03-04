@@ -3632,16 +3632,25 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingProductId ? "Edit Product" : "Add Product"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            {/* LCSC Auto-Import */}
-            {!editingProductId && (
-              <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Search className="w-4 h-4 text-secondary" />
+            <div><Label>Name *</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product name" /></div>
+            <div><Label>Slug</Label><Input value={productForm.slug} onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })} placeholder="auto-generated-from-name" /></div>
+            <div>
+              <Label>Category</Label>
+              <Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>{categories?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
+              </Select>
+            </div>
+            {/* LCSC Auto-Import — only for Micro Electronics category */}
+            {!editingProductId && categories?.find(c => c.id === productForm.category_id && c.name.toLowerCase().includes("micro")) && (
+              <div className="border border-secondary/40 rounded-lg p-3 bg-secondary/5 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
+                  <ExternalLink className="w-4 h-4" />
                   LCSC Auto-Import
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter LCSC Part No. (e.g. C93216)"
+                    placeholder="LCSC Part No. (e.g. C93216)"
                     value={lcscPartNumber}
                     onChange={(e) => setLcscPartNumber(e.target.value.trim())}
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
@@ -3654,22 +3663,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     disabled={lcscLoading || !lcscPartNumber}
                     className="shrink-0"
                   >
-                    {lcscLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                    {lcscLoading ? "Fetching..." : "Fetch"}
+                    {lcscLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                    {lcscLoading ? "Fetching..." : "Fetch from LCSC"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Paste an LCSC part number to auto-fill product details. Set price & stock manually.</p>
+                <p className="text-xs text-muted-foreground">Enter the exact LCSC part number to auto-fill name, SKU, description & datasheet. Then set price & stock.</p>
               </div>
             )}
-            <div><Label>Name *</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product name" /></div>
-            <div><Label>Slug</Label><Input value={productForm.slug} onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })} placeholder="auto-generated-from-name" /></div>
-            <div>
-              <Label>Category</Label>
-              <Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>{categories?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Price (Rs.) *</Label><Input type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></div>
               <div><Label>Original Price (Rs.)</Label><Input type="number" value={productForm.discount_price} onChange={(e) => setProductForm({ ...productForm, discount_price: e.target.value })} placeholder="Higher price" /></div>
