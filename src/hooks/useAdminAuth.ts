@@ -2,8 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+export type UserRole = "admin" | "moderator" | "user";
+
 export const useAdminAuth = () => {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole>("user");
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -15,19 +19,23 @@ export const useAdminAuth = () => {
         return;
       }
 
-      const { data } = await supabase
+      const { data: roles } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", session.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
+        .eq("user_id", session.user.id);
 
-      if (!data) {
+      const roleList = roles?.map((r: any) => r.role) || [];
+      const hasAdmin = roleList.includes("admin");
+      const hasModerator = roleList.includes("moderator");
+
+      if (!hasAdmin && !hasModerator) {
         navigate("/");
         return;
       }
 
-      setIsAdmin(true);
+      setIsAdmin(hasAdmin);
+      setIsModerator(hasModerator);
+      setUserRole(hasAdmin ? "admin" : "moderator");
       setLoading(false);
     };
 
@@ -39,5 +47,5 @@ export const useAdminAuth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  return { isAdmin, loading };
+  return { isAdmin, isModerator, userRole, loading };
 };

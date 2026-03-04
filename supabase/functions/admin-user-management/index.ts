@@ -179,21 +179,27 @@ serve(async (req) => {
 
       case "change_role": {
         const { role } = params;
-        if (!["admin", "user"].includes(role)) throw new Error("Invalid role");
+        if (!["admin", "moderator", "user"].includes(role)) throw new Error("Invalid role");
 
-        if (role === "admin") {
-          // Add admin role
-          const { error } = await supabaseAdmin
-            .from("user_roles")
-            .upsert({ user_id: target_user_id, role: "admin" }, { onConflict: "user_id,role" });
-          if (error) throw error;
-        } else {
-          // Remove admin role
+        if (role === "user") {
+          // Remove all elevated roles
           const { error } = await supabaseAdmin
             .from("user_roles")
             .delete()
             .eq("user_id", target_user_id)
-            .eq("role", "admin");
+            .in("role", ["admin", "moderator"]);
+          if (error) throw error;
+        } else {
+          // Remove any existing elevated role first, then add new one
+          await supabaseAdmin
+            .from("user_roles")
+            .delete()
+            .eq("user_id", target_user_id)
+            .in("role", ["admin", "moderator"]);
+
+          const { error } = await supabaseAdmin
+            .from("user_roles")
+            .insert({ user_id: target_user_id, role });
           if (error) throw error;
         }
 
