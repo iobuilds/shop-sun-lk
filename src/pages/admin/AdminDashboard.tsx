@@ -65,9 +65,9 @@ const emptyCoupon: CouponForm = { code: "", name: "", description: "", discount_
 const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_type: "local", ships_from: "", delivery_eta: "" };
 
 const AdminDashboard = () => {
-  const { isAdmin, loading } = useAdminAuth();
+  const { isAdmin, isModerator, userRole, loading } = useAdminAuth();
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<Tab>("products");
+  const [tab, setTab] = useState<Tab>("orders");
   const [search, setSearch] = useState("");
   const [uploading, setUploading] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -528,9 +528,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const pendingOrderCount = orders?.filter(o => o.status === "pending" || o.status === "confirmed").length || 0;
   const deliveryActionCount = orders?.filter(o => ["confirmed", "paid", "processing", "packed", "shipped"].includes(o.status)).length || 0;
 
-  const sidebarGroups = [
+  const allSidebarGroups = [
     {
-      label: "Catalog", icon: Package, defaultOpen: true,
+      label: "Catalog", icon: Package, defaultOpen: true, adminOnly: true,
       items: [
         { id: "products" as Tab, label: "Products", icon: Package, count: products?.length || 0 },
         { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
@@ -540,14 +540,14 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       ],
     },
     {
-      label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true,
+      label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true, adminOnly: false,
       items: [
         { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: pendingOrderCount },
         { id: "delivery_updates" as Tab, label: "Delivery Updates", icon: Truck, count: deliveryActionCount },
       ],
     },
     {
-      label: "Customers", icon: Users, defaultOpen: true,
+      label: "Customers", icon: Users, defaultOpen: true, adminOnly: true,
       items: [
         { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
         { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
@@ -555,7 +555,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       ],
     },
     {
-      label: "Marketing", icon: Megaphone, defaultOpen: false,
+      label: "Marketing", icon: Megaphone, defaultOpen: false, adminOnly: true,
       items: [
         { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
         { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
@@ -564,7 +564,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       ],
     },
     {
-      label: "Payments & Finance", icon: CreditCard, defaultOpen: false,
+      label: "Payments & Finance", icon: CreditCard, defaultOpen: false, adminOnly: true,
       items: [
         { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
         { id: "wallet" as Tab, label: "User Wallets", icon: Wallet, count: 0 },
@@ -574,32 +574,37 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       ],
     },
     {
-      label: "Content & Site", icon: Globe, defaultOpen: false,
+      label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
         { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
         { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
       ],
     },
     {
-      label: "SMS Center", icon: Send, defaultOpen: false,
+      label: "SMS Center", icon: Send, defaultOpen: false, adminOnly: true,
       items: [
         { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
         { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
       ],
     },
     {
-      label: "Analytics & Reports", icon: TrendingUp, defaultOpen: false,
+      label: "Analytics & Reports", icon: TrendingUp, defaultOpen: false, adminOnly: true,
       items: [
         { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
       ],
     },
     {
-      label: "System Tools", icon: Wrench, defaultOpen: false,
+      label: "System Tools", icon: Wrench, defaultOpen: false, adminOnly: true,
       items: [
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
       ],
     },
   ];
+
+  // Filter sidebar groups based on role
+  const sidebarGroups = isAdmin
+    ? allSidebarGroups
+    : allSidebarGroups.filter(g => !g.adminOnly);
 
   // Flat list for mobile
   const allTabs = sidebarGroups.flatMap(g => g.items);
@@ -730,10 +735,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     } catch {}
   };
 
-  const handleRoleChange = async () => {
+  const handleRoleChange = async (newRole?: string) => {
     if (!roleTarget) return;
-    const newRole = roleTarget.currentRole === "admin" ? "user" : "admin";
-    await callUserManagement("change_role", roleTarget.id, { role: newRole });
+    const role = newRole || (roleTarget.currentRole === "admin" ? "user" : "admin");
+    await callUserManagement("change_role", roleTarget.id, { role });
     setRoleDialog(false);
     setRoleTarget(null);
   };
@@ -1572,7 +1577,11 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     );
   }
 
-  if (!isAdmin) return null;
+  if (!isAdmin && !isModerator) return null;
+
+  // Moderator allowed tabs
+  const moderatorTabs: Tab[] = ["orders", "delivery_updates"];
+  const canAccessTab = (tabId: Tab) => isAdmin || moderatorTabs.includes(tabId);
 
   // Helper to get user role
   const getUserRole = (userId: string) => {
@@ -1621,6 +1630,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
               <span className="w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">{unreadContacts}</span>
             </button>
           )}
+          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${userRole === "admin" ? "bg-destructive/10 text-destructive" : "bg-accent/20 text-accent-foreground"}`}>
+            {userRole}
+          </span>
           <Link to="/" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <Eye className="w-3.5 h-3.5" /> <span className="hidden sm:inline">View Store</span>
           </Link>
@@ -2355,6 +2367,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     <SelectContent>
                       <SelectItem value="all">All Roles</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="moderator">Moderator</SelectItem>
                       <SelectItem value="user">User</SelectItem>
                     </SelectContent>
                   </Select>
@@ -2400,7 +2413,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             <td className="px-4 py-3 text-muted-foreground">{p.phone || "—"}</td>
                             <td className="px-4 py-3 text-muted-foreground">{p.city || "—"}</td>
                             <td className="px-4 py-3">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${role === "admin" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${role === "admin" ? "bg-destructive/10 text-destructive" : role === "moderator" ? "bg-accent/20 text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
                                 {role}
                               </span>
                             </td>
@@ -2427,7 +2440,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => { setRoleTarget({ id: p.user_id, name: p.full_name || "User", currentRole: role }); setRoleDialog(true); }}>
-                                    <Shield className="w-4 h-4 mr-2" /> {role === "admin" ? "Demote to User" : "Promote to Admin"}
+                                    <Shield className="w-4 h-4 mr-2" /> Change Role
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   {isSuspended ? (
@@ -2504,17 +2517,43 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Change User Role</AlertDialogTitle>
                     <AlertDialogDescription>
-                      {roleTarget?.currentRole === "admin"
-                        ? `Remove admin access from ${roleTarget?.name}? They will no longer be able to access the admin dashboard.`
-                        : `Grant admin access to ${roleTarget?.name}? They will be able to manage all data in the admin dashboard.`}
+                      Change the role for <strong>{roleTarget?.name}</strong>. Current role: <strong className="capitalize">{roleTarget?.currentRole}</strong>
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  <div className="flex flex-col gap-2 py-3">
+                    <Button
+                      variant={roleTarget?.currentRole === "admin" ? "default" : "outline"}
+                      size="sm"
+                      className="justify-start gap-2"
+                      disabled={roleTarget?.currentRole === "admin" || userActionLoading}
+                      onClick={() => handleRoleChange("admin")}
+                    >
+                      <Shield className="w-4 h-4" /> Admin
+                      <span className="text-xs text-muted-foreground ml-auto">Full access to everything</span>
+                    </Button>
+                    <Button
+                      variant={roleTarget?.currentRole === "moderator" ? "default" : "outline"}
+                      size="sm"
+                      className="justify-start gap-2"
+                      disabled={roleTarget?.currentRole === "moderator" || userActionLoading}
+                      onClick={() => handleRoleChange("moderator")}
+                    >
+                      <Shield className="w-4 h-4" /> Moderator
+                      <span className="text-xs text-muted-foreground ml-auto">Manage orders only</span>
+                    </Button>
+                    <Button
+                      variant={roleTarget?.currentRole === "user" ? "default" : "outline"}
+                      size="sm"
+                      className="justify-start gap-2"
+                      disabled={roleTarget?.currentRole === "user" || userActionLoading}
+                      onClick={() => handleRoleChange("user")}
+                    >
+                      <Users className="w-4 h-4" /> User
+                      <span className="text-xs text-muted-foreground ml-auto">No admin access</span>
+                    </Button>
+                  </div>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleRoleChange} disabled={userActionLoading}>
-                      {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Shield className="w-4 h-4 mr-1" />}
-                      {roleTarget?.currentRole === "admin" ? "Demote to User" : "Promote to Admin"}
-                    </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
