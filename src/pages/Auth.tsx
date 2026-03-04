@@ -193,12 +193,13 @@ const Auth = () => {
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
-          .eq("user_id", signInData.user.id)
-          .eq("role", "admin")
-          .maybeSingle();
+          .eq("user_id", signInData.user.id);
+        
+        const roles = roleData?.map((r: any) => r.role) || [];
+        const isAdminOrMod = roles.includes("admin") || roles.includes("moderator");
         
         toast.success("Welcome back!");
-        navigate(roleData ? "/admin" : "/");
+        navigate(isAdminOrMod ? "/admin" : "/");
       }
     } catch (error: any) {
       toast.error(error.message);
