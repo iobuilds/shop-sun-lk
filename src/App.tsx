@@ -20,6 +20,7 @@ import OrderSuccess from "./pages/OrderSuccess";
 import StaticPage from "./pages/StaticPage";
 import TrackOrder from "./pages/TrackOrder";
 import NotFound from "./pages/NotFound";
+import SitemapRedirect from "./pages/SitemapRedirect";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/page/:slug" element={<StaticPage />} />
               <Route path="/contact" element={<StaticPage />} />
               <Route path="/track-order" element={<TrackOrder />} />
+              <Route path="/sitemap.xml" element={<SitemapRedirect />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

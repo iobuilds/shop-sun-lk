@@ -1,8 +1,10 @@
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 2
 
 User-agent: Twitterbot
 Allow: /
@@ -12,3 +14,12 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Disallow: /admin
+Disallow: /auth
+Disallow: /checkout
+Disallow: /order-success
+Disallow: /reset-password
+Disallow: /profile
+
+Sitemap: https://shop-sun-lk.lovable.app/sitemap.xml
