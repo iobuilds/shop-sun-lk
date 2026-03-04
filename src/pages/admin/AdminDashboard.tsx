@@ -633,6 +633,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const [smsLogPage, setSmsLogPage] = useState(0);
 
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [orderSearch, setOrderSearch] = useState("");
   const [productStockFilter, setProductStockFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
@@ -654,7 +655,19 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
   const paginatedProducts = filteredProducts?.slice(productPage * ITEMS_PER_PAGE, (productPage + 1) * ITEMS_PER_PAGE);
 
-  const filteredOrders = orders?.filter((o) => orderStatusFilter === "all" || o.status === orderStatusFilter);
+  const filteredOrders = orders?.filter((o) => {
+    const matchesStatus = orderStatusFilter === "all" || o.status === orderStatusFilter;
+    if (!matchesStatus) return false;
+    if (!orderSearch.trim()) return true;
+    const q = orderSearch.toLowerCase().trim();
+    const orderId = o.id.toLowerCase();
+    const shortId = o.id.slice(0, 8).toLowerCase();
+    const addr = o.shipping_address as any;
+    const customerName = (addr?.full_name || "").toLowerCase();
+    const customerPhone = (addr?.phone || "").toLowerCase();
+    const trackingNum = ((o as any).tracking_number || "").toLowerCase();
+    return orderId.includes(q) || shortId.includes(q) || customerName.includes(q) || customerPhone.includes(q) || trackingNum.includes(q);
+  });
   const totalOrderPages = Math.ceil((filteredOrders?.length || 0) / ITEMS_PER_PAGE);
   const paginatedOrders = filteredOrders?.slice(orderPage * ITEMS_PER_PAGE, (orderPage + 1) * ITEMS_PER_PAGE);
 
@@ -1879,9 +1892,23 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {/* ═══ Orders Tab ═══ */}
           {tab === "orders" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
                 <h2 className="text-xl font-bold font-display text-foreground">Orders</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input
+                      value={orderSearch}
+                      onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(0); }}
+                      placeholder="Search Order ID, name, phone…"
+                      className="h-8 text-xs pl-8 w-56"
+                    />
+                    {orderSearch && (
+                      <button onClick={() => setOrderSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrderPage(0); }}>
                     <SelectTrigger className="h-8 text-xs w-40"><SelectValue placeholder="Filter by status" /></SelectTrigger>
                     <SelectContent>
