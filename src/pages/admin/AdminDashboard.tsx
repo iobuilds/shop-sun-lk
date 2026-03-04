@@ -547,11 +547,16 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       ],
     },
     {
+      label: "Customer Support", icon: MessageSquare, defaultOpen: true, adminOnly: false,
+      items: [
+        { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
+      ],
+    },
+    {
       label: "Customers", icon: Users, defaultOpen: true, adminOnly: true,
       items: [
         { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
         { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
-        { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
       ],
     },
     {
