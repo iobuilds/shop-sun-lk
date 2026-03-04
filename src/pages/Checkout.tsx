@@ -11,6 +11,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { useShippingCalculation } from "@/hooks/useShippingCalculation";
 
 // Fetch payment method settings
 const usePaymentMethodSettings = () => useQuery({
@@ -23,16 +24,7 @@ const usePaymentMethodSettings = () => useQuery({
   staleTime: 5 * 60 * 1000,
 });
 
-// Fetch shipping settings
-const useShippingSettings = () => useQuery({
-  queryKey: ["shipping-settings"],
-  queryFn: async () => {
-    const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "shipping_settings").maybeSingle();
-    if (error) throw error;
-    return (data as any)?.value as any || { local_fee: 350, overseas_fee: 1500, free_shipping_threshold: 5000 };
-  },
-  staleTime: 5 * 60 * 1000,
-});
+// Fetch shipping settings — now handled by useShippingCalculation hook
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Session } from "@supabase/supabase-js";
@@ -44,7 +36,7 @@ const Checkout = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { data: pmSettings } = usePaymentMethodSettings();
-  const { data: shipSettings } = useShippingSettings();
+  const { shipping, shippingNote, freeShippingGap, hasOverseas } = useShippingCalculation(items, subtotal);
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -126,11 +118,6 @@ const Checkout = () => {
   const walletBalance = Number(walletData?.balance || 0);
 
   const discount = appliedCoupon?.discount || 0;
-  const localFee = shipSettings?.local_fee ?? 350;
-  const overseasFee = shipSettings?.overseas_fee ?? 1500;
-  const freeThreshold = shipSettings?.free_shipping_threshold ?? 5000;
-  const hasOverseas = items.some(item => (item as any).specifications?._shipping_type === "overseas");
-  const shipping = hasOverseas ? overseasFee : (subtotal >= freeThreshold ? 0 : localFee);
   const walletCredit = useWallet ? Math.min(walletBalance, Math.max(0, subtotal - discount + shipping)) : 0;
   const total = Math.max(0, subtotal - discount - walletCredit + shipping);
 
@@ -473,8 +460,11 @@ const Checkout = () => {
                     )}
                     <div className="flex justify-between text-muted-foreground">
                       <span>Shipping</span>
-                      <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping}`}</span>
+                      <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping.toLocaleString()}`}</span>
                     </div>
+                    {shippingNote && (
+                      <p className="text-[10px] text-muted-foreground">{shippingNote}</p>
+                    )}
                     <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground text-base">
                       <span>Total</span>
                       <span>Rs. {total.toLocaleString()}</span>
