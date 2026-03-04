@@ -14,6 +14,7 @@ const STATUS_TEMPLATE_MAP: Record<string, string> = {
   pending: "order_placed",
   confirmed: "order_confirmed",
   paid: "payment_received",
+  payment_rejected: "payment_rejected",
   processing: "order_processing",
   packed: "order_packed",
   shipped: "order_shipped",
@@ -21,6 +22,11 @@ const STATUS_TEMPLATE_MAP: Record<string, string> = {
   delivered: "order_delivered",
   cancelled: "order_cancelled",
   returned: "order_returned",
+  refund_processed: "refund_processed",
+  wallet_credited: "wallet_credited",
+  coupon_extra_credit: "coupon_extra_credit",
+  delivery_eta_updated: "delivery_eta_updated",
+  tracking_updated: "tracking_updated",
 };
 
 serve(async (req) => {
@@ -109,13 +115,18 @@ serve(async (req) => {
 
     // Replace placeholders
     const shortOrderId = order.id.slice(0, 8).toUpperCase();
+    const trackingLink = (order as any).tracking_link || "";
+    const eta = (order as any).expected_delivery || "3-5 business days";
     let finalMessage = template.message_template
       .replace(/{{customer_name}}/g, profile?.full_name || "Customer")
       .replace(/{{order_id}}/g, shortOrderId)
       .replace(/{{total}}/g, String(order.total?.toLocaleString() || "0"))
       .replace(/{{status}}/g, status)
       .replace(/{{tracking_info}}/g, tracking_code ? `Tracking: ${tracking_code}. ` : "")
-      .replace(/{{eta}}/g, "3-5 business days");
+      .replace(/{{tracking_link}}/g, trackingLink)
+      .replace(/{{eta}}/g, eta)
+      .replace(/{{wallet_amount}}/g, String((order as any).wallet_amount || "0"))
+      .replace(/{{coupon_code}}/g, (order as any).coupon_code || "");
 
     // Send SMS
     const smsResponse = await fetch(TEXTLK_API_URL, {

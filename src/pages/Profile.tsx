@@ -311,6 +311,24 @@ const Profile = () => {
     enabled: !!session?.user?.id,
   });
 
+  // Realtime sync for order updates
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel('user-orders-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'orders',
+        filter: `user_id=eq.${session.user.id}`,
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ["user-orders", session.user.id] });
+        queryClient.invalidateQueries({ queryKey: ["user-wallet", session.user.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user?.id, queryClient]);
+
   // Conversations query
   const { data: conversations } = useQuery({
     queryKey: ["user-conversations", session?.user?.id],
