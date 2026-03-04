@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 
 // Fetch payment method settings
@@ -53,6 +54,39 @@ const Checkout = () => {
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number; description?: string; category_message?: string } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [useWallet, setUseWallet] = useState(false);
+  const [showCoupons, setShowCoupons] = useState(false);
+
+  // Available coupons
+  const { data: availableCoupons } = useQuery({
+    queryKey: ["checkout-available-coupons", session?.user?.id],
+    queryFn: async () => {
+      const now = new Date().toISOString();
+      const { data: publicCoupons } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("is_active", true)
+        .eq("coupon_type", "public")
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .or(`starts_at.is.null,starts_at.lte.${now}`);
+
+      let privateCoupons: any[] = [];
+      if (session?.user?.id) {
+        const { data: assignments } = await supabase
+          .from("coupon_assignments")
+          .select("coupon_id, used, coupons(*)")
+          .eq("used", false);
+        if (assignments) {
+          privateCoupons = assignments
+            .filter((a: any) => a.coupons?.is_active && (!a.coupons?.expires_at || new Date(a.coupons.expires_at) > new Date()))
+            .map((a: any) => a.coupons);
+        }
+      }
+      const all = [...(publicCoupons || []), ...privateCoupons];
+      return Array.from(new Map(all.map((c: any) => [c.id, c])).values());
+    },
+    enabled: !!session?.user?.id,
+    staleTime: 60 * 1000,
+  });
 
   const [form, setForm] = useState({
     full_name: "",
@@ -137,16 +171,18 @@ const Checkout = () => {
       });
   }, [session?.user?.id]);
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim()) return;
+  const applyCoupon = async (codeArg?: string) => {
+    const codeToApply = codeArg || couponCode;
+    if (!codeToApply.trim()) return;
     setValidatingCoupon(true);
     try {
       const { data, error } = await supabase.functions.invoke("validate-coupon", {
-        body: { code: couponCode, subtotal, cart_items: items.map(i => ({ id: i.id, quantity: i.quantity })) },
+        body: { code: codeToApply, subtotal, cart_items: items.map(i => ({ id: i.id, quantity: i.quantity })) },
       });
       if (error) throw error;
       if (!data.valid) throw new Error(data.error);
       setAppliedCoupon({ code: data.code, discount: data.discount, description: data.description, category_message: data.category_message });
+      setCouponCode(data.code);
       toast.success(`Coupon applied! You save Rs. ${data.discount.toLocaleString()}`);
     } catch (err: any) {
       toast.error(err.message || "Invalid coupon");
@@ -348,24 +384,70 @@ const Checkout = () => {
                           className="text-sm"
                           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyCoupon())}
                         />
-                        <Button type="button" variant="outline" size="sm" onClick={applyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                        <Button type="button" variant="outline" size="sm" onClick={() => applyCoupon()} disabled={validatingCoupon || !couponCode.trim()}>
                           {validatingCoupon ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
                         </Button>
                       </div>
                     )}
                   </div>
 
+                  {/* Available Coupons */}
+                  {!appliedCoupon && availableCoupons && availableCoupons.length > 0 && (
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCoupons(!showCoupons)}
+                        className="flex items-center gap-1 text-xs text-secondary hover:underline font-medium"
+                      >
+                        <Tag className="w-3 h-3" />
+                        {availableCoupons.length} coupon{availableCoupons.length > 1 ? "s" : ""} available
+                        {showCoupons ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                      {showCoupons && (
+                        <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                          {availableCoupons.map((c: any) => (
+                            <div key={c.id} className="border border-border rounded-lg p-2.5 flex items-center justify-between bg-muted/30">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-foreground bg-muted px-1.5 py-0.5 rounded font-mono">{c.code}</span>
+                                  {c.coupon_type === "private" && <span className="text-[9px] bg-secondary/10 text-secondary px-1 py-0.5 rounded">For You</span>}
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">
+                                  {c.discount_type === "percentage" ? `${c.discount_value}% off` : `Rs. ${c.discount_value} off`}
+                                  {c.min_order_amount ? ` • Min Rs. ${Number(c.min_order_amount).toLocaleString()}` : ""}
+                                  {c.expires_at ? ` • Expires ${new Date(c.expires_at).toLocaleDateString()}` : ""}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 px-2 shrink-0 ml-2"
+                                onClick={() => { setCouponCode(c.code); applyCoupon(c.code); }}
+                                disabled={validatingCoupon}
+                              >
+                                Apply
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Wallet Credit */}
                   {walletBalance > 0 && (
                     <div className="border-t border-border pt-3">
-                      <label className="flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center justify-between border border-border rounded-lg px-3 py-2">
                         <div className="flex items-center gap-2">
                           <Wallet className="w-4 h-4 text-secondary" />
-                          <span className="text-sm font-medium text-foreground">Use Wallet Credit</span>
-                          <span className="text-xs text-muted-foreground">(Rs. {walletBalance.toLocaleString()})</span>
+                          <div>
+                            <span className="text-sm font-medium text-foreground">Wallet</span>
+                            <span className="text-xs text-muted-foreground ml-1">Rs. {walletBalance.toLocaleString()}</span>
+                          </div>
                         </div>
-                        <input type="checkbox" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} className="rounded" />
-                      </label>
+                        <Switch checked={useWallet} onCheckedChange={setUseWallet} />
+                      </div>
                     </div>
                   )}
 
