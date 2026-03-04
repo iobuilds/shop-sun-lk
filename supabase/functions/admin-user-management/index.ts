@@ -42,7 +42,7 @@ serve(async (req) => {
     if (!action || !target_user_id) throw new Error("action and target_user_id required");
 
     // Prevent self-modification for dangerous actions
-    if (["delete", "suspend"].includes(action) && target_user_id === user.id) {
+    if (["delete", "suspend", "change_role"].includes(action) && target_user_id === user.id) {
       throw new Error("Cannot perform this action on your own account");
     }
 
@@ -181,26 +181,20 @@ serve(async (req) => {
         const { role } = params;
         if (!["admin", "moderator", "user"].includes(role)) throw new Error("Invalid role");
 
-        if (role === "user") {
-          // Remove all elevated roles
-          const { error } = await supabaseAdmin
-            .from("user_roles")
-            .delete()
-            .eq("user_id", target_user_id)
-            .in("role", ["admin", "moderator"]);
-          if (error) throw error;
-        } else {
-          // Remove any existing elevated role first, then add new one
-          await supabaseAdmin
-            .from("user_roles")
-            .delete()
-            .eq("user_id", target_user_id)
-            .in("role", ["admin", "moderator"]);
+        // First, delete ALL existing roles for this user
+        const { error: deleteError } = await supabaseAdmin
+          .from("user_roles")
+          .delete()
+          .eq("user_id", target_user_id);
+        if (deleteError) throw deleteError;
 
-          const { error } = await supabaseAdmin
+        // If the new role is not "user", insert the elevated role
+        // "user" is the default when no role entry exists
+        if (role !== "user") {
+          const { error: insertError } = await supabaseAdmin
             .from("user_roles")
             .insert({ user_id: target_user_id, role });
-          if (error) throw error;
+          if (insertError) throw insertError;
         }
 
         result.message = `Role changed to ${role} successfully`;
