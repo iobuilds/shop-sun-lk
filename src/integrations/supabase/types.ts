@@ -877,9 +877,12 @@ export type Database = {
           created_at: string | null
           full_name: string | null
           id: string
+          is_suspended: boolean
           phone: string | null
           phone_verified: boolean | null
           postal_code: string | null
+          suspended_at: string | null
+          suspended_reason: string | null
           updated_at: string | null
           user_id: string
         }
@@ -891,9 +894,12 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string
+          is_suspended?: boolean
           phone?: string | null
           phone_verified?: boolean | null
           postal_code?: string | null
+          suspended_at?: string | null
+          suspended_reason?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -905,9 +911,12 @@ export type Database = {
           created_at?: string | null
           full_name?: string | null
           id?: string
+          is_suspended?: boolean
           phone?: string | null
           phone_verified?: boolean | null
           postal_code?: string | null
+          suspended_at?: string | null
+          suspended_reason?: string | null
           updated_at?: string | null
           user_id?: string
         }

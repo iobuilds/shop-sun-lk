@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,6 +120,21 @@ const AdminDashboard = () => {
   const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedUserRole, setSelectedUserRole] = useState("user");
+
+  // User management dialogs
+  const [userEditDialog, setUserEditDialog] = useState(false);
+  const [userEditForm, setUserEditForm] = useState({ full_name: "", phone: "", email: "", city: "", address_line1: "", address_line2: "", postal_code: "" });
+  const [userEditTarget, setUserEditTarget] = useState<string | null>(null);
+  const [userActionLoading, setUserActionLoading] = useState(false);
+  const [suspendDialog, setSuspendDialog] = useState(false);
+  const [suspendTarget, setSuspendTarget] = useState<{ id: string; name: string } | null>(null);
+  const [suspendReason, setSuspendReason] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [roleDialog, setRoleDialog] = useState(false);
+  const [roleTarget, setRoleTarget] = useState<{ id: string; name: string; currentRole: string } | null>(null);
+  const [userStatusFilter, setUserStatusFilter] = useState("all");
+  const [userRoleFilter, setUserRoleFilter] = useState("all");
 
   // Promo banners state
   const [promoDialog, setPromoDialog] = useState(false);
@@ -647,9 +664,100 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const totalCouponPages = Math.ceil((coupons?.length || 0) / ITEMS_PER_PAGE);
   const paginatedCoupons = coupons?.slice(couponPage * ITEMS_PER_PAGE, (couponPage + 1) * ITEMS_PER_PAGE);
 
-  const filteredUsers = allProfiles?.filter((p) => !userSearch || (p.full_name || "").toLowerCase().includes(userSearch.toLowerCase()) || (p.phone || "").includes(userSearch) || (p.city || "").toLowerCase().includes(userSearch.toLowerCase()));
+  const filteredUsers = allProfiles?.filter((p: any) => {
+    const matchSearch = !userSearch || (p.full_name || "").toLowerCase().includes(userSearch.toLowerCase()) || (p.phone || "").includes(userSearch) || (p.city || "").toLowerCase().includes(userSearch.toLowerCase());
+    const matchStatus = userStatusFilter === "all" || (userStatusFilter === "suspended" ? p.is_suspended : !p.is_suspended);
+    const matchRole = userRoleFilter === "all" || getUserRole(p.user_id) === userRoleFilter;
+    return matchSearch && matchStatus && matchRole;
+  });
   const totalUserPages = Math.ceil((filteredUsers?.length || 0) / ITEMS_PER_PAGE);
   const paginatedUsers = filteredUsers?.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
+
+  // User management actions
+  const callUserManagement = async (action: string, target_user_id: string, extra: any = {}) => {
+    setUserActionLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await supabase.functions.invoke("admin-user-management", {
+        body: { action, target_user_id, ...extra },
+      });
+      if (res.error) throw new Error(res.error.message);
+      if (res.data?.error) throw new Error(res.data.error);
+      toast({ title: "Success", description: res.data?.message || "Action completed" });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      return res.data;
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+      throw e;
+    } finally {
+      setUserActionLoading(false);
+    }
+  };
+
+  const handleSuspendUser = async () => {
+    if (!suspendTarget) return;
+    await callUserManagement("suspend", suspendTarget.id, { reason: suspendReason });
+    setSuspendDialog(false);
+    setSuspendTarget(null);
+    setSuspendReason("");
+  };
+
+  const handleUnsuspendUser = async (userId: string) => {
+    await callUserManagement("unsuspend", userId);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteTarget) return;
+    try {
+      await callUserManagement("delete", deleteTarget.id);
+      setDeleteDialog(false);
+      setDeleteTarget(null);
+    } catch {}
+  };
+
+  const handleRoleChange = async () => {
+    if (!roleTarget) return;
+    const newRole = roleTarget.currentRole === "admin" ? "user" : "admin";
+    await callUserManagement("change_role", roleTarget.id, { role: newRole });
+    setRoleDialog(false);
+    setRoleTarget(null);
+  };
+
+  const openEditUser = async (userId: string) => {
+    const profile = allProfiles?.find((p: any) => p.user_id === userId);
+    if (!profile) return;
+    setUserEditTarget(userId);
+    setUserEditForm({
+      full_name: profile.full_name || "",
+      phone: profile.phone || "",
+      email: "",
+      city: profile.city || "",
+      address_line1: profile.address_line1 || "",
+      address_line2: profile.address_line2 || "",
+      postal_code: profile.postal_code || "",
+    });
+    setUserEditDialog(true);
+  };
+
+  const handleSaveEditUser = async () => {
+    if (!userEditTarget) return;
+    try {
+      await callUserManagement("update_profile", userEditTarget, {
+        full_name: userEditForm.full_name,
+        phone: userEditForm.phone,
+        city: userEditForm.city,
+        address_line1: userEditForm.address_line1,
+        address_line2: userEditForm.address_line2,
+        postal_code: userEditForm.postal_code,
+      });
+      if (userEditForm.email.trim()) {
+        await callUserManagement("update_email", userEditTarget, { email: userEditForm.email.trim() });
+      }
+      setUserEditDialog(false);
+      setUserEditTarget(null);
+    } catch {}
+  };
 
   const filteredReviews = allReviews?.filter((r: any) => !reviewSearch || (r.products?.name || "").toLowerCase().includes(reviewSearch.toLowerCase()) || (r.comment || "").toLowerCase().includes(reviewSearch.toLowerCase()));
   const totalReviewPages = Math.ceil((filteredReviews?.length || 0) / ITEMS_PER_PAGE);
@@ -2220,11 +2328,29 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {/* ═══ Users Tab ═══ */}
           {tab === "users" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
                 <h2 className="text-xl font-bold font-display text-foreground">Users</h2>
-                <div className="relative w-56">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                  <Input placeholder="Search by name, phone, city..." value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); }} className="h-8 text-xs pl-8" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Select value={userStatusFilter} onValueChange={(v) => { setUserStatusFilter(v); setUserPage(0); }}>
+                    <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={userRoleFilter} onValueChange={(v) => { setUserRoleFilter(v); setUserPage(0); }}>
+                    <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="relative w-56">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input placeholder="Search by name, phone, city..." value={userSearch} onChange={(e) => { setUserSearch(e.target.value); setUserPage(0); }} className="h-8 text-xs pl-8" />
+                  </div>
                 </div>
               </div>
               <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -2236,19 +2362,22 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Phone</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">City</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
+                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Joined</th>
                         <th className="text-left px-4 py-3 font-medium text-muted-foreground">Orders</th>
+                        <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedUsers?.map((p) => {
+                      {paginatedUsers?.map((p: any) => {
                         const role = getUserRole(p.user_id);
                         const userOrders = orders?.filter(o => o.user_id === p.user_id) || [];
+                        const isSuspended = p.is_suspended;
                         return (
-                          <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedUserId(p.user_id); setSelectedUserRole(role); setUserDetailOpen(true); }}>
-                            <td className="px-4 py-3">
+                          <tr key={p.id} className={`border-b border-border last:border-0 hover:bg-muted/30 ${isSuspended ? "opacity-60" : ""}`}>
+                            <td className="px-4 py-3 cursor-pointer" onClick={() => { setSelectedUserId(p.user_id); setSelectedUserRole(role); setUserDetailOpen(true); }}>
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary font-bold text-sm">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${isSuspended ? "bg-destructive/10 text-destructive" : "bg-secondary/10 text-secondary"}`}>
                                   {(p.full_name || "U")[0].toUpperCase()}
                                 </div>
                                 <div>
@@ -2260,17 +2389,56 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             <td className="px-4 py-3 text-muted-foreground">{p.phone || "—"}</td>
                             <td className="px-4 py-3 text-muted-foreground">{p.city || "—"}</td>
                             <td className="px-4 py-3">
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${role === "admin" ? "bg-destructive/10 text-destructive" : role === "moderator" ? "bg-accent/10 text-accent-foreground" : "bg-muted text-muted-foreground"}`}>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${role === "admin" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground"}`}>
                                 {role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isSuspended ? "bg-destructive/10 text-destructive" : "bg-secondary/10 text-secondary"}`}>
+                                {isSuspended ? "Suspended" : "Active"}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-muted-foreground text-xs">{p.created_at ? new Date(p.created_at).toLocaleDateString() : "—"}</td>
                             <td className="px-4 py-3 text-foreground font-medium">{userOrders.length}</td>
+                            <td className="px-4 py-3 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={(e) => e.stopPropagation()}>
+                                    <MoreVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuItem onClick={() => { setSelectedUserId(p.user_id); setSelectedUserRole(role); setUserDetailOpen(true); }}>
+                                    <Eye className="w-4 h-4 mr-2" /> View Details
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openEditUser(p.user_id)}>
+                                    <Pencil className="w-4 h-4 mr-2" /> Edit User
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => { setRoleTarget({ id: p.user_id, name: p.full_name || "User", currentRole: role }); setRoleDialog(true); }}>
+                                    <Shield className="w-4 h-4 mr-2" /> {role === "admin" ? "Demote to User" : "Promote to Admin"}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  {isSuspended ? (
+                                    <DropdownMenuItem onClick={() => handleUnsuspendUser(p.user_id)} className="text-secondary">
+                                      <UserCheck className="w-4 h-4 mr-2" /> Unsuspend
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => { setSuspendTarget({ id: p.user_id, name: p.full_name || "User" }); setSuspendDialog(true); }} className="text-destructive">
+                                      <Ban className="w-4 h-4 mr-2" /> Suspend
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => { setDeleteTarget({ id: p.user_id, name: p.full_name || "User" }); setDeleteDialog(true); }} className="text-destructive">
+                                    <UserX className="w-4 h-4 mr-2" /> Delete User
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
                           </tr>
                         );
                       })}
                       {(!allProfiles || allProfiles.length === 0) && (
-                        <tr><td colSpan={6} className="text-center py-16 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No users yet</p></td></tr>
+                        <tr><td colSpan={8} className="text-center py-16 text-muted-foreground"><Users className="w-12 h-12 mx-auto mb-3 opacity-30" /><p>No users yet</p></td></tr>
                       )}
                     </tbody>
                   </table>
@@ -2278,6 +2446,113 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
               </div>
               {renderPagination(userPage, totalUserPages, setUserPage, filteredUsers?.length || 0)}
               <UserDetailDialog open={userDetailOpen} onOpenChange={setUserDetailOpen} userId={selectedUserId} userRole={selectedUserRole} />
+
+              {/* Suspend Dialog */}
+              <AlertDialog open={suspendDialog} onOpenChange={setSuspendDialog}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Suspend User</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Suspend <strong>{suspendTarget?.name}</strong>? They will be unable to login, place orders, or use wallet/coupons.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <div className="py-2">
+                    <Label className="text-xs">Reason (optional)</Label>
+                    <Input value={suspendReason} onChange={(e) => setSuspendReason(e.target.value)} placeholder="e.g. Violation of terms" className="mt-1" />
+                  </div>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleSuspendUser} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />} Suspend
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Delete Dialog */}
+              <AlertDialog open={deleteDialog} onOpenChange={setDeleteDialog}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete User</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Delete <strong>{deleteTarget?.name}</strong>? This cannot be undone. Users with existing orders cannot be deleted — use suspend instead.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteUser} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <UserX className="w-4 h-4 mr-1" />} Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Role Change Dialog */}
+              <AlertDialog open={roleDialog} onOpenChange={setRoleDialog}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Change User Role</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {roleTarget?.currentRole === "admin"
+                        ? `Remove admin access from ${roleTarget?.name}? They will no longer be able to access the admin dashboard.`
+                        : `Grant admin access to ${roleTarget?.name}? They will be able to manage all data in the admin dashboard.`}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleRoleChange} disabled={userActionLoading}>
+                      {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Shield className="w-4 h-4 mr-1" />}
+                      {roleTarget?.currentRole === "admin" ? "Demote to User" : "Promote to Admin"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              {/* Edit User Dialog */}
+              <Dialog open={userEditDialog} onOpenChange={setUserEditDialog}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit User</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-xs">Full Name</Label>
+                      <Input value={userEditForm.full_name} onChange={(e) => setUserEditForm(prev => ({ ...prev, full_name: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Email (leave empty to keep current)</Label>
+                      <Input value={userEditForm.email} onChange={(e) => setUserEditForm(prev => ({ ...prev, email: e.target.value }))} placeholder="new@email.com" className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Phone</Label>
+                      <Input value={userEditForm.phone} onChange={(e) => setUserEditForm(prev => ({ ...prev, phone: e.target.value }))} className="mt-1" />
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Changing phone resets verification status</p>
+                    </div>
+                    <div>
+                      <Label className="text-xs">City</Label>
+                      <Input value={userEditForm.city} onChange={(e) => setUserEditForm(prev => ({ ...prev, city: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Address Line 1</Label>
+                      <Input value={userEditForm.address_line1} onChange={(e) => setUserEditForm(prev => ({ ...prev, address_line1: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Address Line 2</Label>
+                      <Input value={userEditForm.address_line2} onChange={(e) => setUserEditForm(prev => ({ ...prev, address_line2: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Postal Code</Label>
+                      <Input value={userEditForm.postal_code} onChange={(e) => setUserEditForm(prev => ({ ...prev, postal_code: e.target.value }))} className="mt-1" />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                      <Button variant="outline" onClick={() => setUserEditDialog(false)}>Cancel</Button>
+                      <Button onClick={handleSaveEditUser} disabled={userActionLoading}>
+                        {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />} Save
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </motion.div>
           )}
 
