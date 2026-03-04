@@ -118,8 +118,10 @@ const Checkout = () => {
   const walletBalance = Number(walletData?.balance || 0);
 
   const discount = appliedCoupon?.discount || 0;
-  const walletCredit = useWallet ? Math.min(walletBalance, Math.max(0, subtotal - discount + shipping)) : 0;
-  const total = Math.max(0, subtotal - discount - walletCredit + shipping);
+  const payableBeforeWallet = Math.max(0, subtotal + shipping - discount);
+  const couponExtraCredit = discount > (subtotal + shipping) ? discount - (subtotal + shipping) : 0;
+  const walletCredit = useWallet ? Math.min(walletBalance, payableBeforeWallet) : 0;
+  const total = Math.max(0, payableBeforeWallet - walletCredit);
 
   // Set default payment method based on enabled options
   useEffect(() => {
@@ -220,12 +222,17 @@ const Checkout = () => {
 
       clearCart();
 
+      // Show wallet credit message if applicable
+      if (data.coupon_wallet_credit > 0) {
+        toast.success(`Your coupon covered the full order. Extra Rs. ${data.coupon_wallet_credit.toLocaleString()} has been added to your wallet.`, { duration: 6000 });
+      }
+
       if (data.type === "free") {
-        navigate(`/order-success?order_id=${data.order_id}&method=free`);
+        navigate(`/order-success?order_id=${data.order_id}&method=free${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
       } else if (data.type === "stripe" && data.url) {
         window.location.href = data.url;
       } else if (data.type === "bank_transfer") {
-        navigate(`/order-success?order_id=${data.order_id}&method=bank`);
+        navigate(`/order-success?order_id=${data.order_id}&method=bank${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
       }
     } catch (err: any) {
       toast.error(err.message || "Checkout failed");
@@ -446,11 +453,17 @@ const Checkout = () => {
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary">
                         <span>Discount</span>
-                        <span>-Rs. {discount.toLocaleString()}</span>
+                        <span>-Rs. {Math.min(discount, subtotal + shipping).toLocaleString()}</span>
                       </div>
                     )}
                     {appliedCoupon?.category_message && (
                       <p className="text-[10px] text-amber-600">{appliedCoupon.category_message}</p>
+                    )}
+                    {couponExtraCredit > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span className="flex items-center gap-1"><Wallet className="w-3 h-3" /> Wallet credit to be added</span>
+                        <span>+Rs. {couponExtraCredit.toLocaleString()}</span>
+                      </div>
                     )}
                     {walletCredit > 0 && (
                       <div className="flex justify-between text-secondary">

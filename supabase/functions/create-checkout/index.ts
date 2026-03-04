@@ -157,7 +157,14 @@ serve(async (req) => {
     }
 
     const shipping_fee = subtotal >= 5000 ? 0 : 350;
-    const total = Math.max(0, subtotal - discount_amount - wallet_deduction + shipping_fee);
+    const payable_before_wallet = subtotal + shipping_fee - discount_amount;
+    // If coupon exceeds payable, calculate extra credit for wallet
+    let coupon_wallet_credit = 0;
+    if (payable_before_wallet < 0) {
+      coupon_wallet_credit = Math.abs(payable_before_wallet);
+    }
+    const effective_payable = Math.max(0, payable_before_wallet);
+    const total = Math.max(0, effective_payable - wallet_deduction);
 
     const createOrder = async (pm: string) => {
       const { data: order, error: orderError } = await supabaseAdmin
@@ -173,7 +180,7 @@ serve(async (req) => {
           payment_status: "pending",
           status: "pending",
           shipping_address: shipping_address || {},
-          notes: wallet_deduction > 0 ? `wallet_used:${wallet_deduction}` : null,
+          notes: [wallet_deduction > 0 ? `wallet_used:${wallet_deduction}` : null, coupon_wallet_credit > 0 ? `coupon_extra_credit:${coupon_wallet_credit}` : null].filter(Boolean).join(",") || null,
         })
         .select()
         .single();
@@ -212,6 +219,28 @@ serve(async (req) => {
         }
       }
 
+      // Credit extra coupon amount to wallet
+      if (coupon_wallet_credit > 0) {
+        // Ensure wallet exists
+        let { data: wallet } = await supabaseAdmin
+          .from("wallets").select("id").eq("user_id", user.id).maybeSingle();
+        if (!wallet) {
+          const { data: newWallet } = await supabaseAdmin
+            .from("wallets").insert({ user_id: user.id, balance: 0 }).select("id").single();
+          wallet = newWallet;
+        }
+        if (wallet) {
+          await supabaseAdmin.from("wallet_transactions").insert({
+            wallet_id: wallet.id,
+            user_id: user.id,
+            amount: coupon_wallet_credit,
+            type: "credit",
+            reason: `Coupon extra credit (${validated_coupon_code})`,
+            order_id: order.id,
+          });
+        }
+      }
+
       // Fire notification (non-blocking)
       fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-order-notification`, {
         method: "POST",
@@ -224,10 +253,10 @@ serve(async (req) => {
 
     // Free order (coupon + wallet covers everything)
     if (total === 0) {
-      const order = await createOrder("wallet");
+      const order = await createOrder(wallet_deduction > 0 ? "wallet" : "coupon");
       await supabaseAdmin.from("orders").update({ payment_status: "paid" }).eq("id", order.id);
       return new Response(
-        JSON.stringify({ type: "free", order_id: order.id }),
+        JSON.stringify({ type: "free", order_id: order.id, coupon_wallet_credit }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
@@ -235,7 +264,7 @@ serve(async (req) => {
     if (payment_method === "bank_transfer") {
       const order = await createOrder("bank_transfer");
       return new Response(
-        JSON.stringify({ type: "bank_transfer", order_id: order.id }),
+        JSON.stringify({ type: "bank_transfer", order_id: order.id, coupon_wallet_credit }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
@@ -304,11 +333,11 @@ serve(async (req) => {
 
     await supabaseAdmin
       .from("orders")
-      .update({ notes: `stripe_session:${session.id}${wallet_deduction > 0 ? `,wallet_used:${wallet_deduction}` : ""}` })
+      .update({ notes: `stripe_session:${session.id}${wallet_deduction > 0 ? `,wallet_used:${wallet_deduction}` : ""}${coupon_wallet_credit > 0 ? `,coupon_extra_credit:${coupon_wallet_credit}` : ""}` })
       .eq("id", order.id);
 
     return new Response(
-      JSON.stringify({ type: "stripe", url: session.url, order_id: order.id }),
+      JSON.stringify({ type: "stripe", url: session.url, order_id: order.id, coupon_wallet_credit }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {

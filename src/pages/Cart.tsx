@@ -78,8 +78,10 @@ const Cart = () => {
 
   const discount = appliedCoupon?.discount || 0;
   const { shipping, shippingNote, freeShippingGap, hasOverseas } = useShippingCalculation(items, subtotal);
-  const walletCredit = useWallet ? Math.min(walletBalance, Math.max(0, subtotal - discount + shipping)) : 0;
-  const total = Math.max(0, subtotal - discount - walletCredit + shipping);
+  const payableBeforeWallet = Math.max(0, subtotal + shipping - discount);
+  const couponExtraCredit = discount > (subtotal + shipping) ? discount - (subtotal + shipping) : 0;
+  const walletCredit = useWallet ? Math.min(walletBalance, payableBeforeWallet) : 0;
+  const total = Math.max(0, payableBeforeWallet - walletCredit);
 
   const applyCoupon = async (code?: string) => {
     const codeToApply = code || couponCode;
@@ -269,11 +271,17 @@ const Cart = () => {
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary">
                         <span>Coupon Discount</span>
-                        <span>-Rs. {discount.toLocaleString()}</span>
+                        <span>-Rs. {Math.min(discount, subtotal + shipping).toLocaleString()}</span>
                       </div>
                     )}
                     {appliedCoupon?.category_message && (
                       <p className="text-[10px] text-amber-600">{appliedCoupon.category_message}</p>
+                    )}
+                    {couponExtraCredit > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span className="flex items-center gap-1"><Wallet className="w-3 h-3" /> Wallet credit to be added</span>
+                        <span>+Rs. {couponExtraCredit.toLocaleString()}</span>
+                      </div>
                     )}
                     {walletCredit > 0 && (
                       <div className="flex justify-between text-secondary">
