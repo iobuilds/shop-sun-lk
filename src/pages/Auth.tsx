@@ -171,7 +171,24 @@ const Auth = () => {
         setForgotPassword(false);
       } else if (isLogin) {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          if (error.message?.includes("banned") || error.message?.includes("ban")) {
+            throw new Error("Your account is suspended. Please contact support.");
+          }
+          throw error;
+        }
+
+        // Double-check suspension in profile
+        const { data: profileCheck } = await supabase
+          .from("profiles")
+          .select("is_suspended")
+          .eq("user_id", signInData.user.id)
+          .maybeSingle();
+        
+        if (profileCheck?.is_suspended) {
+          await supabase.auth.signOut();
+          throw new Error("Your account is suspended. Please contact support.");
+        }
         
         const { data: roleData } = await supabase
           .from("user_roles")
