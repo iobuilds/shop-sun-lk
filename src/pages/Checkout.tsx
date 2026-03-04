@@ -50,9 +50,22 @@ const Checkout = () => {
 
   // Available coupons
   const { data: availableCoupons } = useQuery({
-    queryKey: ["checkout-available-coupons", session?.user?.id],
+    queryKey: ["checkout-available-coupons", session?.user?.id, subtotal],
     queryFn: async () => {
       const now = new Date().toISOString();
+      const userId = session!.user.id;
+
+      // Fetch user's coupon usage counts
+      const { data: usageData } = await supabase
+        .from("coupon_usage")
+        .select("coupon_id")
+        .eq("user_id", userId);
+      const usageCounts = new Map<string, number>();
+      (usageData || []).forEach((u: any) => {
+        usageCounts.set(u.coupon_id, (usageCounts.get(u.coupon_id) || 0) + 1);
+      });
+
+      // Public coupons
       const { data: publicCoupons } = await supabase
         .from("coupons")
         .select("*")
@@ -61,23 +74,35 @@ const Checkout = () => {
         .or(`expires_at.is.null,expires_at.gt.${now}`)
         .or(`starts_at.is.null,starts_at.lte.${now}`);
 
+      // Private coupons assigned to user
       let privateCoupons: any[] = [];
-      if (session?.user?.id) {
-        const { data: assignments } = await supabase
-          .from("coupon_assignments")
-          .select("coupon_id, used, coupons(*)")
-          .eq("used", false);
-        if (assignments) {
-          privateCoupons = assignments
-            .filter((a: any) => a.coupons?.is_active && (!a.coupons?.expires_at || new Date(a.coupons.expires_at) > new Date()))
-            .map((a: any) => a.coupons);
-        }
+      const { data: assignments } = await supabase
+        .from("coupon_assignments")
+        .select("coupon_id, used, coupons(*)")
+        .eq("used", false);
+      if (assignments) {
+        privateCoupons = assignments
+          .filter((a: any) => a.coupons?.is_active && (!a.coupons?.expires_at || new Date(a.coupons.expires_at) > new Date()))
+          .map((a: any) => a.coupons);
       }
+
       const all = [...(publicCoupons || []), ...privateCoupons];
-      return Array.from(new Map(all.map((c: any) => [c.id, c])).values());
+      const unique = Array.from(new Map(all.map((c: any) => [c.id, c])).values());
+
+      // Filter out used-up coupons
+      return unique.filter((c: any) => {
+        // Check global max uses
+        if (c.max_uses && c.used_count >= c.max_uses) return false;
+        // Check per-user limit
+        const userUses = usageCounts.get(c.id) || 0;
+        if (c.per_user_limit && userUses >= c.per_user_limit) return false;
+        // Check min order amount
+        if (c.min_order_amount && subtotal < c.min_order_amount) return false;
+        return true;
+      });
     },
     enabled: !!session?.user?.id,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 
   const [form, setForm] = useState({
