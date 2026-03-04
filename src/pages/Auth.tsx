@@ -124,24 +124,11 @@ const Auth = () => {
       const formattedPhone = formatPhone(phone);
       const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { full_name: fullName, phone: formattedPhone },
-          emailRedirectTo: window.location.origin,
-        },
-      });
-      if (signUpError) throw signUpError;
-
-      // Update profile with address and phone_verified
-      if (signUpData.user) {
-        // Wait briefly for the trigger to create the profile
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .update({
+          data: {
             full_name: fullName,
             phone: formattedPhone,
             phone_verified: true,
@@ -149,13 +136,11 @@ const Auth = () => {
             address_line2: addressLine2.trim() || null,
             city: city.trim(),
             postal_code: postalCode.trim() || null,
-          })
-          .eq("user_id", signUpData.user.id);
-        
-        if (profileError) {
-          console.error("Profile update error:", profileError);
-        }
-      }
+          },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+      if (signUpError) throw signUpError;
 
       toast.success("Account created! Please check your email to verify.");
       resetForm();
