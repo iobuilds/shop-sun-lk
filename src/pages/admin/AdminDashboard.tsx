@@ -2513,10 +2513,14 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteUser} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogCancel disabled={userActionLoading}>Cancel</AlertDialogCancel>
+                    <Button
+                      onClick={handleDeleteUser}
+                      disabled={userActionLoading}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
                       {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <UserX className="w-4 h-4 mr-1" />} Delete
-                    </AlertDialogAction>
+                    </Button>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
