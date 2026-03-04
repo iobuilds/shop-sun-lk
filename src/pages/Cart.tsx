@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
+import { useShippingCalculation } from "@/hooks/useShippingCalculation";
 import type { Session } from "@supabase/supabase-js";
 
 const Cart = () => {
@@ -76,7 +77,7 @@ const Cart = () => {
   });
 
   const discount = appliedCoupon?.discount || 0;
-  const shipping = subtotal >= 5000 ? 0 : 350;
+  const { shipping, shippingNote, freeShippingGap, hasOverseas } = useShippingCalculation(items, subtotal);
   const walletCredit = useWallet ? Math.min(walletBalance, Math.max(0, subtotal - discount + shipping)) : 0;
   const total = Math.max(0, subtotal - discount - walletCredit + shipping);
 
@@ -282,17 +283,20 @@ const Cart = () => {
                     )}
                     <div className="flex justify-between text-muted-foreground">
                       <span>Shipping</span>
-                      <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping}`}</span>
+                      <span>{shipping === 0 ? <span className="text-secondary font-medium">Free</span> : `Rs. ${shipping.toLocaleString()}`}</span>
                     </div>
+                    {shippingNote && (
+                      <p className="text-[10px] text-muted-foreground">{shippingNote}</p>
+                    )}
                     <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground text-base">
                       <span>Total</span>
                       <span>Rs. {total.toLocaleString()}</span>
                     </div>
                   </div>
 
-                  {shipping > 0 && subtotal < 5000 && (
+                  {freeShippingGap !== null && freeShippingGap > 0 && !hasOverseas && (
                     <p className="text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-lg">
-                      Add Rs. {(5000 - subtotal).toLocaleString()} more for free shipping
+                      Add Rs. {freeShippingGap.toLocaleString()} more for free shipping
                     </p>
                   )}
 
