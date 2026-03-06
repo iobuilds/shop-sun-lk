@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
@@ -234,6 +234,14 @@ const Navbar = () => {
             >
               <Printer className="w-3.5 h-3.5" /> 3D Print
             </a>
+            <a
+              href="https://pcb.iobuilds.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
+            >
+              <CircuitBoard className="w-3.5 h-3.5" /> PCB Design
+            </a>
             <Link
               to="/daily-deals"
               className="ml-auto px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
@@ -301,6 +309,16 @@ const Navbar = () => {
               >
                 🔥 Daily Deals
               </Link>
+              <a href="https://3dprint.iobuilds.com" target="_blank" rel="noopener noreferrer"
+                className="px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4" /> 3D Print Service
+              </a>
+              <a href="https://pcb.iobuilds.com" target="_blank" rel="noopener noreferrer"
+                className="px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2"
+              >
+                <CircuitBoard className="w-4 h-4" /> PCB Design & Manufacturing
+              </a>
               <div className="border-t border-border mt-2 pt-2 flex flex-col gap-1">
                 <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
