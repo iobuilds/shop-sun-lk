@@ -23,8 +23,9 @@ import WalletManager from "@/components/admin/WalletManager";
 import UserDetailDialog from "@/components/admin/UserDetailDialog";
 import AdminOrderDetailDialog from "@/components/admin/AdminOrderDetailDialog";
 import NavbarManager from "@/components/admin/NavbarManager";
+import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -625,6 +626,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
+        { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
         { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
         { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
       ],
@@ -3008,6 +3010,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {tab === "navbar" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <NavbarManager categories={categories || []} />
+            </motion.div>
+          )}
+
+          {/* ═══ Invoice Template Builder Tab ═══ */}
+          {tab === "invoice_template" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText className="w-5 h-5 text-primary" />
+                <h2 className="text-xl font-bold font-display text-foreground">Invoice Template Builder</h2>
+              </div>
+              <InvoiceTemplateBuilder />
             </motion.div>
           )}
 
