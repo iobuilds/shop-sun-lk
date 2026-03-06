@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import SEOHead from "@/components/SEOHead";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ShoppingCart, Star, Heart, ChevronRight, SlidersHorizontal, X, ChevronDown, Package } from "lucide-react";
+import { ShoppingCart, Star, Heart, ChevronRight, SlidersHorizontal, X, ChevronDown, Package, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import CategorySpecFilters from "@/components/CategorySpecFilters";
+import MicroElectronicsSearch from "@/components/MicroElectronicsSearch";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Product = Tables<"products">;
@@ -26,6 +27,8 @@ const CategoryPage = () => {
   const { isInWishlist, toggleWishlist } = useWishlist();
   const isComboPage = slug === "combo-packs";
 
+  const isMicroElectronics = slug === "micro-electronics";
+
   // Filter/sort state
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 100000]);
@@ -34,6 +37,7 @@ const CategoryPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [visibleCount, setVisibleCount] = useState(12);
   const [selectedSpecs, setSelectedSpecs] = useState<Record<string, string[]>>({});
+  const [microSearchIds, setMicroSearchIds] = useState<Set<string> | null>(null);
   const PRODUCTS_PER_PAGE = 12;
 
   const { data: category, isLoading: catLoading } = useQuery({
@@ -98,6 +102,8 @@ const CategoryPage = () => {
       if (p.price < priceRange[0] || p.price > priceRange[1]) return false;
       if (minRating > 0 && (p.rating || 0) < minRating) return false;
       if (inStockOnly && (p.stock_quantity || 0) <= 0) return false;
+      // Micro Electronics search filter
+      if (microSearchIds !== null && !microSearchIds.has(p.id)) return false;
       // Spec-based filtering
       for (const [key, values] of Object.entries(selectedSpecs)) {
         if (values.length === 0) continue;
@@ -119,7 +125,7 @@ const CategoryPage = () => {
       default: break;
     }
     return result;
-  }, [products, sortBy, priceRange, minRating, inStockOnly, selectedSpecs]);
+  }, [products, sortBy, priceRange, minRating, inStockOnly, selectedSpecs, microSearchIds]);
 
   // Reset pagination when filters/sort change
   useMemo(() => {
@@ -284,6 +290,14 @@ const CategoryPage = () => {
 
           {/* Sort & Filter bar + Product grid - only for non-combo pages */}
           {!isComboPage && (<>
+
+          {/* ── Micro Electronics special search ── */}
+          {isMicroElectronics && products && (
+            <MicroElectronicsSearch
+              products={products}
+              onFilteredChange={(ids) => setMicroSearchIds(ids)}
+            />
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
             <div className="flex items-center gap-3">
               <Button
@@ -553,6 +567,12 @@ const CategoryPage = () => {
                               </div>
                               <span className="text-[10px] text-muted-foreground">({product.review_count || 0})</span>
                             </div>
+                            {/* SKU / part number for micro-electronics */}
+                            {isMicroElectronics && product.sku && (
+                              <p className="text-[10px] text-muted-foreground font-mono mb-1.5 truncate">
+                                {product.sku}
+                              </p>
+                            )}
                             <div className="flex items-center justify-between">
                               <div>
                                 <span className="text-base font-bold text-foreground">Rs. {product.price.toLocaleString()}</span>
@@ -562,21 +582,35 @@ const CategoryPage = () => {
                                   </span>
                                 )}
                               </div>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  addItem({
-                                    id: product.id,
-                                    name: product.name,
-                                    price: product.price,
-                                    image: product.images?.[0] || "/placeholder.svg",
-                                    slug: product.slug,
-                                  });
-                                }}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
-                              >
-                                <ShoppingCart className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center gap-1.5">
+                                {isMicroElectronics && product.datasheet_url && (
+                                  <a
+                                    href={product.datasheet_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title="View Datasheet"
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-muted text-muted-foreground hover:bg-secondary/10 hover:text-secondary transition-all duration-200"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    addItem({
+                                      id: product.id,
+                                      name: product.name,
+                                      price: product.price,
+                                      image: product.images?.[0] || "/placeholder.svg",
+                                      slug: product.slug,
+                                    });
+                                  }}
+                                  className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
+                                >
+                                  <ShoppingCart className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </Link>
