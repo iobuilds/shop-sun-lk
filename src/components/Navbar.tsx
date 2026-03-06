@@ -1,11 +1,39 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+
+interface CustomLink {
+  id: string;
+  label: string;
+  url: string;
+  icon: string;
+  visible: boolean;
+  external: boolean;
+}
+
+interface NavbarConfig {
+  announcement_visible: boolean;
+  announcement_text: string;
+  show_daily_deals: boolean;
+  hidden_category_slugs: string[];
+  custom_links: CustomLink[];
+}
+
+const DEFAULT_CONFIG: NavbarConfig = {
+  announcement_visible: true,
+  announcement_text: "🇱🇰 Free delivery in Colombo for orders above Rs. 5,000",
+  show_daily_deals: true,
+  hidden_category_slugs: [],
+  custom_links: [
+    { id: "3dprint", label: "3D Print", url: "https://3dprint.iobuilds.com", icon: "Printer", visible: true, external: true },
+    { id: "pcbdesign", label: "PCB Design", url: "https://pcb.iobuilds.com", icon: "CircuitBoard", visible: true, external: true },
+  ],
+};
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -39,6 +67,22 @@ const Navbar = () => {
     },
     staleTime: 60000,
   });
+
+  // Navbar config from site_settings
+  const { data: navConfig } = useQuery({
+    queryKey: ["navbar-config"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_settings")
+        .select("value")
+        .eq("key", "navbar_config")
+        .single();
+      return (data?.value as unknown as NavbarConfig) || DEFAULT_CONFIG;
+    },
+    staleTime: 30000,
+  });
+
+  const config = navConfig || DEFAULT_CONFIG;
 
   // Search products
   const { data: searchResults } = useQuery({
@@ -90,7 +134,13 @@ const Navbar = () => {
     }
   };
 
-  const navCategories = categories?.slice(0, 6) || [];
+  // Apply hidden categories filter and limit to 6
+  const navCategories = (categories || [])
+    .filter((c) => !config.hidden_category_slugs.includes(c.slug))
+    .slice(0, 6);
+
+  // Visible custom links
+  const visibleCustomLinks = config.custom_links.filter((l) => l.visible);
 
   const SearchDropdown = () => (
     <AnimatePresence>
@@ -142,16 +192,18 @@ const Navbar = () => {
         isScrolled ? "bg-card/95 backdrop-blur-md shadow-md" : "bg-card"
       }`}
     >
-      {/* Top bar */}
-      <div className="bg-primary">
-        <div className="container mx-auto px-4 flex items-center justify-between h-8 text-xs text-primary-foreground/80">
-          <span>🇱🇰 Free delivery in Colombo for orders above Rs. 5,000</span>
-          <div className="hidden md:flex items-center gap-4">
-            <Link to="/track-order" className="hover:text-primary-foreground transition-colors">Track Order</Link>
-            <Link to="/contact" className="hover:text-primary-foreground transition-colors">Contact Us</Link>
+      {/* Announcement bar — controlled by admin */}
+      {config.announcement_visible && (
+        <div className="bg-primary">
+          <div className="container mx-auto px-4 flex items-center justify-between h-8 text-xs text-primary-foreground/80">
+            <span>{config.announcement_text}</span>
+            <div className="hidden md:flex items-center gap-4">
+              <Link to="/track-order" className="hover:text-primary-foreground transition-colors">Track Order</Link>
+              <Link to="/contact" className="hover:text-primary-foreground transition-colors">Contact Us</Link>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main nav */}
       <div className="container mx-auto px-4">
@@ -207,7 +259,7 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Category nav - dynamic */}
+      {/* Category nav - dynamic from DB + config */}
       <div className="hidden md:block border-t border-border">
         <div className="container mx-auto px-4">
           <nav className="flex items-center gap-1 h-11">
@@ -226,28 +278,32 @@ const Navbar = () => {
                 {cat.name}
               </Link>
             ))}
-            <a
-              href="https://3dprint.iobuilds.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
-            >
-              <Printer className="w-3.5 h-3.5" /> 3D Print
-            </a>
-            <a
-              href="https://pcb.iobuilds.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
-            >
-              <CircuitBoard className="w-3.5 h-3.5" /> PCB Design
-            </a>
-            <Link
-              to="/daily-deals"
-              className="ml-auto px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
-            >
-              🔥 Daily Deals
-            </Link>
+
+            {/* Custom links from admin config */}
+            {visibleCustomLinks.map((link) => (
+              <a
+                key={link.id}
+                href={link.url}
+                target={link.external ? "_blank" : undefined}
+                rel={link.external ? "noopener noreferrer" : undefined}
+                className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
+              >
+                {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
+                {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
+                {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
+                {link.label}
+              </a>
+            ))}
+
+            {/* Daily Deals — controlled by admin */}
+            {config.show_daily_deals && (
+              <Link
+                to="/daily-deals"
+                className="ml-auto px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
+              >
+                🔥 Daily Deals
+              </Link>
+            )}
           </nav>
         </div>
       </div>
@@ -282,7 +338,7 @@ const Navbar = () => {
         )}
       </AnimatePresence>
 
-      {/* Mobile menu - dynamic categories */}
+      {/* Mobile menu */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -292,7 +348,7 @@ const Navbar = () => {
             className="md:hidden border-t border-border overflow-hidden bg-card"
           >
             <nav className="container mx-auto px-4 py-4 flex flex-col gap-1">
-              {(categories || []).map((cat) => (
+              {navCategories.map((cat) => (
                 <Link
                   key={cat.slug}
                   to={`/category/${cat.slug}`}
@@ -302,23 +358,30 @@ const Navbar = () => {
                   {cat.name}
                 </Link>
               ))}
-              <Link
-                to="/daily-deals"
-                className="px-3 py-2.5 text-sm font-semibold text-destructive hover:bg-muted rounded-md transition-colors"
-                onClick={() => setMobileOpen(false)}
-              >
-                🔥 Daily Deals
-              </Link>
-              <a href="https://3dprint.iobuilds.com" target="_blank" rel="noopener noreferrer"
-                className="px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2"
-              >
-                <Printer className="w-4 h-4" /> 3D Print Service
-              </a>
-              <a href="https://pcb.iobuilds.com" target="_blank" rel="noopener noreferrer"
-                className="px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2"
-              >
-                <CircuitBoard className="w-4 h-4" /> PCB Design & Manufacturing
-              </a>
+              {config.show_daily_deals && (
+                <Link
+                  to="/daily-deals"
+                  className="px-3 py-2.5 text-sm font-semibold text-destructive hover:bg-muted rounded-md transition-colors"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  🔥 Daily Deals
+                </Link>
+              )}
+              {visibleCustomLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target={link.external ? "_blank" : undefined}
+                  rel={link.external ? "noopener noreferrer" : undefined}
+                  className="px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {link.icon === "Printer" && <Printer className="w-4 h-4" />}
+                  {link.icon === "CircuitBoard" && <CircuitBoard className="w-4 h-4" />}
+                  {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-4 h-4" />}
+                  {link.label}
+                </a>
+              ))}
               <div className="border-t border-border mt-2 pt-2 flex flex-col gap-1">
                 <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
