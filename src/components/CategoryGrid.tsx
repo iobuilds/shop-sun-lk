@@ -14,6 +14,7 @@ const iconMap: Record<string, any> = {
   "3d-printing": Printer,
   "combo-packs": Box,
   "power-batteries": Zap,
+  "micro-electronics": CircuitBoard,
 };
 
 const colorMap: Record<string, string> = {
@@ -25,6 +26,7 @@ const colorMap: Record<string, string> = {
   "3d-printing": "bg-primary/10 text-primary",
   "combo-packs": "bg-secondary/10 text-secondary",
   "power-batteries": "bg-accent/15 text-accent-foreground",
+  "micro-electronics": "bg-primary/10 text-primary",
 };
 
 const CategoryGrid = () => {
