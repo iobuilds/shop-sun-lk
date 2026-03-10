@@ -247,8 +247,8 @@ export default function PreOrder() {
     staleTime: 60000,
   });
 
-  const stripeEnabled = paymentSettings?.stripe !== false;
-  const bankEnabled = paymentSettings?.bank_transfer !== false;
+  const stripeEnabled = paymentSettings?.stripe_enabled === true || paymentSettings?.stripe === true;
+  const bankEnabled = paymentSettings?.bank_transfer_enabled === true || paymentSettings?.bank_transfer === true;
 
   const filteredProducts = (idx: number) => {
     const q = (productSearch[idx] || "").toLowerCase();
