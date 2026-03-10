@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, ExternalLink, MessageSquare, CheckCircle, XCircle, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText } from "lucide-react";
+import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const STATUS_OPTIONS = [
   { value: "pending",   label: "Pending Review",  color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
@@ -24,9 +26,134 @@ interface AdminPreOrdersProps {
   requests: any[];
   onRefresh: () => void;
   allProfiles: any[];
+  onOpenConversation?: (conversationId: string) => void;
 }
 
-export default function AdminPreOrders({ requests, onRefresh, allProfiles }: AdminPreOrdersProps) {
+const generatePreOrderInvoice = (req: any, profile: any) => {
+  const doc = new jsPDF();
+  const shortId = req.id.slice(0, 8).toUpperCase();
+
+  // Header
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("NanoCircuit.lk", 20, 25);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120, 120, 120);
+  doc.text("Electronics & Components | Sri Lanka", 20, 32);
+
+  // Title
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("PRE-ORDER QUOTE", 145, 25);
+
+  // Meta
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Quote #: PO-${shortId}`, 145, 33);
+  doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
+  doc.text(`Status: ${STATUS_OPTIONS.find(s => s.value === req.status)?.label || req.status}`, 145, 45);
+
+  // Divider
+  doc.setDrawColor(220, 220, 220);
+  doc.line(20, 52, 190, 52);
+
+  // Customer
+  doc.setFontSize(10);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("Customer:", 20, 61);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  let y = 67;
+  if (profile?.full_name) { doc.text(profile.full_name, 20, y); y += 5; }
+  if (profile?.phone) { doc.text(`Tel: ${profile.phone}`, 20, y); y += 5; }
+
+  // Items table
+  const tableData = (req.preorder_items || []).map((it: any, i: number) => [
+    String(i + 1),
+    it.product_name || "Item",
+    it.external_url ? "External" : "Store",
+    String(it.quantity),
+    it.unit_price ? `Rs. ${Number(it.unit_price).toLocaleString()}` : "—",
+    it.unit_price ? `Rs. ${(Number(it.unit_price) * (it.quantity || 1)).toLocaleString()}` : "—",
+  ]);
+
+  autoTable(doc, {
+    startY: Math.max(y + 8, 85),
+    head: [["#", "Item", "Type", "Qty", "Unit Price", "Subtotal"]],
+    body: tableData,
+    theme: "grid",
+    headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: [60, 60, 60] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 65 },
+      2: { cellWidth: 20 },
+      3: { cellWidth: 12, halign: "center" },
+      4: { cellWidth: 33, halign: "right" },
+      5: { cellWidth: 33, halign: "right" },
+    },
+    margin: { left: 20, right: 20 },
+  });
+
+  // Summary
+  const finalY = (doc as any).lastAutoTable?.finalY || 200;
+  let sY = finalY + 10;
+  const xL = 130, xV = 185;
+
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.setFont("helvetica", "normal");
+
+  const unitTotal = Number(req.unit_cost_total) || 0;
+  const shipping = Number(req.shipping_fee) || 0;
+  const tax = Number(req.tax_amount) || 0;
+  const grand = unitTotal + shipping + tax;
+
+  if (unitTotal > 0) {
+    doc.text("Items Total:", xL, sY);
+    doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" });
+    sY += 6;
+  }
+  if (shipping > 0) {
+    doc.text("Shipping Fee:", xL, sY);
+    doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" });
+    sY += 6;
+  }
+  if (tax > 0) {
+    doc.text("Tax / Custom Duty:", xL, sY);
+    doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" });
+    sY += 6;
+  }
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(xL, sY - 2, xV, sY - 2);
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("Grand Total:", xL, sY + 3);
+  doc.text(`Rs. ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+
+  if (req.admin_notes) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Note: ${req.admin_notes}`, 20, sY + 12);
+  }
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(150, 150, 150);
+  doc.text("Thank you for your pre-order request! | NanoCircuit.lk", 105, 280, { align: "center" });
+
+  doc.save(`PreOrder-Quote-PO${shortId}.pdf`);
+};
+
+export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpenConversation }: AdminPreOrdersProps) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
@@ -64,6 +191,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
   const handleSave = async () => {
     if (!editTarget) return;
     setSaving(true);
+    const wasQuoted = editTarget.status !== "quoted" && editForm.status === "quoted";
     try {
       // Update each item's unit_price
       for (const item of editItems) {
@@ -74,6 +202,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
 
       // Calculate total from items
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
+      const grandTotal = unitCostTotal + (parseFloat(editForm.shipping_fee) || 0) + (parseFloat(editForm.tax_amount) || 0);
 
       const { error } = await supabase.from("preorder_requests").update({
         status: editForm.status,
@@ -81,10 +210,25 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
         shipping_fee: parseFloat(editForm.shipping_fee) || 0,
         tax_amount: parseFloat(editForm.tax_amount) || 0,
         unit_cost_total: unitCostTotal,
+        grand_total: grandTotal,
       }).eq("id", editTarget.id);
 
       if (error) throw error;
-      toast({ title: "✅ Pre-order updated" });
+
+      // If status just became "quoted", send SMS to customer
+      if (wasQuoted) {
+        const profile = getProfile(editTarget.user_id);
+        const phone = profile?.phone;
+        if (phone) {
+          const shortId = editTarget.id.slice(0, 8).toUpperCase();
+          const message = `NanoCircuit.lk: Your pre-order PO-${shortId} has been quoted. Grand Total: Rs. ${grandTotal.toLocaleString()}. ${editForm.admin_notes ? editForm.admin_notes + " " : ""}Please log in to view your quote and details.`;
+          await supabase.functions.invoke("send-sms", {
+            body: { phone, message, order_id: editTarget.id, user_id: editTarget.user_id },
+          });
+        }
+      }
+
+      toast({ title: "Pre-order updated" });
       setEditDialog(false);
       onRefresh();
     } catch (err: any) {
@@ -95,21 +239,23 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
   };
 
   const openConversation = async (req: any) => {
-    if (req.conversation_id) {
-      // Already has a conversation
-      toast({ title: "Conversation exists", description: "Check the Messages tab to continue the thread." });
-      return;
-    }
-    // Create a new conversation linked to this pre-order
+    let convId = req.conversation_id;
     try {
-      const { data: conv, error: convError } = await supabase
-        .from("conversations")
-        .insert({ user_id: req.user_id, subject: `Pre-Order #${req.id.slice(0, 8).toUpperCase()}` })
-        .select().single();
-      if (convError) throw convError;
-      await supabase.from("preorder_requests").update({ conversation_id: conv.id }).eq("id", req.id);
-      toast({ title: "Conversation started", description: "Go to the Messages tab to reply." });
-      onRefresh();
+      if (!convId) {
+        // Create a new conversation linked to this pre-order
+        const { data: conv, error: convError } = await supabase
+          .from("conversations")
+          .insert({ user_id: req.user_id, subject: `Pre-Order #${req.id.slice(0, 8).toUpperCase()}` })
+          .select().single();
+        if (convError) throw convError;
+        await supabase.from("preorder_requests").update({ conversation_id: conv.id }).eq("id", req.id);
+        convId = conv.id;
+        onRefresh();
+      }
+      // Navigate to contacts tab with this conversation pre-selected
+      if (onOpenConversation) {
+        onOpenConversation(convId);
+      }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -149,6 +295,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
             const si = statusInfo(req.status);
             const isExpanded = expandedId === req.id;
             const grandTotal = (parseFloat(req.unit_cost_total) || 0) + (parseFloat(req.shipping_fee) || 0) + (parseFloat(req.tax_amount) || 0);
+            const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
 
             return (
               <div key={req.id} className="border border-border rounded-xl bg-card overflow-hidden">
@@ -170,9 +317,14 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {isQuoted && grandTotal > 0 && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => generatePreOrderInvoice(req, profile)}>
+                        <FileDown className="w-3 h-3" /> PDF
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openConversation(req)}>
                       <MessageSquare className="w-3 h-3" />
-                      {req.conversation_id ? "View Chat" : "Message"}
+                      {req.conversation_id ? "Open Chat" : "Message"}
                     </Button>
                     <Button size="sm" variant="secondary" className="h-7 text-xs gap-1" onClick={() => openEdit(req)}>
                       <DollarSign className="w-3 h-3" /> Quote
@@ -194,7 +346,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
                         }
                         <span className="text-foreground">{it.product_name}</span>
                         {it.external_url && (
-                          <a href={it.external_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">link ↗</a>
+                          <a href={it.external_url} target="_blank" rel="noopener noreferrer" className="text-secondary hover:underline">link</a>
                         )}
                         {it.unit_price && (
                           <span className="text-muted-foreground">@ Rs. {Number(it.unit_price).toLocaleString()}</span>
@@ -204,7 +356,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles }: Adm
                     </div>
                   ))}
                   {!isExpanded && req.preorder_items?.length > 2 && (
-                    <p className="text-xs text-muted-foreground">+{req.preorder_items.length - 2} more items…</p>
+                    <p className="text-xs text-muted-foreground">+{req.preorder_items.length - 2} more items</p>
                   )}
                 </div>
 
