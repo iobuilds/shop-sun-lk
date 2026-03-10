@@ -3859,11 +3859,11 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="LCSC Part No. (e.g. C93216)"
+                    placeholder="C93216  or  lcsc.com/product-detail/C93216.html"
                     value={lcscPartNumber}
-                    onChange={(e) => setLcscPartNumber(e.target.value.trim())}
+                    onChange={(e) => setLcscPartNumber(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
-                    className="flex-1"
+                    className="flex-1 text-xs"
                   />
                   <Button
                     type="button"
@@ -3876,7 +3876,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     {lcscLoading ? "Fetching..." : "Fetch from LCSC"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Enter the exact LCSC part number to auto-fill name, SKU, description & datasheet. Then set price & stock.</p>
+                <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs. Then set price & stock.</p>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
