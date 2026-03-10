@@ -20,10 +20,11 @@ import autoTable from "jspdf-autotable";
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",  color: "text-yellow-600 bg-yellow-50 border-yellow-200",    icon: Clock },
   quoted:    { label: "Quoted",          color: "text-blue-600 bg-blue-50 border-blue-200",           icon: Info },
-  approved:  { label: "Approved",        color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
-  sourcing:  { label: "Sourcing",        color: "text-purple-600 bg-purple-50 border-purple-200",     icon: ShoppingBag },
-  arrived:   { label: "Arrived",         color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
-  completed: { label: "Completed",       color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
+  approved:  { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200", icon: CheckCircle },
+  sourcing:  { label: "Sourcing Items",  color: "text-purple-600 bg-purple-50 border-purple-200",    icon: ShoppingBag },
+  arrived:   { label: "Items Arrived — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
+  shipped:   { label: "Shipped",         color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
+  completed: { label: "Delivered",       color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
   cancelled: { label: "Cancelled",       color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
 };
 
