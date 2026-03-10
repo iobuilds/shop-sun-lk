@@ -3681,6 +3681,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             </motion.div>
           )}
 
+          {/* ═══ QR Stock Scan Tab ═══ */}
+          {tab === "qr_scan" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <QRStockScanner />
+            </motion.div>
+          )}
+
           {/* ═══ DB Tools Tab ═══ */}
           {tab === "db_tools" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
