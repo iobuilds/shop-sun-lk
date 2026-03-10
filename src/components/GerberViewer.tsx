@@ -174,7 +174,7 @@ export default function GerberViewer({ file }: GerberViewerProps) {
         const THREE = await import("three");
         three.Camera.position.set(0, 0, 80);
         three.Camera.lookAt(new THREE.Vector3(0, 0, 0));
-        three.Controls?.update?.();
+        (three as any).Controls?.update?.();
       } catch {}
 
       setLoading(false);
