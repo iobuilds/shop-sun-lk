@@ -144,6 +144,9 @@ const AdminDashboard = () => {
   // LCSC import state
   const [lcscPartNumber, setLcscPartNumber] = useState("");
   const [lcscLoading, setLcscLoading] = useState(false);
+  const [lcscFailed, setLcscFailed] = useState(false);
+  const [lcscFailedMpn, setLcscFailedMpn] = useState("");
+  const [lcscFailedLcscNum, setLcscFailedLcscNum] = useState("");
 
   // Listen for QR scanner "add product" event
   useEffect(() => {
@@ -151,6 +154,9 @@ const AdminDashboard = () => {
       const { lcsc, mpn } = e.detail || {};
       const partToFetch = parseLcscInput(lcsc || mpn || "");
       setLcscPartNumber(partToFetch);
+      setLcscFailed(false);
+      setLcscFailedMpn(mpn || "");
+      setLcscFailedLcscNum(lcsc || "");
       setProductDialog(true);
       setEditingProductId(null);
       setProductForm(emptyProduct);
@@ -173,6 +179,18 @@ const AdminDashboard = () => {
             }));
             if (d.images?.length) setProductImagePreviews(d.images.slice(0, 5));
             toast({ title: "✅ LCSC data auto-filled", description: `${d.name} — Set price, stock & category.` });
+          } else {
+            // Auto-fetch failed — pre-fill manual fallback fields from QR data
+            setLcscFailed(true);
+            setLcscFailedMpn(mpn || "");
+            setLcscFailedLcscNum(lcsc || "");
+            // Pre-fill SKU with LCSC C-number and name with MPN as starting point
+            setProductForm((prev) => ({
+              ...prev,
+              sku: lcsc || prev.sku,
+              name: mpn || prev.name,
+              slug: (mpn || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+            }));
           }
         }, 400);
       }
@@ -194,6 +212,7 @@ const AdminDashboard = () => {
   const fetchFromLcsc = async () => {
     if (!lcscPartNumber.trim()) return;
     setLcscLoading(true);
+    setLcscFailed(false);
     const partNumber = parseLcscInput(lcscPartNumber);
     // Update the input field to show the extracted part number
     if (partNumber !== lcscPartNumber.trim()) setLcscPartNumber(partNumber);
@@ -202,10 +221,20 @@ const AdminDashboard = () => {
         body: { partNumber },
       });
       if (error || !data?.success) {
-        toast({ title: "LCSC fetch failed", description: data?.error || error?.message || "Part not found", variant: "destructive" });
+        // Show manual fallback fields pre-filled with the attempted part number
+        setLcscFailed(true);
+        setLcscFailedLcscNum(partNumber);
+        setLcscFailedMpn(productForm.sku || "");
+        // Pre-fill SKU with C-number so admin doesn't have to retype
+        setProductForm((prev) => ({
+          ...prev,
+          sku: prev.sku || partNumber,
+        }));
+        toast({ title: "Part not found on LCSC", description: "Please fill in the details manually below.", variant: "destructive" });
         return;
       }
       const d = data.data;
+      setLcscFailed(false);
       setProductForm((prev) => ({
         ...prev,
         name: d.name || prev.name,
@@ -221,6 +250,8 @@ const AdminDashboard = () => {
         description: `${d.name} — Set price, stock & category to complete.`,
       });
     } catch (err: any) {
+      setLcscFailed(true);
+      setLcscFailedLcscNum(parseLcscInput(lcscPartNumber));
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setLcscLoading(false);
