@@ -554,6 +554,22 @@ const AdminDashboard = () => {
   });
   const pendingPreorderCount = preorderRequests?.filter((r: any) => r.status === "pending").length || 0;
 
+  // PCB orders query
+  const { data: pcbOrders, refetch: refetchPCBOrders } = useQuery({
+    queryKey: ["admin-pcb-orders"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pcb_order_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isAdmin || isModerator,
+  });
+  const pendingPCBCount = pcbOrders?.filter((o: any) => o.status === "pending").length || 0;
+
+
 
 const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   allProfiles: any[];
