@@ -375,8 +375,36 @@ export default function PreOrder() {
 
   // Open bank transfer dialog
   const openBankTransfer = (preorderId: string, type: "quote" | "arrival", amount: number) => {
+    setSlipUrl(null);
     setBankTransferDialog({ open: true, preorderId, type, amount });
   };
+
+  const handleSlipUpload = async (file: File) => {
+    if (!bankTransferDialog) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum 10MB allowed.", variant: "destructive" });
+      return;
+    }
+    setSlipUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `preorder-slips/${bankTransferDialog.preorderId}-${bankTransferDialog.type}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      setSlipUrl(publicUrl);
+      // Store slip URL on the preorder record
+      const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
+      await supabase.from("preorder_requests").update({ [field]: publicUrl }).eq("id", bankTransferDialog.preorderId);
+      toast({ title: "Slip uploaded!", description: "Your payment slip has been saved." });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSlipUploading(false);
+    }
+  };
+
 
   return (
     <>
