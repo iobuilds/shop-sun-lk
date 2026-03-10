@@ -1771,9 +1771,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         </button>
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-            <span className="text-secondary-foreground font-bold text-sm font-display">T</span>
+            <span className="text-secondary-foreground font-bold text-sm font-display">N</span>
           </div>
-          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">TechLK</span>
+          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">NanoCircuit.lk</span>
         </Link>
         <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
           <span>/</span>
@@ -3050,7 +3050,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Store Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><Label>Store Name</Label><Input value={seoForm.store_name || ""} onChange={(e) => setSeoForm({ ...seoForm, store_name: e.target.value })} placeholder="TechLK" /></div>
+                      <div><Label>Store Name</Label><Input value={seoForm.store_name || ""} onChange={(e) => setSeoForm({ ...seoForm, store_name: e.target.value })} placeholder="NanoCircuit.lk" /></div>
                       <div><Label>Tagline</Label><Input value={seoForm.tagline || ""} onChange={(e) => setSeoForm({ ...seoForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
                     </div>
                     <div><Label>Meta Description</Label><Textarea value={seoForm.meta_description || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_description: e.target.value })} rows={3} placeholder="Brief description for search engines (max 160 chars)" /></div>
@@ -3147,11 +3147,11 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Basic Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><Label>Store / Company Name</Label><Input value={companyForm.store_name || ""} onChange={(e) => setCompanyForm({ ...companyForm, store_name: e.target.value })} placeholder="TechLK" /></div>
+                      <div><Label>Store / Company Name</Label><Input value={companyForm.store_name || ""} onChange={(e) => setCompanyForm({ ...companyForm, store_name: e.target.value })} placeholder="NanoCircuit.lk" /></div>
                       <div><Label>Tagline</Label><Input value={companyForm.tagline || ""} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
                     </div>
                     <div><Label>Short Description</Label><Textarea value={companyForm.description || ""} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} rows={2} placeholder="Brief description shown in footer" /></div>
-                    <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 TechLK. All rights reserved." /></div>
+                    <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 NanoCircuit.lk. All rights reserved." /></div>
                     <div>
                       <Label>Company Logo</Label>
                       <div className="flex items-center gap-3 mt-1">
@@ -3185,17 +3185,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       <div><Label>Phone</Label><Input value={companyForm.phone || ""} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} placeholder="+94 77 123 4567" /></div>
                       <div><Label>WhatsApp</Label><Input value={companyForm.whatsapp || ""} onChange={(e) => setCompanyForm({ ...companyForm, whatsapp: e.target.value })} placeholder="+94771234567" /></div>
                     </div>
-                    <div><Label>Email</Label><Input value={companyForm.email || ""} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@techlk.lk" /></div>
+                    <div><Label>Email</Label><Input value={companyForm.email || ""} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@nanocircuit.lk" /></div>
                     <div><Label>Business Hours</Label><Textarea value={companyForm.business_hours || ""} onChange={(e) => setCompanyForm({ ...companyForm, business_hours: e.target.value })} rows={3} placeholder={"Mon-Fri: 9AM-6PM\nSat: 9AM-2PM\nSun: Closed"} /></div>
                   </div>
 
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Social Media Links</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><Label>Facebook URL</Label><Input value={companyForm.facebook_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, facebook_url: e.target.value })} placeholder="https://facebook.com/techlk" /></div>
-                      <div><Label>Instagram URL</Label><Input value={companyForm.instagram_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, instagram_url: e.target.value })} placeholder="https://instagram.com/techlk" /></div>
-                      <div><Label>YouTube URL</Label><Input value={companyForm.youtube_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, youtube_url: e.target.value })} placeholder="https://youtube.com/@techlk" /></div>
-                      <div><Label>TikTok URL</Label><Input value={companyForm.tiktok_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@techlk" /></div>
+                       <div><Label>Facebook URL</Label><Input value={companyForm.facebook_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, facebook_url: e.target.value })} placeholder="https://facebook.com/nanocircuit" /></div>
+                      <div><Label>Instagram URL</Label><Input value={companyForm.instagram_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, instagram_url: e.target.value })} placeholder="https://instagram.com/nanocircuit" /></div>
+                      <div><Label>YouTube URL</Label><Input value={companyForm.youtube_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, youtube_url: e.target.value })} placeholder="https://youtube.com/@nanocircuit" /></div>
+                      <div><Label>TikTok URL</Label><Input value={companyForm.tiktok_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@nanocircuit" /></div>
                     </div>
                   </div>
                 </div>

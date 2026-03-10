@@ -18,11 +18,11 @@ const Footer = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const storeName = company?.store_name || "TechLK";
+  const storeName = company?.store_name || "NanoCircuit.lk";
   const description = company?.description || "Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing supplies and more.";
   const address = company?.address || "No. 42, Galle Road, Colombo 03, Sri Lanka";
   const phone = company?.phone || "+94 77 123 4567";
-  const email = company?.email || "info@techlk.lk";
+  const email = company?.email || "info@nanocircuit.lk";
   const copyright = company?.copyright_text || `© ${new Date().getFullYear()} ${storeName}. All rights reserved.`;
   const facebookUrl = company?.facebook_url || "#";
   const instagramUrl = company?.instagram_url || "#";

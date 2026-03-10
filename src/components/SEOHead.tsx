@@ -37,10 +37,10 @@ const SEOHead = ({
     staleTime: 5 * 60 * 1000,
   });
 
-  const storeName = seoSettings?.store_name || "TechLK";
+  const storeName = seoSettings?.store_name || "NanoCircuit.lk";
   const tagline = seoSettings?.tagline || "Electronics & Components Store | Sri Lanka";
-  const defaultDescription = seoSettings?.meta_description || "TechLK - Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing, tools and more. Island-wide delivery.";
-  const defaultKeywords = seoSettings?.meta_keywords || "electronics Sri Lanka, Arduino, sensors, components, TechLK, Colombo";
+  const defaultDescription = seoSettings?.meta_description || "NanoCircuit.lk - Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing, tools and more. Island-wide delivery.";
+  const defaultKeywords = seoSettings?.meta_keywords || "electronics Sri Lanka, Arduino, sensors, components, NanoCircuit, Colombo";
   const defaultOgImage = seoSettings?.og_image || "https://lovable.dev/opengraph-image-p98pqg.png";
   const faviconUrl = seoSettings?.favicon_url || "/favicon.ico";
 

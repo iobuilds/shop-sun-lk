@@ -155,7 +155,7 @@ export default function PreOrder() {
 
   return (
     <>
-      <SEOHead title="Pre-Order Request | TechLK" description="Request items not in stock. Our team will source them for you." />
+      <SEOHead title="Pre-Order Request | NanoCircuit.lk" description="Request items not in stock. Our team will source them for you." />
       <Navbar />
       <div className="min-h-screen bg-background pt-28 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">

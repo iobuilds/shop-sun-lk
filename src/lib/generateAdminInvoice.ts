@@ -32,7 +32,7 @@ interface CompanyInfo {
 export const generateAdminInvoice = async (order: InvoiceOrder, company?: CompanyInfo) => {
   const doc = new jsPDF();
   const addr = order.shipping_address || {};
-  const storeName = company?.store_name || "TechLK";
+  const storeName = company?.store_name || "NanoCircuit.lk";
 
   // Header - try logo first, fallback to text
   let headerY = 25;

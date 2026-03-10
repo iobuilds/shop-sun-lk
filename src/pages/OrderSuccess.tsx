@@ -114,7 +114,7 @@ const OrderSuccess = () => {
 
   const bankAccounts: any[] = bankDetails
     ? Array.isArray(bankDetails) ? bankDetails : [bankDetails]
-    : [{ bank_name: "Commercial Bank of Ceylon", account_name: "TechLK (Pvt) Ltd", account_number: "8012345678", branch: "Colombo Fort" }];
+    : [{ bank_name: "Commercial Bank of Ceylon", account_name: "NanoCircuit.lk (Pvt) Ltd", account_number: "8012345678", branch: "Colombo Fort" }];
 
   return (
     <div className="min-h-screen bg-background">
