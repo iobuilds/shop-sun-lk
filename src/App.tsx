@@ -51,6 +51,7 @@ const App = () => (
               <Route path="/contact" element={<StaticPage />} />
               <Route path="/track-order" element={<TrackOrder />} />
               <Route path="/pre-order" element={<PreOrder />} />
+              <Route path="/deals" element={<DealsPage />} />
               <Route path="/sitemap.xml" element={<SitemapRedirect />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

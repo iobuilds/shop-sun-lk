@@ -35,6 +35,7 @@ const CountdownTimer = forwardRef<HTMLDivElement, { endsAt: string }>(({ endsAt 
 CountdownTimer.displayName = "CountdownTimer";
 
 const DailyDeals = () => {
+  const navigate = useNavigate();
   const { data: deals, isLoading } = useQuery({
     queryKey: ["daily-deals"],
     queryFn: async () => {
