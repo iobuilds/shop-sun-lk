@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,8 +25,9 @@ import AdminOrderDetailDialog from "@/components/admin/AdminOrderDetailDialog";
 import NavbarManager from "@/components/admin/NavbarManager";
 import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
 import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager";
+import QRStockScanner from "@/components/admin/QRStockScanner";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -143,6 +144,42 @@ const AdminDashboard = () => {
   // LCSC import state
   const [lcscPartNumber, setLcscPartNumber] = useState("");
   const [lcscLoading, setLcscLoading] = useState(false);
+
+  // Listen for QR scanner "add product" event
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { lcsc, mpn } = e.detail || {};
+      const partToFetch = lcsc || mpn || "";
+      setLcscPartNumber(partToFetch);
+      setProductDialog(true);
+      setEditingProductId(null);
+      setProductForm(emptyProduct);
+      setProductImagePreviews([]);
+      setTab("micro_electronics");
+      if (partToFetch) {
+        // Auto-trigger LCSC fetch after dialog opens
+        setTimeout(async () => {
+          const { data, error } = await supabase.functions.invoke("lcsc-import", { body: { partNumber: partToFetch } });
+          if (!error && data?.success) {
+            const d = data.data;
+            setProductForm((prev) => ({
+              ...prev,
+              name: d.name || prev.name,
+              sku: d.sku || prev.sku,
+              description: d.description || prev.description,
+              datasheet_url: d.datasheet_url || prev.datasheet_url,
+              images: d.images?.join(",") || prev.images,
+              slug: (d.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+            }));
+            if (d.images?.length) setProductImagePreviews(d.images.slice(0, 5));
+            toast({ title: "✅ LCSC data auto-filled", description: `${d.name} — Set price, stock & category.` });
+          }
+        }, 400);
+      }
+    };
+    window.addEventListener("openAddProductFromQR", handler);
+    return () => window.removeEventListener("openAddProductFromQR", handler);
+  }, []);
 
   const fetchFromLcsc = async () => {
     if (!lcscPartNumber.trim()) return;
@@ -582,6 +619,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
         { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
         { id: "stock" as Tab, label: "Stock", icon: Package, count: lowStockCount },
+        { id: "qr_scan" as Tab, label: "QR Stock Scan", icon: QrCode, count: 0 },
       ],
     },
     {
@@ -3640,6 +3678,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <p>Loading stock data...</p>
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {/* ═══ QR Stock Scan Tab ═══ */}
+          {tab === "qr_scan" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <QRStockScanner />
             </motion.div>
           )}
 
