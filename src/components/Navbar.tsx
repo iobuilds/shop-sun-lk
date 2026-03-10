@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard, ExternalLink } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard, ExternalLink, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface CustomLink {
@@ -42,10 +42,13 @@ const Navbar = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [showResults, setShowResults] = useState(false);
   const [session, setSession] = useState<any>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { totalItems } = useCart();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -82,6 +85,43 @@ const Navbar = () => {
     staleTime: 30000,
   });
 
+  // Notifications
+  const { data: notifications } = useQuery({
+    queryKey: ["user-notifications", session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return [];
+      const { data, error } = await supabase
+        .from("user_notifications" as any)
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!session?.user?.id,
+    refetchInterval: 30000,
+  });
+
+  const unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
+
+  const markAllRead = async () => {
+    if (!session?.user?.id || unreadCount === 0) return;
+    await supabase
+      .from("user_notifications" as any)
+      .update({ is_read: true })
+      .eq("user_id", session.user.id)
+      .eq("is_read", false);
+    queryClient.invalidateQueries({ queryKey: ["user-notifications", session.user.id] });
+  };
+
+  const handleNotifOpen = () => {
+    setNotifOpen((prev) => {
+      if (!prev) markAllRead();
+      return !prev;
+    });
+  };
+
   const config = navConfig || DEFAULT_CONFIG;
 
   // Search products
@@ -106,12 +146,15 @@ const Navbar = () => {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close search on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node) &&
           mobileSearchRef.current && !mobileSearchRef.current.contains(e.target as Node)) {
         setShowResults(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -141,6 +184,14 @@ const Navbar = () => {
 
   // Visible custom links
   const visibleCustomLinks = config.custom_links.filter((l) => l.visible);
+
+  const notifTypeColor = (type: string) => {
+    if (type === "order") return "text-secondary";
+    if (type === "success") return "text-green-500";
+    if (type === "warning") return "text-yellow-500";
+    if (type === "error") return "text-destructive";
+    return "text-muted-foreground";
+  };
 
   const SearchDropdown = () => (
     <AnimatePresence>
@@ -192,7 +243,7 @@ const Navbar = () => {
         isScrolled ? "bg-card/95 backdrop-blur-md shadow-md" : "bg-card"
       }`}
     >
-      {/* Announcement bar — controlled by admin */}
+      {/* Announcement bar */}
       {config.announcement_visible && (
         <div className="bg-primary">
           <div className="container mx-auto px-4 flex items-center justify-between h-8 text-xs text-primary-foreground/80">
@@ -241,6 +292,74 @@ const Navbar = () => {
             <Link to="/wishlist" className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors relative">
               <Heart className="w-5 h-5" />
             </Link>
+
+            {/* Notification Bell */}
+            {session && (
+              <div className="relative" ref={notifRef}>
+                <button
+                  onClick={handleNotifOpen}
+                  className="p-2 text-muted-foreground hover:text-foreground transition-colors relative"
+                >
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {notifOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-xl overflow-hidden z-50"
+                    >
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                        <span className="text-sm font-semibold text-foreground">Notifications</span>
+                        {unreadCount > 0 && (
+                          <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
+                        )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                        {!notifications?.length ? (
+                          <div className="px-4 py-10 text-center">
+                            <Bell className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-30" />
+                            <p className="text-sm text-muted-foreground">No notifications yet</p>
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <div
+                              key={n.id}
+                              className={`px-4 py-3 border-b border-border last:border-0 transition-colors ${
+                                !n.is_read ? "bg-secondary/5" : ""
+                              }`}
+                            >
+                              {n.link_url ? (
+                                <Link to={n.link_url} onClick={() => setNotifOpen(false)} className="block">
+                                  <p className={`text-xs font-semibold mb-0.5 ${notifTypeColor(n.type)}`}>{n.title}</p>
+                                  <p className="text-xs text-foreground">{n.message}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString("en-LK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                                </Link>
+                              ) : (
+                                <>
+                                  <p className={`text-xs font-semibold mb-0.5 ${notifTypeColor(n.type)}`}>{n.title}</p>
+                                  <p className="text-xs text-foreground">{n.message}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString("en-LK", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</p>
+                                </>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
             <Link to={session ? "/profile" : "/auth"} className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
               <User className="w-5 h-5" />
             </Link>
@@ -259,58 +378,61 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Category nav - dynamic from DB + config */}
+      {/* Category nav — justified */}
       <div className="hidden md:block border-t border-border">
         <div className="container mx-auto px-4">
-          <nav className="flex items-center gap-1 h-11">
-            <div className="group relative">
-              <button className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-foreground hover:text-secondary transition-colors">
-                All Categories
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
+          <nav className="flex items-center justify-between h-11">
+            <div className="flex items-center gap-0.5">
+              <div className="group relative">
+                <button className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-foreground hover:text-secondary transition-colors">
+                  All Categories
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              {navCategories.map((cat) => (
+                <Link
+                  key={cat.slug}
+                  to={`/category/${cat.slug}`}
+                  className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors whitespace-nowrap"
+                >
+                  {cat.name}
+                </Link>
+              ))}
+
+              {/* Custom links from admin config */}
+              {visibleCustomLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target={link.external ? "_blank" : undefined}
+                  rel={link.external ? "noopener noreferrer" : undefined}
+                  className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1 whitespace-nowrap"
+                >
+                  {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
+                  {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
+                  {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
+                  {link.label}
+                </a>
+              ))}
             </div>
-            {navCategories.map((cat) => (
-              <Link
-                key={cat.slug}
-                to={`/category/${cat.slug}`}
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors"
-              >
-                {cat.name}
-              </Link>
-            ))}
 
-            {/* Custom links from admin config */}
-            {visibleCustomLinks.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target={link.external ? "_blank" : undefined}
-                rel={link.external ? "noopener noreferrer" : undefined}
-                className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1"
-              >
-                {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
-                {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
-                {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
-                {link.label}
-              </a>
-            ))}
-
-            {/* Daily Deals — controlled by admin */}
-            {config.show_daily_deals && (
+            {/* Right side: Daily Deals + Pre-Order */}
+            <div className="flex items-center gap-1">
+              {config.show_daily_deals && (
+                <Link
+                  to="/deals"
+                  className="px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1 whitespace-nowrap"
+                >
+                  🔥 Daily Deals
+                </Link>
+              )}
               <Link
-                to="/daily-deals"
-                className="px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
+                to="/pre-order"
+                className="px-3 py-1.5 text-sm font-semibold text-secondary-foreground bg-secondary hover:bg-secondary/90 transition-colors rounded-md flex items-center gap-1 whitespace-nowrap"
               >
-                🔥 Daily Deals
+                📦 Pre-Order
               </Link>
-            )}
-            {/* Pre-Order link */}
-            <Link
-              to="/pre-order"
-              className="ml-1 px-3 py-1.5 text-sm font-semibold text-secondary-foreground bg-secondary hover:bg-secondary/90 transition-colors rounded-md flex items-center gap-1"
-            >
-              📦 Pre-Order
-            </Link>
+            </div>
           </nav>
         </div>
       </div>
@@ -367,7 +489,7 @@ const Navbar = () => {
               ))}
               {config.show_daily_deals && (
                 <Link
-                  to="/daily-deals"
+                  to="/deals"
                   className="px-3 py-2.5 text-sm font-semibold text-destructive hover:bg-muted rounded-md transition-colors"
                   onClick={() => setMobileOpen(false)}
                 >
