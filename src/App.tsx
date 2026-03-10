@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import SitemapRedirect from "./pages/SitemapRedirect";
 import PreOrder from "./pages/PreOrder";
 import DealsPage from "./pages/DealsPage";
+import PCBOrder from "./pages/PCBOrder";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => (
               <Route path="/track-order" element={<TrackOrder />} />
               <Route path="/pre-order" element={<PreOrder />} />
               <Route path="/deals" element={<DealsPage />} />
+              <Route path="/pcb-order" element={<PCBOrder />} />
               <Route path="/sitemap.xml" element={<SitemapRedirect />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
@@ -63,3 +65,4 @@ const App = () => (
 );
 
 export default App;
+

@@ -27,8 +27,9 @@ import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
 import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager";
 import QRStockScanner from "@/components/admin/QRStockScanner";
 import AdminPreOrders from "@/components/admin/AdminPreOrders";
+import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -553,6 +554,22 @@ const AdminDashboard = () => {
   });
   const pendingPreorderCount = preorderRequests?.filter((r: any) => r.status === "pending").length || 0;
 
+  // PCB orders query
+  const { data: pcbOrders, refetch: refetchPCBOrders } = useQuery({
+    queryKey: ["admin-pcb-orders"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("pcb_order_requests")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: isAdmin || isModerator,
+  });
+  const pendingPCBCount = pcbOrders?.filter((o: any) => o.status === "pending").length || 0;
+
+
 
 const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   allProfiles: any[];
@@ -694,6 +711,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       items: [
         { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
         { id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount },
+        { id: "pcb_orders" as Tab, label: "PCB Orders", icon: Layers, count: pendingPCBCount },
       ],
     },
     {
@@ -3767,6 +3785,24 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
               />
             </motion.div>
           )}
+
+          {/* ═══ PCB Orders Tab ═══ */}
+          {tab === "pcb_orders" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-primary" />
+                </div>
+                <h2 className="text-xl font-bold font-display text-foreground">PCB Orders</h2>
+              </div>
+              <AdminPCBOrders
+                orders={pcbOrders || []}
+                onRefresh={refetchPCBOrders}
+                allProfiles={allProfiles || []}
+              />
+            </motion.div>
+          )}
+
 
           {/* ═══ DB Tools Tab ═══ */}
           {tab === "db_tools" && (
