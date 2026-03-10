@@ -3192,10 +3192,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Social Media Links</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><Label>Facebook URL</Label><Input value={companyForm.facebook_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, facebook_url: e.target.value })} placeholder="https://facebook.com/techlk" /></div>
-                      <div><Label>Instagram URL</Label><Input value={companyForm.instagram_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, instagram_url: e.target.value })} placeholder="https://instagram.com/techlk" /></div>
-                      <div><Label>YouTube URL</Label><Input value={companyForm.youtube_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, youtube_url: e.target.value })} placeholder="https://youtube.com/@techlk" /></div>
-                      <div><Label>TikTok URL</Label><Input value={companyForm.tiktok_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@techlk" /></div>
+                       <div><Label>Facebook URL</Label><Input value={companyForm.facebook_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, facebook_url: e.target.value })} placeholder="https://facebook.com/nanocircuit" /></div>
+                      <div><Label>Instagram URL</Label><Input value={companyForm.instagram_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, instagram_url: e.target.value })} placeholder="https://instagram.com/nanocircuit" /></div>
+                      <div><Label>YouTube URL</Label><Input value={companyForm.youtube_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, youtube_url: e.target.value })} placeholder="https://youtube.com/@nanocircuit" /></div>
+                      <div><Label>TikTok URL</Label><Input value={companyForm.tiktok_url || ""} onChange={(e) => setCompanyForm({ ...companyForm, tiktok_url: e.target.value })} placeholder="https://tiktok.com/@nanocircuit" /></div>
                     </div>
                   </div>
                 </div>
