@@ -159,6 +159,8 @@ export default function PreOrder() {
   const [viewRequest, setViewRequest] = useState<any>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [bankTransferDialog, setBankTransferDialog] = useState<{open: boolean; preorderId: string; type: string; amount: number} | null>(null);
+  const [slipUploading, setSlipUploading] = useState(false);
+  const [slipUrl, setSlipUrl] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -231,8 +233,12 @@ export default function PreOrder() {
   const { data: bankAccounts } = useQuery({
     queryKey: ["bank-accounts-preorder"],
     queryFn: async () => {
-      const { data } = await supabase.from("site_settings").select("*").eq("key", "bank_accounts").single();
-      return (data?.value as any)?.accounts || [];
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "bank_details").single();
+      const val = data?.value as any;
+      // value is directly an array of account objects
+      if (Array.isArray(val)) return val;
+      if (Array.isArray(val?.accounts)) return val.accounts;
+      return [];
     },
     staleTime: 60000,
   });
@@ -369,8 +375,36 @@ export default function PreOrder() {
 
   // Open bank transfer dialog
   const openBankTransfer = (preorderId: string, type: "quote" | "arrival", amount: number) => {
+    setSlipUrl(null);
     setBankTransferDialog({ open: true, preorderId, type, amount });
   };
+
+  const handleSlipUpload = async (file: File) => {
+    if (!bankTransferDialog) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum 10MB allowed.", variant: "destructive" });
+      return;
+    }
+    setSlipUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `preorder-slips/${bankTransferDialog.preorderId}-${bankTransferDialog.type}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
+      const publicUrl = urlData.publicUrl;
+      setSlipUrl(publicUrl);
+      // Store slip URL on the preorder record
+      const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
+      await supabase.from("preorder_requests").update({ [field]: publicUrl }).eq("id", bankTransferDialog.preorderId);
+      toast({ title: "Slip uploaded!", description: "Your payment slip has been saved." });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSlipUploading(false);
+    }
+  };
+
 
   return (
     <>
@@ -782,32 +816,60 @@ export default function PreOrder() {
           </AnimatePresence>
 
           {/* Bank Transfer Dialog */}
-          <Dialog open={!!bankTransferDialog?.open} onOpenChange={() => setBankTransferDialog(null)}>
-            <DialogContent className="max-w-sm">
+          <Dialog open={!!bankTransferDialog?.open} onOpenChange={() => { setBankTransferDialog(null); setSlipUrl(null); }}>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Bank Transfer Payment</DialogTitle>
               </DialogHeader>
               {bankTransferDialog && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Transfer <strong className="text-foreground">Rs. {bankTransferDialog.amount.toLocaleString()}</strong> to one of the following accounts.
-                    After transfer, please send your receipt via the conversation chat.
+                    Transfer <strong className="text-foreground">Rs. {bankTransferDialog.amount.toLocaleString()}</strong> to one of the following accounts, then upload your payment slip below.
                   </p>
                   {bankAccounts?.length > 0 ? (
                     <div className="space-y-2">
                       {bankAccounts.map((acc: any, i: number) => (
-                        <div key={i} className="border border-border rounded-lg p-3 text-xs space-y-0.5">
-                          <p className="font-semibold text-foreground">{acc.bank_name}</p>
-                          {acc.branch && <p className="text-muted-foreground">Branch: {acc.branch}</p>}
-                          <p className="text-muted-foreground">A/C: <span className="font-mono text-foreground">{acc.account_number}</span></p>
-                          {acc.account_name && <p className="text-muted-foreground">Name: {acc.account_name}</p>}
+                        <div key={i} className="border border-border rounded-lg p-3 text-xs space-y-1 bg-muted/30">
+                          <p className="font-semibold text-foreground text-sm">{acc.bank_name}</p>
+                          {acc.branch && <p className="text-muted-foreground">Branch: <span className="text-foreground">{acc.branch}</span></p>}
+                          <p className="text-muted-foreground">Account No: <span className="font-mono text-foreground font-semibold">{acc.account_number}</span></p>
+                          {acc.account_name && <p className="text-muted-foreground">Account Name: <span className="text-foreground">{acc.account_name}</span></p>}
+                          {acc.additional_info && <p className="text-muted-foreground">{acc.additional_info}</p>}
                         </div>
                       ))}
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">Bank account details not available. Please contact us.</p>
                   )}
-                  <Button variant="outline" className="w-full" onClick={() => setBankTransferDialog(null)}>Close</Button>
+
+                  {/* Upload Slip */}
+                  <div className="border border-dashed border-border rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-medium text-foreground">Upload Payment Slip</p>
+                    <p className="text-xs text-muted-foreground">Upload your bank transfer receipt (JPG, PNG, PDF — max 10MB)</p>
+                    {slipUrl ? (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                        <span className="text-xs text-green-700 font-medium">Slip uploaded successfully!</span>
+                        <a href={slipUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">View</a>
+                      </div>
+                    ) : (
+                      <label className="cursor-pointer">
+                        <div className="flex items-center gap-2 px-3 py-2 border border-border rounded text-xs text-muted-foreground hover:bg-muted/50 transition-colors">
+                          <FileDown className="w-3.5 h-3.5" />
+                          {slipUploading ? "Uploading…" : "Choose file"}
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          disabled={slipUploading}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleSlipUpload(f); }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  <Button className="w-full" onClick={() => { setBankTransferDialog(null); setSlipUrl(null); }}>Done</Button>
                 </div>
               )}
             </DialogContent>
