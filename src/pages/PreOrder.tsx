@@ -395,10 +395,15 @@ export default function PreOrder() {
       const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
       setSlipUrl(publicUrl);
-      // Store slip URL on the preorder record
+      // Store slip URL + mark payment as under_review
       const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
-      await supabase.from("preorder_requests").update({ [field]: publicUrl }).eq("id", bankTransferDialog.preorderId);
-      toast({ title: "Slip uploaded!", description: "Your payment slip has been saved." });
+      const statusField = bankTransferDialog.type === "arrival" ? "arrival_payment_status" : "payment_status";
+      await supabase.from("preorder_requests").update({
+        [field]: publicUrl,
+        [statusField]: "under_review",
+      }).eq("id", bankTransferDialog.preorderId);
+      toast({ title: "Slip uploaded!", description: "Your payment slip has been submitted for review." });
+      refetchRequests();
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
