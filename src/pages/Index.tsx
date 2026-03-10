@@ -122,8 +122,7 @@ const Index = () => {
             {
               "@type": "Store",
               "@id": `${window.location.origin}/#store`,
-              name: "TechLK",
-              description: "Sri Lanka's leading electronics & components supplier. Arduino, sensors, 3D printing, tools and more.",
+              name: "NanoCircuit.lk",
               url: window.location.origin,
               telephone: "+94771234567",
               address: {
