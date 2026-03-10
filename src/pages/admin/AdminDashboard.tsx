@@ -145,6 +145,42 @@ const AdminDashboard = () => {
   const [lcscPartNumber, setLcscPartNumber] = useState("");
   const [lcscLoading, setLcscLoading] = useState(false);
 
+  // Listen for QR scanner "add product" event
+  useEffect(() => {
+    const handler = (e: any) => {
+      const { lcsc, mpn } = e.detail || {};
+      const partToFetch = lcsc || mpn || "";
+      setLcscPartNumber(partToFetch);
+      setProductDialog(true);
+      setEditingProductId(null);
+      setProductForm(emptyProduct);
+      setProductImagePreviews([]);
+      setTab("micro_electronics");
+      if (partToFetch) {
+        // Auto-trigger LCSC fetch after dialog opens
+        setTimeout(async () => {
+          const { data, error } = await supabase.functions.invoke("lcsc-import", { body: { partNumber: partToFetch } });
+          if (!error && data?.success) {
+            const d = data.data;
+            setProductForm((prev) => ({
+              ...prev,
+              name: d.name || prev.name,
+              sku: d.sku || prev.sku,
+              description: d.description || prev.description,
+              datasheet_url: d.datasheet_url || prev.datasheet_url,
+              images: d.images?.join(",") || prev.images,
+              slug: (d.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""),
+            }));
+            if (d.images?.length) setProductImagePreviews(d.images.slice(0, 5));
+            toast({ title: "✅ LCSC data auto-filled", description: `${d.name} — Set price, stock & category.` });
+          }
+        }, 400);
+      }
+    };
+    window.addEventListener("openAddProductFromQR", handler);
+    return () => window.removeEventListener("openAddProductFromQR", handler);
+  }, []);
+
   const fetchFromLcsc = async () => {
     if (!lcscPartNumber.trim()) return;
     setLcscLoading(true);
