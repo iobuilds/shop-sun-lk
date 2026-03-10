@@ -242,7 +242,7 @@ const Profile = () => {
   const [tab, setTab] = useState<ProfileTab>((searchParams.get("tab") as ProfileTab) || "details");
   const [saving, setSaving] = useState(false);
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
-  const [selectedConvo, setSelectedConvo] = useState<string | null>(null);
+  const [selectedConvo, setSelectedConvo] = useState<string | null>(searchParams.get("convo") || null);
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);

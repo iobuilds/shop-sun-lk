@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle, FileDown, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",  color: "text-yellow-600 bg-yellow-50 border-yellow-200",    icon: Clock },
@@ -23,6 +25,97 @@ const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }>
   arrived:   { label: "Arrived",         color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
   completed: { label: "Completed",       color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
   cancelled: { label: "Cancelled",       color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
+};
+
+const generateUserPreOrderPDF = (req: any) => {
+  const doc = new jsPDF();
+  const shortId = req.id.slice(0, 8).toUpperCase();
+
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("NanoCircuit.lk", 20, 25);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120, 120, 120);
+  doc.text("Electronics & Components | Sri Lanka", 20, 32);
+
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("PRE-ORDER QUOTE", 145, 25);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Quote #: PO-${shortId}`, 145, 33);
+  doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
+
+  doc.setDrawColor(220, 220, 220);
+  doc.line(20, 46, 190, 46);
+
+  const tableData = (req.preorder_items || []).map((it: any, i: number) => [
+    String(i + 1),
+    it.product_name || "Item",
+    String(it.quantity),
+    it.unit_price ? `Rs. ${Number(it.unit_price).toLocaleString()}` : "—",
+    it.unit_price ? `Rs. ${(Number(it.unit_price) * (it.quantity || 1)).toLocaleString()}` : "—",
+  ]);
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["#", "Item", "Qty", "Unit Price", "Subtotal"]],
+    body: tableData,
+    theme: "grid",
+    headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: [60, 60, 60] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 85 },
+      2: { cellWidth: 15, halign: "center" },
+      3: { cellWidth: 35, halign: "right" },
+      4: { cellWidth: 35, halign: "right" },
+    },
+    margin: { left: 20, right: 20 },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || 180;
+  let sY = finalY + 10;
+  const xL = 130, xV = 185;
+
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.setFont("helvetica", "normal");
+
+  const unitTotal = Number(req.unit_cost_total) || 0;
+  const shipping = Number(req.shipping_fee) || 0;
+  const tax = Number(req.tax_amount) || 0;
+  const grand = unitTotal + shipping + tax;
+
+  if (unitTotal > 0) { doc.text("Items Total:", xL, sY); doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  if (shipping > 0) { doc.text("Shipping Fee:", xL, sY); doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  if (tax > 0) { doc.text("Tax / Custom Duty:", xL, sY); doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(xL, sY - 2, xV, sY - 2);
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("Grand Total:", xL, sY + 3);
+  doc.text(`Rs. ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+
+  if (req.admin_notes) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Note: ${req.admin_notes}`, 20, sY + 12);
+  }
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(150, 150, 150);
+  doc.text("Thank you for your pre-order request! | NanoCircuit.lk", 105, 280, { align: "center" });
+
+  doc.save(`PreOrder-Quote-PO${shortId}.pdf`);
 };
 
 interface PreOrderItem {
@@ -232,7 +325,7 @@ export default function PreOrder() {
                                     : "bg-background text-muted-foreground border-border hover:border-secondary/50"
                                 }`}
                               >
-                                {t === "store" ? "🏪 From Our Store" : "🔗 External Link"}
+                                {t === "store" ? "From Our Store" : "External Link"}
                               </button>
                             ))}
                           </div>
@@ -394,20 +487,32 @@ export default function PreOrder() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {myRequests.map((req: any) => {
-                      const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
-                      const Icon = s.icon;
-                      return (
-                        <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
-                          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
-                              <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
-                                <Icon className="w-3 h-3" /> {s.label}
-                              </span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
-                          </div>
+                     {myRequests.map((req: any) => {
+                       const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
+                       const Icon = s.icon;
+                       const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+                       const hasQuote = req.unit_cost_total > 0 || req.shipping_fee > 0 || req.tax_amount > 0;
+                       return (
+                         <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
+                           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
+                               <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
+                                 <Icon className="w-3 h-3" /> {s.label}
+                               </span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               {isQuoted && hasQuote && (
+                                 <button
+                                   onClick={() => generateUserPreOrderPDF(req)}
+                                   className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                                 >
+                                   <FileDown className="w-3 h-3" /> Download Quote
+                                 </button>
+                               )}
+                               <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
+                             </div>
+                           </div>
                           <div className="px-4 py-3 space-y-1.5">
                             {req.preorder_items?.map((it: any) => (
                               <div key={it.id} className="flex items-center justify-between text-sm">
@@ -445,15 +550,15 @@ export default function PreOrder() {
                             </div>
                           )}
                           {req.conversation_id && (
-                            <div className="px-4 pb-3">
-                              <Link
-                                to="/profile"
-                                className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
-                              >
-                                <MessageSquare className="w-3 h-3" /> View Conversation
-                              </Link>
-                            </div>
-                          )}
+                             <div className="px-4 pb-3">
+                               <Link
+                                 to={`/profile?tab=messages&convo=${req.conversation_id}`}
+                                 className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                               >
+                                 <MessageSquare className="w-3 h-3" /> View Conversation
+                               </Link>
+                             </div>
+                           )}
                         </div>
                       );
                     })}
