@@ -3751,6 +3751,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             </motion.div>
           )}
 
+          {/* ═══ Pre-Orders Tab ═══ */}
+          {tab === "preorders" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <AdminPreOrders
+                requests={preorderRequests || []}
+                onRefresh={refetchPreorders}
+                allProfiles={allProfiles || []}
+              />
+            </motion.div>
+          )}
+
           {/* ═══ DB Tools Tab ═══ */}
           {tab === "db_tools" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
