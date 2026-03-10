@@ -950,14 +950,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   };
 
   // ── Product CRUD ──
-  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setLcscPartNumber(""); setProductDialog(true); };
+  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setLcscPartNumber(""); setLcscFailed(false); setLcscFailedMpn(""); setLcscFailedLcscNum(""); setProductDialog(true); };
   const openAddMicroProduct = () => {
     setEditingProductId(null);
-    setProductForm({ ...emptyProduct, category_id: microElectronicsCategory?.id || "" });
-    setProductImagePreviews([]);
-    setLcscPartNumber("");
-    setProductDialog(true);
-  };
   const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
     const imgs = p.images || [];
