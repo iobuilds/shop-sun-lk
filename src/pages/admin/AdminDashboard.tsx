@@ -181,12 +181,25 @@ const AdminDashboard = () => {
     return () => window.removeEventListener("openAddProductFromQR", handler);
   }, []);
 
+  /** Extract C-number from a full LCSC URL or return the raw input as-is */
+  const parseLcscInput = (raw: string): string => {
+    const trimmed = raw.trim();
+    // Support: https://www.lcsc.com/product-detail/C17932.html  or  .../C17932_...html
+    const urlMatch = trimmed.match(/\/(?:product-detail\/)?([Cc]\d+)/i);
+    if (urlMatch) return urlMatch[1].toUpperCase();
+    // Support: plain C-number like C17932
+    return trimmed.toUpperCase();
+  };
+
   const fetchFromLcsc = async () => {
     if (!lcscPartNumber.trim()) return;
     setLcscLoading(true);
+    const partNumber = parseLcscInput(lcscPartNumber);
+    // Update the input field to show the extracted part number
+    if (partNumber !== lcscPartNumber.trim()) setLcscPartNumber(partNumber);
     try {
       const { data, error } = await supabase.functions.invoke("lcsc-import", {
-        body: { partNumber: lcscPartNumber.trim() },
+        body: { partNumber },
       });
       if (error || !data?.success) {
         toast({ title: "LCSC fetch failed", description: data?.error || error?.message || "Part not found", variant: "destructive" });
