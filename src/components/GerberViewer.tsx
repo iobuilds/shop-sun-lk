@@ -123,7 +123,7 @@ async function svgToImageBitmap(svgStr: string, w: number, h: number): Promise<I
 
     await new Promise<void>((res, rej) => {
       img.onload = () => res();
-      img.onerror = () => rej(new Error("img load failed"));
+      img.onerror = (_e: any) => rej(new Error("img load failed"));
       img.src = url;
     });
 
