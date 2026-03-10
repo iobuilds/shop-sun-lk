@@ -325,7 +325,7 @@ export default function PreOrder() {
                                     : "bg-background text-muted-foreground border-border hover:border-secondary/50"
                                 }`}
                               >
-                                {t === "store" ? "🏪 From Our Store" : "🔗 External Link"}
+                                {t === "store" ? "From Our Store" : "External Link"}
                               </button>
                             ))}
                           </div>
