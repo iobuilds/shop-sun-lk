@@ -537,7 +537,21 @@ const AdminDashboard = () => {
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
-// Searchable user picker for coupon assignments
+  // Pre-orders query
+  const { data: preorderRequests, refetch: refetchPreorders } = useQuery({
+    queryKey: ["admin-preorders"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("preorder_requests")
+        .select("*, preorder_items(*), profiles!inner(full_name, phone)")
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: isAdmin || isModerator,
+  });
+  const pendingPreorderCount = preorderRequests?.filter((r: any) => r.status === "pending").length || 0;
+
+
 const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   allProfiles: any[];
   selectedPhones: string;
