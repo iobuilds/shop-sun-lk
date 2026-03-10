@@ -48,6 +48,8 @@ interface ReceiptForm {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+type PermissionState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
+
 export default function QRStockScanner() {
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -61,6 +63,7 @@ export default function QRStockScanner() {
   const [saving, setSaving] = useState(false);
   const [manualQR, setManualQR] = useState("");
   const [form, setForm] = useState<ReceiptForm>({ qty: "", buyPrice: "", buyDate: today(), notes: "" });
+  const [permState, setPermState] = useState<PermissionState>("idle");
 
   // Stock receipts history
   const { data: receipts, refetch: refetchReceipts } = useQuery({
@@ -75,13 +78,48 @@ export default function QRStockScanner() {
     },
   });
 
-  const stopScanner = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    setScanning(false);
+  // Check existing permission state on mount
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setPermState("unavailable");
+      return;
+    }
+    navigator.permissions?.query({ name: "camera" as PermissionName }).then((result) => {
+      if (result.state === "granted") setPermState("granted");
+      else if (result.state === "denied") setPermState("denied");
+      result.onchange = () => {
+        if (result.state === "granted") setPermState("granted");
+        else if (result.state === "denied") setPermState("denied");
+        else setPermState("idle");
+      };
+    }).catch(() => {/* permissions API not available */});
   }, []);
 
-  const startScanner = useCallback(async () => {
+  const requestCameraPermission = useCallback(async () => {
+    setPermState("requesting");
+    try {
+      // Trigger the browser permission prompt via getUserMedia (requires user gesture)
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      // Got permission — stop the temporary stream, let ZXing manage it
+      stream.getTracks().forEach(t => t.stop());
+      setPermState("granted");
+      // Auto-start scanner after permission granted
+      setTimeout(() => startScannerInternal(), 100);
+    } catch (e: any) {
+      if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+        setPermState("denied");
+        toast({ title: "Camera permission denied", description: "Please allow camera access in your browser settings and refresh.", variant: "destructive" });
+      } else if (e.name === "NotFoundError") {
+        setPermState("unavailable");
+        toast({ title: "No camera found", description: "No camera device was detected on this device.", variant: "destructive" });
+      } else {
+        setPermState("idle");
+        toast({ title: "Camera error", description: e.message, variant: "destructive" });
+      }
+    }
+  }, []);
+
+  const startScannerInternal = useCallback(async () => {
     try {
       const devices = await BrowserQRCodeReader.listVideoInputDevices();
       setCameras(devices);
@@ -92,11 +130,8 @@ export default function QRStockScanner() {
       const controls = await reader.decodeFromVideoDevice(
         camId,
         videoRef.current!,
-        (result, err) => {
-          if (result) {
-            const text = result.getText();
-            handleQRDetected(text);
-          }
+        (result) => {
+          if (result) handleQRDetected(result.getText());
         }
       );
       controlsRef.current = controls;
@@ -105,6 +140,20 @@ export default function QRStockScanner() {
       setScanning(false);
     }
   }, [selectedCamera]);
+
+  const stopScanner = useCallback(() => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    setScanning(false);
+  }, []);
+
+  const startScanner = useCallback(async () => {
+    if (permState !== "granted") {
+      await requestCameraPermission();
+    } else {
+      await startScannerInternal();
+    }
+  }, [permState, requestCameraPermission, startScannerInternal]);
 
   useEffect(() => {
     return () => { controlsRef.current?.stop(); };
