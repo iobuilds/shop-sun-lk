@@ -27,7 +27,7 @@ export const generateInvoice = (order: InvoiceOrder) => {
   // Header
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
-  doc.text("TechLK", 20, 25);
+  doc.text("NanoCircuit.lk", 20, 25);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(120, 120, 120);
