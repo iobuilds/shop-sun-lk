@@ -561,6 +561,22 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                             </div>
                           </div>
                         )}
+                        {/* Payment slips */}
+                        {(req.slip_url || req.arrival_slip_url) && (
+                          <div className="text-xs bg-muted/30 rounded-lg p-2 space-y-1">
+                            <p className="font-semibold text-foreground">Payment Slips</p>
+                            {req.slip_url && (
+                              <a href={req.slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary underline hover:no-underline">
+                                <FileDown className="w-3 h-3" /> View Quote Payment Slip
+                              </a>
+                            )}
+                            {req.arrival_slip_url && (
+                              <a href={req.arrival_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary underline hover:no-underline">
+                                <FileDown className="w-3 h-3" /> View Arrival Payment Slip
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
