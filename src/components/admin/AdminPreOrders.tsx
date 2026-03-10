@@ -109,24 +109,33 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.setTextColor(80, 80, 80);
   doc.setFont("helvetica", "normal");
 
-  const unitTotal = Number(req.unit_cost_total) || 0;
-  const shipping = Number(req.shipping_fee) || 0;
-  const tax = Number(req.tax_amount) || 0;
-  const grand = unitTotal + shipping + tax;
+  const shipping = Number(req.shipping_fee);
+  const tax = Number(req.tax_amount);
+  const shippingTBA = shipping === -1;
+  const taxTBA = tax === -1;
+  const grand = unitTotal + (shippingTBA ? 0 : Math.max(0, shipping)) + (taxTBA ? 0 : Math.max(0, tax));
 
   if (unitTotal > 0) {
     doc.text("Items Total:", xL, sY);
     doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" });
     sY += 6;
   }
-  if (shipping > 0) {
+  if (!shippingTBA && shipping > 0) {
     doc.text("Shipping Fee:", xL, sY);
     doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" });
     sY += 6;
+  } else if (shippingTBA) {
+    doc.text("Shipping Fee:", xL, sY);
+    doc.text("Price after arrival", xV, sY, { align: "right" });
+    sY += 6;
   }
-  if (tax > 0) {
+  if (!taxTBA && tax > 0) {
     doc.text("Tax / Custom Duty:", xL, sY);
     doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" });
+    sY += 6;
+  } else if (taxTBA) {
+    doc.text("Tax / Custom Duty:", xL, sY);
+    doc.text("Price after arrival", xV, sY, { align: "right" });
     sY += 6;
   }
 
