@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle, Search, User, Phone, AlertTriangle, CreditCard } from "lucide-react";
+import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle, Search, User, Phone, AlertTriangle, CreditCard, Eye, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ const STATUS_OPTIONS = [
   { value: "approved",  label: "Approved",         color: "bg-green-100 text-green-800 border-green-300" },
   { value: "sourcing",  label: "Sourcing",         color: "bg-purple-100 text-purple-800 border-purple-300" },
   { value: "arrived",   label: "Arrived",          color: "bg-secondary/20 text-secondary border-secondary/40" },
+  { value: "shipped",   label: "Shipped",          color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
   { value: "completed", label: "Completed",        color: "bg-green-100 text-green-900 border-green-400" },
   { value: "cancelled", label: "Cancelled",        color: "bg-destructive/10 text-destructive border-destructive/30" },
 ];
@@ -53,7 +54,6 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
   doc.text(`Status: ${STATUS_OPTIONS.find(s => s.value === req.status)?.label || req.status}`, 145, 45);
 
-  // Quote validity
   if (req.quoted_at) {
     doc.setTextColor(200, 50, 50);
     doc.text("* This quote is valid for 48 hours from issue date.", 145, 51);
@@ -184,6 +184,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   const [arrivalTarget, setArrivalTarget] = useState<any>(null);
   const [arrivalForm, setArrivalForm] = useState({ shipping: "", tax: "" });
   const [arrivalSaving, setArrivalSaving] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   // Filter by status and search by order ID
   const filtered = requests.filter(r => {
@@ -208,10 +209,10 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     setEditForm({
       status: req.status,
       admin_notes: req.admin_notes || "",
-      shipping_fee: req.shipping_fee ? String(req.shipping_fee) : "",
-      tax_amount: req.tax_amount ? String(req.tax_amount) : "",
-      shipping_after_arrival: req.shipping_fee === -1 || req.shipping_fee === null && req.status !== "pending",
-      tax_after_arrival: req.tax_amount === -1 || req.tax_amount === null && req.status !== "pending",
+      shipping_fee: req.shipping_fee != null && req.shipping_fee !== -1 ? String(req.shipping_fee) : "",
+      tax_amount: req.tax_amount != null && req.tax_amount !== -1 ? String(req.tax_amount) : "",
+      shipping_after_arrival: req.shipping_fee === -1,
+      tax_after_arrival: req.tax_amount === -1,
     });
     setEditDialog(true);
   };
@@ -225,6 +226,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     setSaving(true);
     const wasQuoted = editTarget.status !== "quoted" && editForm.status === "quoted";
     try {
+      // Update item prices
       for (const item of editItems) {
         if (item.unit_price !== null && item.unit_price !== undefined && item.unit_price !== "") {
           await supabase.from("preorder_items").update({ unit_price: parseFloat(item.unit_price) || 0 }).eq("id", item.id);
@@ -234,19 +236,27 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
       const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
       const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
+      // grand_total = items + non-TBA shipping + non-TBA tax
       const grandTotal = unitCostTotal
         + (shippingVal > 0 ? shippingVal : 0)
         + (taxVal > 0 ? taxVal : 0);
 
-      const { error } = await supabase.from("preorder_requests").update({
+      const updatePayload: any = {
         status: editForm.status,
         admin_notes: editForm.admin_notes || null,
         shipping_fee: shippingVal,
         tax_amount: taxVal,
         unit_cost_total: unitCostTotal,
-        grand_total: grandTotal,
-      }).eq("id", editTarget.id);
+      };
+      // Only set grand_total if it's a definite number (not TBA scenario causes issues)
+      if (!editForm.shipping_after_arrival && !editForm.tax_after_arrival) {
+        updatePayload.grand_total = grandTotal;
+      } else if (unitCostTotal > 0) {
+        // Partial grand total (items only, TBA parts excluded)
+        updatePayload.grand_total = unitCostTotal;
+      }
 
+      const { error } = await supabase.from("preorder_requests").update(updatePayload).eq("id", editTarget.id);
       if (error) throw error;
 
       // If status just became "quoted", send SMS + notification
@@ -260,7 +270,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             body: { phone, message, order_id: editTarget.id, user_id: editTarget.user_id },
           });
         }
-        // Send in-app notification
         await supabase.from("user_notifications").insert({
           user_id: editTarget.user_id,
           title: "Pre-Order Quoted",
@@ -277,6 +286,98 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Approve or reject a payment slip
+  const handlePaymentReview = async (req: any, paymentType: "quote" | "arrival", action: "approve" | "reject") => {
+    setApprovingId(req.id + paymentType);
+    try {
+      const shortId = req.id.slice(0, 8).toUpperCase();
+
+      if (paymentType === "quote") {
+        if (action === "approve") {
+          // Approve quote payment → move to "approved"
+          const { error } = await supabase.from("preorder_requests").update({
+            payment_status: "paid",
+            status: "approved",
+          }).eq("id", req.id);
+          if (error) throw error;
+          // Notify user
+          const profile = getProfile(req.user_id);
+          await supabase.from("user_notifications").insert({
+            user_id: req.user_id,
+            title: "Payment Approved",
+            message: `Your payment for pre-order PO-${shortId} has been approved. We're now sourcing your items!`,
+            type: "order",
+            link_url: "/pre-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: Payment approved for PO-${shortId}. We're now sourcing your items!`, order_id: req.id, user_id: req.user_id },
+            });
+          }
+          toast({ title: "Payment approved", description: "Order moved to Approved." });
+        } else {
+          // Reject → reset to quoted, clear slip
+          const { error } = await supabase.from("preorder_requests").update({
+            payment_status: "unpaid",
+            slip_url: null,
+          }).eq("id", req.id);
+          if (error) throw error;
+          await supabase.from("user_notifications").insert({
+            user_id: req.user_id,
+            title: "Payment Rejected",
+            message: `Your payment slip for pre-order PO-${shortId} was rejected. Please re-upload a valid slip.`,
+            type: "order",
+            link_url: "/pre-order?tab=my",
+          });
+          toast({ title: "Payment rejected", description: "User will be asked to re-upload." });
+        }
+      } else {
+        // arrival payment
+        if (action === "approve") {
+          const { error } = await supabase.from("preorder_requests").update({
+            arrival_payment_status: "paid",
+            status: "shipped",
+          }).eq("id", req.id);
+          if (error) throw error;
+          const profile = getProfile(req.user_id);
+          await supabase.from("user_notifications").insert({
+            user_id: req.user_id,
+            title: "Arrival Payment Approved",
+            message: `Arrival payment for PO-${shortId} approved. Your order is being shipped!`,
+            type: "order",
+            link_url: "/pre-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: Arrival payment approved for PO-${shortId}. Your order is being shipped!`, order_id: req.id, user_id: req.user_id },
+            });
+          }
+          toast({ title: "Arrival payment approved", description: "Order moved to Shipped." });
+        } else {
+          const { error } = await supabase.from("preorder_requests").update({
+            arrival_payment_status: "unpaid",
+            arrival_slip_url: null,
+          }).eq("id", req.id);
+          if (error) throw error;
+          await supabase.from("user_notifications").insert({
+            user_id: req.user_id,
+            title: "Arrival Payment Rejected",
+            message: `Your arrival payment slip for pre-order PO-${shortId} was rejected. Please re-upload.`,
+            type: "order",
+            link_url: "/pre-order?tab=my",
+          });
+          toast({ title: "Arrival payment rejected" });
+        }
+      }
+
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -298,11 +399,10 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       const { error } = await supabase.from("preorder_requests").update({
         arrival_shipping_fee: shipping,
         arrival_tax_amount: tax,
-        arrival_payment_status: "pending",
+        arrival_payment_status: "unpaid",
       }).eq("id", arrivalTarget.id);
       if (error) throw error;
 
-      // Notify user
       const shortId = arrivalTarget.id.slice(0, 8).toUpperCase();
       const total = shipping + tax;
       await supabase.from("user_notifications").insert({
@@ -313,7 +413,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         link_url: "/pre-order?tab=my",
       });
 
-      // SMS
       const profile = getProfile(arrivalTarget.user_id);
       if (profile?.phone) {
         await supabase.functions.invoke("send-sms", {
@@ -390,6 +489,17 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         </div>
       </div>
 
+      {/* Flow guide */}
+      <div className="mb-4 bg-muted/40 border border-border rounded-lg px-4 py-2.5 text-xs text-muted-foreground flex flex-wrap items-center gap-1.5">
+        <span className="font-semibold text-foreground">Flow:</span>
+        {["Pending", "Quoted", "User Pays", "✓ Approve", "Sourcing", "Arrived", "User Pays Arrival", "✓ Approve", "Shipped", "Completed"].map((step, i) => (
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span className="text-border">→</span>}
+            <span className={step.startsWith("✓") ? "text-green-600 font-semibold" : ""}>{step}</span>
+          </span>
+        ))}
+      </div>
+
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
@@ -404,8 +514,10 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             const shipping = Number(req.shipping_fee) || 0;
             const tax = Number(req.tax_amount) || 0;
             const grandTotal = (parseFloat(req.unit_cost_total) || 0) + (shipping === -1 ? 0 : Math.max(0, shipping)) + (tax === -1 ? 0 : Math.max(0, tax));
-            const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+            const isQuoted = ["quoted", "approved", "sourcing", "arrived", "shipped", "completed"].includes(req.status);
             const expired = isQuoteExpired(req);
+            const hasQuoteSlip = !!req.slip_url;
+            const hasArrivalSlip = !!req.arrival_slip_url;
 
             return (
               <div key={req.id} className="border border-border rounded-xl bg-card overflow-hidden">
@@ -423,6 +535,16 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                       {req.payment_status === "paid" && (
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-100 text-green-800 flex items-center gap-1">
                           <CreditCard className="w-3 h-3" /> Paid
+                        </span>
+                      )}
+                      {req.payment_status === "under_review" && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-1 animate-pulse">
+                          <Clock className="w-3 h-3" /> Slip Under Review
+                        </span>
+                      )}
+                      {req.arrival_payment_status === "under_review" && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-orange-300 bg-orange-100 text-orange-800 flex items-center gap-1 animate-pulse">
+                          <Clock className="w-3 h-3" /> Arrival Slip Review
                         </span>
                       )}
                       {grandTotal > 0 && (
@@ -488,6 +610,61 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                   )}
                 </div>
 
+                {/* Slip review banners — always visible even when collapsed */}
+                {req.payment_status === "under_review" && hasQuoteSlip && (
+                  <div className="mx-4 mb-3 border border-amber-200 bg-amber-50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> Quote Payment Slip — Awaiting Review
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a href={req.slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline hover:no-underline">
+                        <Eye className="w-3 h-3" /> View Slip
+                      </a>
+                      <Button
+                        size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={approvingId === req.id + "quote"}
+                        onClick={() => handlePaymentReview(req, "quote", "approve")}
+                      >
+                        <ThumbsUp className="w-3 h-3" /> Approve Payment
+                      </Button>
+                      <Button
+                        size="sm" variant="outline" className="h-7 text-xs gap-1 border-destructive text-destructive hover:bg-destructive/10"
+                        disabled={approvingId === req.id + "quote"}
+                        onClick={() => handlePaymentReview(req, "quote", "reject")}
+                      >
+                        <ThumbsDown className="w-3 h-3" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {req.arrival_payment_status === "under_review" && hasArrivalSlip && (
+                  <div className="mx-4 mb-3 border border-orange-200 bg-orange-50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-orange-800 mb-2 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> Arrival Payment Slip — Awaiting Review
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a href={req.arrival_slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline hover:no-underline">
+                        <Eye className="w-3 h-3" /> View Slip
+                      </a>
+                      <Button
+                        size="sm" className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={approvingId === req.id + "arrival"}
+                        onClick={() => handlePaymentReview(req, "arrival", "approve")}
+                      >
+                        <ThumbsUp className="w-3 h-3" /> Approve & Ship
+                      </Button>
+                      <Button
+                        size="sm" variant="outline" className="h-7 text-xs gap-1 border-destructive text-destructive hover:bg-destructive/10"
+                        disabled={approvingId === req.id + "arrival"}
+                        onClick={() => handlePaymentReview(req, "arrival", "reject")}
+                      >
+                        <ThumbsDown className="w-3 h-3" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Expanded extra info */}
                 <AnimatePresence>
                   {isExpanded && (
@@ -527,12 +704,25 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                               : `Quote expires: ${new Date(new Date(req.quoted_at).getTime() + 48 * 60 * 60 * 1000).toLocaleString()}`}
                           </div>
                         )}
-                        {/* Payment status */}
-                        {req.payment_status && req.payment_status !== "unpaid" && (
-                          <div className="text-xs bg-green-50 border border-green-200 text-green-700 rounded-lg p-2 flex items-center gap-1">
-                            <CreditCard className="w-3 h-3" /> Payment: {req.payment_status}
+
+                        {/* Payment status summary */}
+                        <div className="text-xs space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground w-32">Quote Payment:</span>
+                            <span className={`font-medium ${req.payment_status === "paid" ? "text-green-600" : req.payment_status === "under_review" ? "text-amber-600" : "text-muted-foreground"}`}>
+                              {req.payment_status === "paid" ? "✓ Paid" : req.payment_status === "under_review" ? "⏳ Under Review" : req.payment_status || "Unpaid"}
+                            </span>
                           </div>
-                        )}
+                          {(req.arrival_shipping_fee > 0 || req.arrival_tax_amount > 0) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground w-32">Arrival Payment:</span>
+                              <span className={`font-medium ${req.arrival_payment_status === "paid" ? "text-green-600" : req.arrival_payment_status === "under_review" ? "text-amber-600" : "text-muted-foreground"}`}>
+                                {req.arrival_payment_status === "paid" ? "✓ Paid" : req.arrival_payment_status === "under_review" ? "⏳ Under Review" : "Unpaid"}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
                         {/* Arrival charges */}
                         {(req.arrival_shipping_fee > 0 || req.arrival_tax_amount > 0) && (
                           <div className="text-xs bg-secondary/5 border border-secondary/20 rounded-lg p-2 space-y-0.5">
@@ -542,11 +732,9 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                             <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
                               <span>Total</span><span>Rs. {((Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0)).toLocaleString()}</span>
                             </div>
-                            <span className={`font-medium ${req.arrival_payment_status === "paid" ? "text-green-600" : "text-yellow-600"}`}>
-                              {req.arrival_payment_status === "paid" ? "✓ Paid" : "⏳ Pending payment"}
-                            </span>
                           </div>
                         )}
+
                         {grandTotal > 0 && (
                           <div className="text-xs space-y-0.5 bg-muted/30 rounded-lg p-2">
                             {req.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Items total</span><span>Rs. {Number(req.unit_cost_total).toLocaleString()}</span></div>}
@@ -561,18 +749,19 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                             </div>
                           </div>
                         )}
+
                         {/* Payment slips */}
                         {(req.slip_url || req.arrival_slip_url) && (
                           <div className="text-xs bg-muted/30 rounded-lg p-2 space-y-1">
                             <p className="font-semibold text-foreground">Payment Slips</p>
                             {req.slip_url && (
                               <a href={req.slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary underline hover:no-underline">
-                                <FileDown className="w-3 h-3" /> View Quote Payment Slip
+                                <Eye className="w-3 h-3" /> View Quote Payment Slip
                               </a>
                             )}
                             {req.arrival_slip_url && (
                               <a href={req.arrival_slip_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary underline hover:no-underline">
-                                <FileDown className="w-3 h-3" /> View Arrival Payment Slip
+                                <Eye className="w-3 h-3" /> View Arrival Payment Slip
                               </a>
                             )}
                           </div>
@@ -669,7 +858,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                   <div className="flex items-center gap-2 mt-1 mb-1">
                     <button
                       type="button"
-                      onClick={() => setEditForm(f => ({ ...f, shipping_after_arrival: !f.shipping_after_arrival, shipping_fee: f.shipping_after_arrival ? f.shipping_fee : "" }))}
+                      onClick={() => setEditForm(f => ({ ...f, shipping_after_arrival: !f.shipping_after_arrival, shipping_fee: "" }))}
                       className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.shipping_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
                     >
                       <Clock className="w-3 h-3" />
@@ -689,7 +878,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                   <div className="flex items-center gap-2 mt-1 mb-1">
                     <button
                       type="button"
-                      onClick={() => setEditForm(f => ({ ...f, tax_after_arrival: !f.tax_after_arrival, tax_amount: f.tax_after_arrival ? f.tax_amount : "" }))}
+                      onClick={() => setEditForm(f => ({ ...f, tax_after_arrival: !f.tax_after_arrival, tax_amount: "" }))}
                       className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.tax_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
                     >
                       <Clock className="w-3 h-3" />

@@ -20,10 +20,11 @@ import autoTable from "jspdf-autotable";
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",  color: "text-yellow-600 bg-yellow-50 border-yellow-200",    icon: Clock },
   quoted:    { label: "Quoted",          color: "text-blue-600 bg-blue-50 border-blue-200",           icon: Info },
-  approved:  { label: "Approved",        color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
-  sourcing:  { label: "Sourcing",        color: "text-purple-600 bg-purple-50 border-purple-200",     icon: ShoppingBag },
-  arrived:   { label: "Arrived",         color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
-  completed: { label: "Completed",       color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
+  approved:  { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200", icon: CheckCircle },
+  sourcing:  { label: "Sourcing Items",  color: "text-purple-600 bg-purple-50 border-purple-200",    icon: ShoppingBag },
+  arrived:   { label: "Items Arrived — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
+  shipped:   { label: "Shipped",         color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
+  completed: { label: "Delivered",       color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
   cancelled: { label: "Cancelled",       color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
 };
 
@@ -649,11 +650,13 @@ export default function PreOrder() {
                     {myRequests.map((req: any) => {
                       const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
                       const Icon = s.icon;
-                      const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+                      const isQuoted = ["quoted", "approved", "sourcing", "arrived", "shipped", "completed"].includes(req.status);
                       const hasQuote = req.unit_cost_total > 0 || req.grand_total > 0;
                       const expired = isQuoteExpired(req);
-                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.payment_status !== "under_review" && req.grand_total > 0;
+                      // User can pay quote if: status=quoted, not expired, not paid or under_review
+                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.payment_status !== "under_review" && (req.grand_total > 0 || req.unit_cost_total > 0);
                       const arrivalChargesTotal = (Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0);
+                      // User can pay arrival if: status=arrived, charges set, not paid or under_review
                       const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid" && req.arrival_payment_status !== "under_review";
                       const shipping = Number(req.shipping_fee);
                       const tax = Number(req.tax_amount);
@@ -768,6 +771,24 @@ export default function PreOrder() {
                                     </a>
                                   )}
                                 </div>
+                              ) : req.arrival_payment_status === "unpaid" && req.arrival_slip_url ? (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-xs text-destructive font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Slip rejected — please re-upload</p>
+                                  {canPayArrival && (
+                                    <div className="flex gap-2">
+                                      {stripeEnabled && (
+                                        <Button size="sm" className="gap-1 text-xs h-7" onClick={() => handleStripePayment(req.id, "arrival")} disabled={payingId === req.id}>
+                                          <CreditCard className="w-3 h-3" /> Pay with Card
+                                        </Button>
+                                      )}
+                                      {bankEnabled && (
+                                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => openBankTransfer(req.id, "arrival", arrivalChargesTotal)}>
+                                          <Building className="w-3 h-3" /> Re-upload Slip
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               ) : canPayArrival && (
                                 <div className="flex gap-2 mt-2">
                                   {stripeEnabled && (
@@ -785,10 +806,12 @@ export default function PreOrder() {
                             </div>
                           )}
 
-                          {/* Payment actions */}
-                          {req.payment_status === "under_review" && req.status === "quoted" && (
-                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5">
-                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Payment submitted — under admin review</p>
+                          {/* Quote payment status */}
+                          {req.payment_status === "under_review" && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5 bg-amber-50/50">
+                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" /> Payment slip submitted — under admin review
+                              </p>
                               {req.slip_url && (
                                 <a href={req.slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
                                   <FileDown className="w-3 h-3" /> View uploaded slip
@@ -796,8 +819,19 @@ export default function PreOrder() {
                               )}
                             </div>
                           )}
+
+                          {/* Rejected slip — ask to re-upload */}
+                          {req.status === "quoted" && req.payment_status === "unpaid" && req.slip_url && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border bg-destructive/5 space-y-1.5">
+                              <p className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Payment slip was rejected — please re-upload a valid slip.
+                              </p>
+                            </div>
+                          )}
+
                           {canPay && (
                             <div className="px-4 pb-3 pt-2 border-t border-border">
+                              <p className="text-xs text-muted-foreground mb-2">Make payment for your quote:</p>
                               <div className="flex items-center gap-2 flex-wrap">
                                 {stripeEnabled && (
                                   <Button size="sm" className="gap-1 text-xs" onClick={() => handleStripePayment(req.id, "quote")} disabled={payingId === req.id}>
@@ -805,7 +839,7 @@ export default function PreOrder() {
                                   </Button>
                                 )}
                                 {bankEnabled && (
-                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openBankTransfer(req.id, "quote", Number(req.grand_total))}>
+                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openBankTransfer(req.id, "quote", Number(req.grand_total || req.unit_cost_total))}>
                                     <Building className="w-3 h-3" /> Bank Transfer
                                   </Button>
                                 )}
