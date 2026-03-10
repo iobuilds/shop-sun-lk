@@ -953,7 +953,15 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setLcscPartNumber(""); setLcscFailed(false); setLcscFailedMpn(""); setLcscFailedLcscNum(""); setProductDialog(true); };
   const openAddMicroProduct = () => {
     setEditingProductId(null);
-  const openEditProduct = (p: any) => {
+    const microCat = categories?.find(c => c.name.toLowerCase().includes("micro"));
+    setProductForm({ ...emptyProduct, category_id: microCat?.id || "" });
+    setProductImagePreviews([]);
+    setLcscPartNumber("");
+    setLcscFailed(false);
+    setLcscFailedMpn("");
+    setLcscFailedLcscNum("");
+    setProductDialog(true);
+  };
     setEditingProductId(p.id);
     const imgs = p.images || [];
     setProductImagePreviews(imgs);
