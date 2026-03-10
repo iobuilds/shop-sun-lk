@@ -708,6 +708,113 @@ export type Database = {
         }
         Relationships: []
       }
+      preorder_items: {
+        Row: {
+          created_at: string
+          expected_date: string | null
+          external_url: string | null
+          id: string
+          notes: string | null
+          preorder_id: string
+          product_id: string | null
+          product_name: string
+          quantity: number
+          unit_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          expected_date?: string | null
+          external_url?: string | null
+          id?: string
+          notes?: string | null
+          preorder_id: string
+          product_id?: string | null
+          product_name: string
+          quantity?: number
+          unit_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          expected_date?: string | null
+          external_url?: string | null
+          id?: string
+          notes?: string | null
+          preorder_id?: string
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preorder_items_preorder_id_fkey"
+            columns: ["preorder_id"]
+            isOneToOne: false
+            referencedRelation: "preorder_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preorder_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preorder_requests: {
+        Row: {
+          admin_notes: string | null
+          conversation_id: string | null
+          created_at: string
+          customer_note: string | null
+          grand_total: number | null
+          id: string
+          shipping_fee: number | null
+          status: string
+          tax_amount: number | null
+          unit_cost_total: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_note?: string | null
+          grand_total?: number | null
+          id?: string
+          shipping_fee?: number | null
+          status?: string
+          tax_amount?: number | null
+          unit_cost_total?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          customer_note?: string | null
+          grand_total?: number | null
+          id?: string
+          shipping_fee?: number | null
+          status?: string
+          tax_amount?: number | null
+          unit_cost_total?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preorder_requests_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_external_links: {
         Row: {
           created_at: string
