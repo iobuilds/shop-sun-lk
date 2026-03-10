@@ -163,6 +163,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     admin_notes: "",
     shipping_fee: "",
     tax_amount: "",
+    shipping_after_arrival: false,
+    tax_after_arrival: false,
   });
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
