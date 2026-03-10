@@ -332,7 +332,19 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             type: "order",
             link_url: "/pre-order?tab=my",
           });
-          toast({ title: "Payment rejected", description: "User will be asked to re-upload." });
+          // Send SMS to user on rejection
+          const rejectProfile = getProfile(req.user_id);
+          if (rejectProfile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: {
+                phone: rejectProfile.phone,
+                message: `NanoCircuit.lk: Your payment slip for pre-order PO-${shortId} was rejected. Please log in and re-upload a valid bank transfer slip. nanocircuit.lk/pre-order`,
+                order_id: req.id,
+                user_id: req.user_id,
+              },
+            });
+          }
+          toast({ title: "Payment rejected — user notified by SMS" });
         }
       } else {
         // arrival payment
