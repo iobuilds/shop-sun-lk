@@ -765,13 +765,19 @@ export type Database = {
       preorder_requests: {
         Row: {
           admin_notes: string | null
+          arrival_payment_status: string
+          arrival_shipping_fee: number | null
+          arrival_tax_amount: number | null
           conversation_id: string | null
           created_at: string
           customer_note: string | null
           grand_total: number | null
           id: string
+          payment_status: string
+          quoted_at: string | null
           shipping_fee: number | null
           status: string
+          stripe_session_id: string | null
           tax_amount: number | null
           unit_cost_total: number | null
           updated_at: string
@@ -779,13 +785,19 @@ export type Database = {
         }
         Insert: {
           admin_notes?: string | null
+          arrival_payment_status?: string
+          arrival_shipping_fee?: number | null
+          arrival_tax_amount?: number | null
           conversation_id?: string | null
           created_at?: string
           customer_note?: string | null
           grand_total?: number | null
           id?: string
+          payment_status?: string
+          quoted_at?: string | null
           shipping_fee?: number | null
           status?: string
+          stripe_session_id?: string | null
           tax_amount?: number | null
           unit_cost_total?: number | null
           updated_at?: string
@@ -793,13 +805,19 @@ export type Database = {
         }
         Update: {
           admin_notes?: string | null
+          arrival_payment_status?: string
+          arrival_shipping_fee?: number | null
+          arrival_tax_amount?: number | null
           conversation_id?: string | null
           created_at?: string
           customer_note?: string | null
           grand_total?: number | null
           id?: string
+          payment_status?: string
+          quoted_at?: string | null
           shipping_fee?: number | null
           status?: string
+          stripe_session_id?: string | null
           tax_amount?: number | null
           unit_cost_total?: number | null
           updated_at?: string
