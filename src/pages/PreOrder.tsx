@@ -759,6 +759,15 @@ export default function PreOrder() {
                               </div>
                               {req.arrival_payment_status === "paid" ? (
                                 <p className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Paid</p>
+                              ) : req.arrival_payment_status === "under_review" ? (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-xs text-amber-700 font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Payment submitted — under admin review</p>
+                                  {req.arrival_slip_url && (
+                                    <a href={req.arrival_slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
+                                      <FileDown className="w-3 h-3" /> View uploaded slip
+                                    </a>
+                                  )}
+                                </div>
                               ) : canPayArrival && (
                                 <div className="flex gap-2 mt-2">
                                   {stripeEnabled && (
