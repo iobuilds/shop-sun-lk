@@ -3786,6 +3786,24 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             </motion.div>
           )}
 
+          {/* ═══ PCB Orders Tab ═══ */}
+          {tab === "pcb_orders" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Layers className="w-5 h-5 text-primary" />
+                </div>
+                <h2 className="text-xl font-bold font-display text-foreground">PCB Orders</h2>
+              </div>
+              <AdminPCBOrders
+                orders={pcbOrders || []}
+                onRefresh={refetchPCBOrders}
+                allProfiles={allProfiles || []}
+              />
+            </motion.div>
+          )}
+
+
           {/* ═══ DB Tools Tab ═══ */}
           {tab === "db_tools" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
