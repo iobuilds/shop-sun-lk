@@ -98,9 +98,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="TechLK — Sri Lanka's Leading Electronics & Components Store"
-        description="TechLK is Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing supplies, tools & components online. Best prices, island-wide delivery."
-        keywords="electronics Sri Lanka, buy electronics online, Arduino Sri Lanka, sensors, components, TechLK, Colombo, online electronics store, 3D printing, IoT, microcontrollers"
+        title="NanoCircuit.lk — Sri Lanka's Leading Electronics & Components Store"
+        description="NanoCircuit.lk is Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing supplies, tools & components online. Best prices, island-wide delivery."
+        keywords="electronics Sri Lanka, buy electronics online, Arduino Sri Lanka, sensors, components, NanoCircuit, Colombo, online electronics store, 3D printing, IoT, microcontrollers"
         canonical={window.location.origin}
         jsonLd={{
           "@context": "https://schema.org",
