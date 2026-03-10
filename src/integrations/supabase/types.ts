@@ -767,6 +767,7 @@ export type Database = {
           admin_notes: string | null
           arrival_payment_status: string
           arrival_shipping_fee: number | null
+          arrival_slip_url: string | null
           arrival_tax_amount: number | null
           conversation_id: string | null
           created_at: string
@@ -776,6 +777,7 @@ export type Database = {
           payment_status: string
           quoted_at: string | null
           shipping_fee: number | null
+          slip_url: string | null
           status: string
           stripe_session_id: string | null
           tax_amount: number | null
@@ -787,6 +789,7 @@ export type Database = {
           admin_notes?: string | null
           arrival_payment_status?: string
           arrival_shipping_fee?: number | null
+          arrival_slip_url?: string | null
           arrival_tax_amount?: number | null
           conversation_id?: string | null
           created_at?: string
@@ -796,6 +799,7 @@ export type Database = {
           payment_status?: string
           quoted_at?: string | null
           shipping_fee?: number | null
+          slip_url?: string | null
           status?: string
           stripe_session_id?: string | null
           tax_amount?: number | null
@@ -807,6 +811,7 @@ export type Database = {
           admin_notes?: string | null
           arrival_payment_status?: string
           arrival_shipping_fee?: number | null
+          arrival_slip_url?: string | null
           arrival_tax_amount?: number | null
           conversation_id?: string | null
           created_at?: string
@@ -816,6 +821,7 @@ export type Database = {
           payment_status?: string
           quoted_at?: string | null
           shipping_fee?: number | null
+          slip_url?: string | null
           status?: string
           stripe_session_id?: string | null
           tax_amount?: number | null
