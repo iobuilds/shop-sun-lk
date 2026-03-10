@@ -708,6 +708,90 @@ export type Database = {
         }
         Relationships: []
       }
+      pcb_order_requests: {
+        Row: {
+          admin_notes: string | null
+          arrival_payment_status: string
+          arrival_shipping_fee: number | null
+          arrival_slip_url: string | null
+          arrival_tax_amount: number | null
+          board_thickness: string
+          created_at: string
+          customer_note: string | null
+          gerber_file_name: string | null
+          gerber_file_url: string | null
+          grand_total: number | null
+          id: string
+          layer_count: number
+          payment_status: string
+          pcb_color: string
+          quantity: number
+          quoted_at: string | null
+          shipping_fee: number | null
+          slip_url: string | null
+          status: string
+          surface_finish: string
+          tax_amount: number | null
+          unit_cost_total: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          arrival_payment_status?: string
+          arrival_shipping_fee?: number | null
+          arrival_slip_url?: string | null
+          arrival_tax_amount?: number | null
+          board_thickness?: string
+          created_at?: string
+          customer_note?: string | null
+          gerber_file_name?: string | null
+          gerber_file_url?: string | null
+          grand_total?: number | null
+          id?: string
+          layer_count?: number
+          payment_status?: string
+          pcb_color?: string
+          quantity?: number
+          quoted_at?: string | null
+          shipping_fee?: number | null
+          slip_url?: string | null
+          status?: string
+          surface_finish?: string
+          tax_amount?: number | null
+          unit_cost_total?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          arrival_payment_status?: string
+          arrival_shipping_fee?: number | null
+          arrival_slip_url?: string | null
+          arrival_tax_amount?: number | null
+          board_thickness?: string
+          created_at?: string
+          customer_note?: string | null
+          gerber_file_name?: string | null
+          gerber_file_url?: string | null
+          grand_total?: number | null
+          id?: string
+          layer_count?: number
+          payment_status?: string
+          pcb_color?: string
+          quantity?: number
+          quoted_at?: string | null
+          shipping_fee?: number | null
+          slip_url?: string | null
+          status?: string
+          surface_finish?: string
+          tax_amount?: number | null
+          unit_cost_total?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       preorder_items: {
         Row: {
           created_at: string
