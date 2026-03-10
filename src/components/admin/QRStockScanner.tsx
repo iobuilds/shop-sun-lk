@@ -48,6 +48,8 @@ interface ReceiptForm {
 
 const today = () => new Date().toISOString().split("T")[0];
 
+type PermissionState = "idle" | "requesting" | "granted" | "denied" | "unavailable";
+
 export default function QRStockScanner() {
   const qc = useQueryClient();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -61,6 +63,7 @@ export default function QRStockScanner() {
   const [saving, setSaving] = useState(false);
   const [manualQR, setManualQR] = useState("");
   const [form, setForm] = useState<ReceiptForm>({ qty: "", buyPrice: "", buyDate: today(), notes: "" });
+  const [permState, setPermState] = useState<PermissionState>("idle");
 
   // Stock receipts history
   const { data: receipts, refetch: refetchReceipts } = useQuery({
@@ -75,13 +78,48 @@ export default function QRStockScanner() {
     },
   });
 
-  const stopScanner = useCallback(() => {
-    controlsRef.current?.stop();
-    controlsRef.current = null;
-    setScanning(false);
+  // Check existing permission state on mount
+  useEffect(() => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setPermState("unavailable");
+      return;
+    }
+    navigator.permissions?.query({ name: "camera" as PermissionName }).then((result) => {
+      if (result.state === "granted") setPermState("granted");
+      else if (result.state === "denied") setPermState("denied");
+      result.onchange = () => {
+        if (result.state === "granted") setPermState("granted");
+        else if (result.state === "denied") setPermState("denied");
+        else setPermState("idle");
+      };
+    }).catch(() => {/* permissions API not available */});
   }, []);
 
-  const startScanner = useCallback(async () => {
+  const requestCameraPermission = useCallback(async () => {
+    setPermState("requesting");
+    try {
+      // Trigger the browser permission prompt via getUserMedia (requires user gesture)
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      // Got permission — stop the temporary stream, let ZXing manage it
+      stream.getTracks().forEach(t => t.stop());
+      setPermState("granted");
+      // Auto-start scanner after permission granted
+      setTimeout(() => startScannerInternal(), 100);
+    } catch (e: any) {
+      if (e.name === "NotAllowedError" || e.name === "PermissionDeniedError") {
+        setPermState("denied");
+        toast({ title: "Camera permission denied", description: "Please allow camera access in your browser settings and refresh.", variant: "destructive" });
+      } else if (e.name === "NotFoundError") {
+        setPermState("unavailable");
+        toast({ title: "No camera found", description: "No camera device was detected on this device.", variant: "destructive" });
+      } else {
+        setPermState("idle");
+        toast({ title: "Camera error", description: e.message, variant: "destructive" });
+      }
+    }
+  }, []);
+
+  const startScannerInternal = useCallback(async () => {
     try {
       const devices = await BrowserQRCodeReader.listVideoInputDevices();
       setCameras(devices);
@@ -92,11 +130,8 @@ export default function QRStockScanner() {
       const controls = await reader.decodeFromVideoDevice(
         camId,
         videoRef.current!,
-        (result, err) => {
-          if (result) {
-            const text = result.getText();
-            handleQRDetected(text);
-          }
+        (result) => {
+          if (result) handleQRDetected(result.getText());
         }
       );
       controlsRef.current = controls;
@@ -105,6 +140,20 @@ export default function QRStockScanner() {
       setScanning(false);
     }
   }, [selectedCamera]);
+
+  const stopScanner = useCallback(() => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    setScanning(false);
+  }, []);
+
+  const startScanner = useCallback(async () => {
+    if (permState !== "granted") {
+      await requestCameraPermission();
+    } else {
+      await startScannerInternal();
+    }
+  }, [permState, requestCameraPermission, startScannerInternal]);
 
   useEffect(() => {
     return () => { controlsRef.current?.stop(); };
@@ -228,26 +277,85 @@ export default function QRStockScanner() {
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="relative bg-black aspect-video flex items-center justify-center">
               <video ref={videoRef} className={`w-full h-full object-cover ${scanning ? "block" : "hidden"}`} />
-              {!scanning && (
-                <div className="flex flex-col items-center gap-3 text-muted-foreground py-10">
-                  <QrCode className="w-14 h-14 opacity-20" />
-                  <p className="text-sm">Camera preview will appear here</p>
+
+              {/* Permission denied state */}
+              {!scanning && permState === "denied" && (
+                <div className="flex flex-col items-center gap-3 text-center px-6 py-10">
+                  <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <CameraOff className="w-7 h-7 text-destructive" />
+                  </div>
+                  <p className="text-sm font-semibold text-destructive">Camera Access Denied</p>
+                  <p className="text-xs text-muted-foreground max-w-xs">
+                    Your browser has blocked camera access. Click the camera icon in your browser's address bar and set it to <strong>Allow</strong>, then refresh the page.
+                  </p>
                 </div>
               )}
+
+              {/* Unavailable state */}
+              {!scanning && permState === "unavailable" && (
+                <div className="flex flex-col items-center gap-3 text-center px-6 py-10">
+                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center">
+                    <CameraOff className="w-7 h-7 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">No Camera Found</p>
+                  <p className="text-xs text-muted-foreground">No camera was detected. Use the manual entry below instead.</p>
+                </div>
+              )}
+
+              {/* Requesting permission state */}
+              {!scanning && permState === "requesting" && (
+                <div className="flex flex-col items-center gap-3 text-center px-6 py-10">
+                  <Loader2 className="w-10 h-10 animate-spin text-secondary" />
+                  <p className="text-sm text-muted-foreground">Requesting camera permission…</p>
+                  <p className="text-xs text-muted-foreground">Please click <strong>Allow</strong> in the browser popup</p>
+                </div>
+              )}
+
+              {/* Idle / ready state */}
+              {!scanning && (permState === "idle" || permState === "granted") && (
+                <div className="flex flex-col items-center gap-3 text-muted-foreground py-10">
+                  <QrCode className="w-14 h-14 opacity-20" />
+                  <p className="text-sm">
+                    {permState === "granted" ? "Click Start Camera to begin scanning" : "Camera access is required to scan QR codes"}
+                  </p>
+                </div>
+              )}
+
+              {/* Scanning overlay */}
               {scanning && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-48 h-48 border-2 border-secondary rounded-lg opacity-60">
-                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-secondary rounded-tl-lg" />
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-secondary rounded-tr-lg" />
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-secondary rounded-bl-lg" />
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-secondary rounded-br-lg" />
+                  <div className="relative w-52 h-52">
+                    <div className="absolute inset-0 border-2 border-secondary/40 rounded-lg" />
+                    <div className="absolute top-0 left-0 w-7 h-7 border-t-4 border-l-4 border-secondary rounded-tl-lg" />
+                    <div className="absolute top-0 right-0 w-7 h-7 border-t-4 border-r-4 border-secondary rounded-tr-lg" />
+                    <div className="absolute bottom-0 left-0 w-7 h-7 border-b-4 border-l-4 border-secondary rounded-bl-lg" />
+                    <div className="absolute bottom-0 right-0 w-7 h-7 border-b-4 border-r-4 border-secondary rounded-br-lg" />
+                    <motion.div
+                      className="absolute left-1 right-1 h-0.5 bg-secondary/70 rounded-full shadow-[0_0_8px_2px_hsl(var(--secondary)/0.4)]"
+                      animate={{ top: ["10%", "85%", "10%"] }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                  </div>
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+                    <span className="text-xs text-secondary/80 bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm">
+                      Align QR code within the frame
+                    </span>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Permission status bar */}
+            {permState === "denied" && (
+              <div className="px-4 py-2 bg-destructive/10 border-t border-destructive/20 flex items-center gap-2">
+                <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                <p className="text-xs text-destructive flex-1">Camera blocked — update permissions in browser settings</p>
+                <Button size="sm" variant="outline" className="h-6 text-xs px-2" onClick={() => setPermState("idle")}>Retry</Button>
+              </div>
+            )}
+
             <div className="p-4 flex items-center gap-3">
-              {cameras.length > 1 && (
+              {cameras.length > 1 && scanning && (
                 <select
                   value={selectedCamera}
                   onChange={e => { stopScanner(); setSelectedCamera(e.target.value); }}
@@ -256,13 +364,21 @@ export default function QRStockScanner() {
                   {cameras.map(c => <option key={c.deviceId} value={c.deviceId}>{c.label || `Camera ${c.deviceId.slice(0, 6)}`}</option>)}
                 </select>
               )}
-              <Button
-                onClick={scanning ? stopScanner : startScanner}
-                variant={scanning ? "destructive" : "default"}
-                className="gap-2"
-              >
-                {scanning ? <><CameraOff className="w-4 h-4" /> Stop</> : <><Camera className="w-4 h-4" /> Start Camera</>}
-              </Button>
+              {permState !== "unavailable" && (
+                <Button
+                  onClick={scanning ? stopScanner : startScanner}
+                  variant={scanning ? "destructive" : "default"}
+                  disabled={permState === "requesting"}
+                  className="gap-2 flex-1"
+                >
+                  {permState === "requesting"
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Requesting…</>
+                    : scanning
+                      ? <><CameraOff className="w-4 h-4" /> Stop Scanner</>
+                      : <><Camera className="w-4 h-4" /> {permState === "granted" ? "Start Camera" : "Enable Camera"}</>
+                  }
+                </Button>
+              )}
             </div>
           </div>
 
