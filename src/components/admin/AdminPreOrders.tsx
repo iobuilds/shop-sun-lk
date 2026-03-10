@@ -532,16 +532,22 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
               {/* Grand total preview */}
               {(() => {
                 const itemsTotal = editItems.reduce((s, it) => s + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
-                const shipping = parseFloat(editForm.shipping_fee) || 0;
-                const tax = parseFloat(editForm.tax_amount) || 0;
+                const shipping = editForm.shipping_after_arrival ? 0 : (parseFloat(editForm.shipping_fee) || 0);
+                const tax = editForm.tax_after_arrival ? 0 : (parseFloat(editForm.tax_amount) || 0);
                 const grand = itemsTotal + shipping + tax;
-                return grand > 0 ? (
+                const hasTBA = editForm.shipping_after_arrival || editForm.tax_after_arrival;
+                return (itemsTotal > 0 || hasTBA) ? (
                   <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
                     {itemsTotal > 0 && <div className="flex justify-between text-muted-foreground"><span>Items</span><span>Rs. {itemsTotal.toLocaleString()}</span></div>}
-                    {shipping > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
-                    {tax > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
+                    {editForm.shipping_after_arrival
+                      ? <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                      : shipping > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
+                    {editForm.tax_after_arrival
+                      ? <div className="flex justify-between text-muted-foreground"><span>Tax</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                      : tax > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
                     <div className="flex justify-between font-bold text-foreground border-t border-border pt-1">
-                      <span>Grand Total</span><span>Rs. {grand.toLocaleString()}</span>
+                      <span>Grand Total</span>
+                      <span>Rs. {grand.toLocaleString()}{hasTBA ? " + TBA" : ""}</span>
                     </div>
                   </div>
                 ) : null;
