@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { ShoppingCart, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
-const CountdownTimer = ({ endsAt }: { endsAt: string }) => {
+const CountdownTimer = forwardRef<HTMLDivElement, { endsAt: string }>(({ endsAt }, _ref) => {
   const [timeLeft, setTimeLeft] = useState({ h: 0, m: 0, s: 0 });
 
   useEffect(() => {
@@ -31,9 +31,11 @@ const CountdownTimer = ({ endsAt }: { endsAt: string }) => {
       </span>
     </div>
   );
-};
+});
+CountdownTimer.displayName = "CountdownTimer";
 
 const DailyDeals = () => {
+  const navigate = useNavigate();
   const { data: deals, isLoading } = useQuery({
     queryKey: ["daily-deals"],
     queryFn: async () => {
@@ -82,7 +84,7 @@ const DailyDeals = () => {
             Limited Time
           </span>
         </div>
-        <Button variant="ghost" size="sm" className="text-secondary hover:text-secondary/80">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/deals")} className="text-secondary hover:text-secondary/80">
           View All →
         </Button>
       </div>

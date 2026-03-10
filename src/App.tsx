@@ -22,6 +22,7 @@ import TrackOrder from "./pages/TrackOrder";
 import NotFound from "./pages/NotFound";
 import SitemapRedirect from "./pages/SitemapRedirect";
 import PreOrder from "./pages/PreOrder";
+import DealsPage from "./pages/DealsPage";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/contact" element={<StaticPage />} />
               <Route path="/track-order" element={<TrackOrder />} />
               <Route path="/pre-order" element={<PreOrder />} />
+              <Route path="/deals" element={<DealsPage />} />
               <Route path="/sitemap.xml" element={<SitemapRedirect />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
