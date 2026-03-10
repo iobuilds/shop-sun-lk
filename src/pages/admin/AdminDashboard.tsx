@@ -564,7 +564,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   const selectedList = selectedPhones.split(",").map(p => p.trim()).filter(Boolean);
 
-  const filteredUsers = useMemo(() => {
+  const filteredPickerUsers = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
     const term = searchTerm.toLowerCase();
     return (allProfiles || [])
