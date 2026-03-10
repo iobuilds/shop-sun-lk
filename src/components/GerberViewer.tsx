@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Layers, Loader2, AlertCircle, RotateCcw, Maximize2, Box } from "lucide-react";
+import { Layers, Loader2, AlertCircle, RotateCcw, Box, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Gerber layer extension to semantic role mapping
-const LAYER_ROLE: Record<string, keyof typeof ROLE_KEYS | null> = {
+// Extension → semantic role
+const LAYER_ROLE: Record<string, string> = {
   ".gtl": "top_copper",
   ".gts": "top_mask",
   ".gto": "top_silk",
@@ -12,29 +12,20 @@ const LAYER_ROLE: Record<string, keyof typeof ROLE_KEYS | null> = {
   ".gbo": "btm_silk",
   ".gko": "outline",
   ".gm1": "outline",
+  ".gm2": "outline",
   ".drl": "drill",
   ".xln": "drill",
   ".exc": "drill",
   ".txt": "drill",
-  ".g1": "top_copper",
-  ".g2": "btm_copper",
   ".gbr": "top_copper",
   ".ger": "top_copper",
+  ".g1":  "top_copper",
+  ".g2":  "btm_copper",
+  ".g3":  "top_copper",
+  ".g4":  "btm_copper",
 };
 
-const ROLE_KEYS = {
-  top_copper: true,
-  top_mask: true,
-  top_silk: true,
-  btm_copper: true,
-  btm_mask: true,
-  btm_silk: true,
-  outline: true,
-  drill: true,
-};
-
-type LayerRole = keyof typeof ROLE_KEYS;
-type LayerMap = Partial<Record<LayerRole, string>>;
+type LayerMap = Record<string, string>;
 
 interface GerberViewerProps {
   file: File;
@@ -47,26 +38,38 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
 
   for (const [filename, zipEntry] of Object.entries(zip.files)) {
     if (zipEntry.dir) continue;
-    const ext = "." + filename.split(".").pop()?.toLowerCase();
+    const cleanName = filename.split("/").pop() || filename;
+    const ext = "." + cleanName.split(".").pop()?.toLowerCase();
     const role = LAYER_ROLE[ext];
     if (!role) continue;
-    // Don't overwrite already found preferred layers
+    // Don't overwrite already-found layer for this role
     if (layers[role]) continue;
     try {
       const content = await zipEntry.async("string");
-      layers[role] = content;
+      // Basic sanity check: gerber files start with % or G
+      if (content.trim().length > 10) {
+        layers[role] = content;
+      }
     } catch {
-      // skip binary
+      // skip binary/unreadable files
     }
   }
   return layers;
 }
 
-async function buildMesh(gerberString: string, color: any, isOutline = false) {
-  const { parse, plot, renderThree } = await import("web-gerber");
-  const parsed = parse(gerberString);
-  const plotted = plot(parsed, isOutline);
-  return renderThree(plotted, color, undefined, false);
+// Safe mesh builder — never throws, returns null on failure
+async function safeBuildMesh(gerberString: string, color: any, isOutline = false): Promise<any> {
+  try {
+    const { parse, plot, renderThree } = await import("web-gerber");
+    const parsed = parse(gerberString);
+    const plotted = plot(parsed, isOutline);
+    const mesh = renderThree(plotted, color, undefined, false);
+    // Validate mesh is a real Three.js object with scale
+    if (!mesh || typeof mesh !== "object" || !("scale" in mesh)) return null;
+    return mesh;
+  } catch {
+    return null;
+  }
 }
 
 export default function GerberViewer({ file }: GerberViewerProps) {
@@ -75,22 +78,35 @@ export default function GerberViewer({ file }: GerberViewerProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [layerCount, setLayerCount] = useState(0);
+  const [meshCount, setMeshCount] = useState(0);
+
+  const destroyRenderer = useCallback(() => {
+    if (rendererRef.current) {
+      try { (rendererRef.current as any).Renderer?.dispose?.(); } catch {}
+      rendererRef.current = null;
+    }
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
+  }, []);
 
   const resetCamera = useCallback(() => {
-    (rendererRef.current as any)?.Controls?.reset?.();
+    try {
+      const r = rendererRef.current as any;
+      if (r?.Controls) {
+        r.Controls.reset();
+      } else if (r?.Camera) {
+        r.Camera.position.set(0, 50, 120);
+        r.Camera.lookAt(0, 0, 0);
+      }
+    } catch {}
   }, []);
 
   const initViewer = useCallback(async () => {
     if (!containerRef.current) return;
     setLoading(true);
     setError(null);
-
-    // Destroy old renderer if any
-    if (rendererRef.current) {
-      try { rendererRef.current.Renderer?.dispose?.(); } catch {}
-      rendererRef.current = null;
-      containerRef.current.innerHTML = "";
-    }
+    destroyRenderer();
 
     try {
       const {
@@ -100,7 +116,7 @@ export default function GerberViewer({ file }: GerberViewerProps) {
         defaultColor,
       } = await import("web-gerber");
 
-      // Init Three.js renderer inside our container
+      // Mount Three.js into container div
       const three = NewRenderByElement(containerRef.current, {
         AddAnimationLoop: true,
         AddOrbitControls: true,
@@ -109,7 +125,7 @@ export default function GerberViewer({ file }: GerberViewerProps) {
       });
       rendererRef.current = three;
 
-      // Extract layer content
+      // Parse layers
       let layers: LayerMap = {};
       const ext = "." + file.name.split(".").pop()?.toLowerCase();
 
@@ -117,64 +133,95 @@ export default function GerberViewer({ file }: GerberViewerProps) {
         layers = await extractLayersFromZip(file);
       } else {
         const content = await file.text();
-        const role = (LAYER_ROLE[ext] ?? "top_copper") as LayerRole;
+        const role = LAYER_ROLE[ext] ?? "top_copper";
         layers[role] = content;
       }
 
-      const count = Object.keys(layers).length;
-      setLayerCount(count);
+      const foundRoles = Object.keys(layers);
+      setLayerCount(foundRoles.length);
 
-      if (count === 0) {
-        setError("No recognizable Gerber layers found in the file.");
+      if (foundRoles.length === 0) {
+        setError("No Gerber layers found. Please upload a valid ZIP with Gerber files.");
         setLoading(false);
         return;
       }
 
-      // Build meshes for each found layer in parallel
+      // Build all meshes concurrently, safely
       const [
-        top_copper_mesh,
-        top_mask_mesh,
-        top_silk_mesh,
-        btm_copper_mesh,
-        btm_mask_mesh,
-        btm_silk_mesh,
-        outline_mesh,
-        drill_mesh,
+        top_copper, top_mask, top_silk,
+        btm_copper, btm_mask, btm_silk,
+        outline, drill,
       ] = await Promise.all([
-        layers.top_copper ? buildMesh(layers.top_copper, defaultColor.Copper) : Promise.resolve(null),
-        layers.top_mask   ? buildMesh(layers.top_mask,   defaultColor.SolderMask) : Promise.resolve(null),
-        layers.top_silk   ? buildMesh(layers.top_silk,   defaultColor.Silkscreen) : Promise.resolve(null),
-        layers.btm_copper ? buildMesh(layers.btm_copper, defaultColor.Copper) : Promise.resolve(null),
-        layers.btm_mask   ? buildMesh(layers.btm_mask,   defaultColor.SolderMask) : Promise.resolve(null),
-        layers.btm_silk   ? buildMesh(layers.btm_silk,   defaultColor.Silkscreen) : Promise.resolve(null),
-        layers.outline    ? buildMesh(layers.outline,    defaultColor.BaseBoard, true) : Promise.resolve(null),
-        layers.drill      ? buildMesh(layers.drill,      defaultColor.Drill) : Promise.resolve(null),
+        safeBuildMesh(layers.top_copper ?? "", defaultColor.Copper),
+        safeBuildMesh(layers.top_mask   ?? "", defaultColor.SolderMask),
+        safeBuildMesh(layers.top_silk   ?? "", defaultColor.Silkscreen),
+        safeBuildMesh(layers.btm_copper ?? "", defaultColor.Copper),
+        safeBuildMesh(layers.btm_mask   ?? "", defaultColor.SolderMask),
+        safeBuildMesh(layers.btm_silk   ?? "", defaultColor.Silkscreen),
+        safeBuildMesh(layers.outline    ?? "", defaultColor.BaseBoard, true),
+        safeBuildMesh(layers.drill      ?? "", defaultColor.Drill),
       ]);
 
-      // Assemble PCB structure — only include non-null meshes
-      const pcb_struct: any = {
-        Top: {
-          ...(top_copper_mesh ? { Copper: top_copper_mesh } : {}),
-          ...(top_mask_mesh   ? { SolidMask: top_mask_mesh } : {}),
-          ...(top_silk_mesh   ? { Silkscreen: top_silk_mesh } : {}),
-        },
-        Btm: {
-          ...(btm_copper_mesh ? { Copper: btm_copper_mesh } : {}),
-          ...(btm_mask_mesh   ? { SolidMask: btm_mask_mesh } : {}),
-          ...(btm_silk_mesh   ? { Silkscreen: btm_silk_mesh } : {}),
-        },
-        ...(outline_mesh ? { Outline: outline_mesh } : {}),
-        ...(drill_mesh   ? { Drill: drill_mesh } : {}),
-      };
+      // Count valid meshes
+      const validMeshes = [top_copper, top_mask, top_silk, btm_copper, btm_mask, btm_silk, outline, drill].filter(Boolean);
+      setMeshCount(validMeshes.length);
 
-      assemblyPCBToThreeJS(three.Scene, pcb_struct, DefaultLaminar);
+      if (validMeshes.length === 0) {
+        setError("No renderable layers found. The Gerber data may be empty or unsupported.");
+        setLoading(false);
+        return;
+      }
 
-      // Position camera nicely
+      // Build Top/Btm only if they have at least one valid mesh
+      const topLayers: Record<string, any> = {};
+      if (top_copper) topLayers.Copper = top_copper;
+      if (top_mask)   topLayers.SolidMask = top_mask;
+      if (top_silk)   topLayers.Silkscreen = top_silk;
+
+      const btmLayers: Record<string, any> = {};
+      if (btm_copper) btmLayers.Copper = btm_copper;
+      if (btm_mask)   btmLayers.SolidMask = btm_mask;
+      if (btm_silk)   btmLayers.Silkscreen = btm_silk;
+
+      const hasTop = Object.keys(topLayers).length > 0;
+      const hasBtm = Object.keys(btmLayers).length > 0;
+
+      if (outline) {
+        // Full assembly with outline (best result)
+        const pcb_struct: any = {
+          ...(hasTop ? { Top: topLayers } : {}),
+          ...(hasBtm ? { Btm: btmLayers } : {}),
+          Outline: outline,
+          ...(drill ? { Drill: drill } : {}),
+        };
+        assemblyPCBToThreeJS(three.Scene, pcb_struct, DefaultLaminar);
+      } else {
+        // No outline — add meshes directly to scene with manual z-offsets
+        let z = 0;
+        const step = 0.2;
+        const addToScene = (mesh: any) => {
+          if (!mesh) return;
+          mesh.position.z = z;
+          z += step;
+          three.Scene.add(mesh);
+        };
+        [btm_copper, btm_mask, btm_silk, top_copper, top_mask, top_silk, drill].forEach(addToScene);
+      }
+
+      // Auto-fit camera
       try {
         const THREE = await import("three");
-        three.Camera.position.set(0, 0, 80);
-        three.Camera.lookAt(new THREE.Vector3(0, 0, 0));
-        (three as any).Controls?.update?.();
+        const box = new THREE.Box3().setFromObject(three.Scene);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const dist = maxDim * 1.8;
+        three.Camera.position.set(center.x, center.y + dist * 0.4, center.z + dist);
+        three.Camera.lookAt(center);
+        if ((three as any).Controls) {
+          (three as any).Controls.target.copy(center);
+          (three as any).Controls.update();
+        }
       } catch {}
 
       setLoading(false);
@@ -183,17 +230,12 @@ export default function GerberViewer({ file }: GerberViewerProps) {
       setError("Could not render 3D PCB preview. The file may be corrupt or unsupported.");
       setLoading(false);
     }
-  }, [file]);
+  }, [file, destroyRenderer]);
 
   useEffect(() => {
     initViewer();
-    return () => {
-      if (rendererRef.current) {
-        try { rendererRef.current.Renderer?.dispose?.(); } catch {}
-        rendererRef.current = null;
-      }
-    };
-  }, [initViewer]);
+    return destroyRenderer;
+  }, [initViewer, destroyRenderer]);
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card">
@@ -203,8 +245,13 @@ export default function GerberViewer({ file }: GerberViewerProps) {
           <Box className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">3D PCB Preview</span>
           {layerCount > 0 && (
-            <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+            <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
               {layerCount} layer{layerCount !== 1 ? "s" : ""}
+            </span>
+          )}
+          {meshCount > 0 && (
+            <span className="text-xs text-muted-foreground">
+              · {meshCount} rendered
             </span>
           )}
         </div>
@@ -212,30 +259,30 @@ export default function GerberViewer({ file }: GerberViewerProps) {
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={resetCamera} title="Reset camera">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={initViewer} title="Reload">
-            <Maximize2 className="w-3.5 h-3.5" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={initViewer} title="Reload viewer">
+            <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
       {/* 3D Viewport */}
-      <div className="relative" style={{ height: 360, background: "#0d1117" }}>
-        {/* Three.js mounts here */}
+      <div className="relative" style={{ height: 380, background: "#0d1117" }}>
         <div ref={containerRef} className="absolute inset-0 w-full h-full" />
 
-        {/* Loading overlay */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0d1117]/90 z-10">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0d1117]/95 z-10">
             <Loader2 className="w-6 h-6 text-primary animate-spin" />
             <p className="text-xs text-muted-foreground">Rendering 3D PCB...</p>
           </div>
         )}
 
-        {/* Error overlay */}
         {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 bg-[#0d1117]/90 z-10">
-            <AlertCircle className="w-6 h-6 text-destructive" />
-            <p className="text-xs text-destructive text-center">{error}</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 bg-[#0d1117]/95 z-10">
+            <AlertCircle className="w-7 h-7 text-destructive" />
+            <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
+            <Button size="sm" variant="outline" className="text-xs h-7" onClick={initViewer}>
+              <RefreshCw className="w-3 h-3 mr-1" /> Retry
+            </Button>
           </div>
         )}
       </div>
