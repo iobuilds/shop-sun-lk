@@ -149,7 +149,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const handler = (e: any) => {
       const { lcsc, mpn } = e.detail || {};
-      const partToFetch = lcsc || mpn || "";
+      const partToFetch = parseLcscInput(lcsc || mpn || "");
       setLcscPartNumber(partToFetch);
       setProductDialog(true);
       setEditingProductId(null);
@@ -181,12 +181,25 @@ const AdminDashboard = () => {
     return () => window.removeEventListener("openAddProductFromQR", handler);
   }, []);
 
+  /** Extract C-number from a full LCSC URL or return the raw input as-is */
+  const parseLcscInput = (raw: string): string => {
+    const trimmed = raw.trim();
+    // Support: https://www.lcsc.com/product-detail/C17932.html  or  .../C17932_...html
+    const urlMatch = trimmed.match(/\/(?:product-detail\/)?([Cc]\d+)/i);
+    if (urlMatch) return urlMatch[1].toUpperCase();
+    // Support: plain C-number like C17932
+    return trimmed.toUpperCase();
+  };
+
   const fetchFromLcsc = async () => {
     if (!lcscPartNumber.trim()) return;
     setLcscLoading(true);
+    const partNumber = parseLcscInput(lcscPartNumber);
+    // Update the input field to show the extracted part number
+    if (partNumber !== lcscPartNumber.trim()) setLcscPartNumber(partNumber);
     try {
       const { data, error } = await supabase.functions.invoke("lcsc-import", {
-        body: { partNumber: lcscPartNumber.trim() },
+        body: { partNumber },
       });
       if (error || !data?.success) {
         toast({ title: "LCSC fetch failed", description: data?.error || error?.message || "Part not found", variant: "destructive" });
@@ -1978,15 +1991,15 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <p className="font-semibold text-foreground text-sm flex items-center gap-2">
                     <ExternalLink className="w-4 h-4 text-secondary" /> LCSC Auto-Import
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Enter an LCSC part number to instantly import component data — name, SKU, datasheet, specs & images.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Enter a part number (C93216) or paste a full LCSC product URL to instantly import component data.</p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                   <Input
-                    placeholder="e.g. C93216"
+                    placeholder="C93216 or lcsc.com/…/C93216.html"
                     value={lcscPartNumber}
-                    onChange={(e) => setLcscPartNumber(e.target.value.trim())}
+                    onChange={(e) => setLcscPartNumber(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { openAddMicroProduct(); } }}
-                    className="w-40"
+                    className="w-56 text-xs"
                   />
                   <Button
                     variant="secondary"
@@ -3846,11 +3859,11 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                 </div>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="LCSC Part No. (e.g. C93216)"
+                    placeholder="C93216  or  lcsc.com/product-detail/C93216.html"
                     value={lcscPartNumber}
-                    onChange={(e) => setLcscPartNumber(e.target.value.trim())}
+                    onChange={(e) => setLcscPartNumber(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
-                    className="flex-1"
+                    className="flex-1 text-xs"
                   />
                   <Button
                     type="button"
@@ -3863,7 +3876,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     {lcscLoading ? "Fetching..." : "Fetch from LCSC"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Enter the exact LCSC part number to auto-fill name, SKU, description & datasheet. Then set price & stock.</p>
+                <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs. Then set price & stock.</p>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

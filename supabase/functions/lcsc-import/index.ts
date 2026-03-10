@@ -18,7 +18,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    const cleanPart = partNumber.trim().toUpperCase();
+    // Support full LCSC URLs: https://www.lcsc.com/product-detail/C17932.html
+    // or https://www.lcsc.com/product-detail/LM358_xxx_C17932.html
+    let cleanPart = partNumber.trim();
+    const urlMatch = cleanPart.match(/\/(?:product-detail\/)?([Cc]\d+)/i);
+    if (urlMatch) {
+      cleanPart = urlMatch[1];
+    }
+    cleanPart = cleanPart.toUpperCase();
 
     // Use LCSC's product detail API for exact part lookup
     const detailUrl = `https://wmsc.lcsc.com/ftps/wanna/search/part?searchContent=${encodeURIComponent(cleanPart)}&currentPage=1&pageSize=20`;

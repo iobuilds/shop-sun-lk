@@ -175,17 +175,48 @@ export default function QRStockScanner() {
     setLookingUp(true);
     setMatchedProduct(null);
     try {
-      // Try matching by SKU (lcsc part number or mpn)
-      let { data } = await supabase
-        .from("products")
-        .select("*, categories(name)")
-        .or(`sku.ilike.${lcsc},sku.ilike.${mpn}`)
-        .maybeSingle();
-      if (!data && lcsc) {
-        const r = await supabase.from("products").select("*, categories(name)").ilike("sku", `%${lcsc}%`).maybeSingle();
-        data = r.data;
+      // First: try exact SKU match in micro-electronics category (LCSC C-number priority)
+      // The LCSC pc field (e.g. C5381776) is stored as SKU in micro-electronics products
+      if (lcsc) {
+        const { data: catData } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("slug", "micro-electronics")
+          .maybeSingle();
+
+        if (catData?.id) {
+          // Exact match first
+          const { data: exactMatch } = await supabase
+            .from("products")
+            .select("*, categories(name)")
+            .eq("category_id", catData.id)
+            .ilike("sku", lcsc)
+            .maybeSingle();
+          if (exactMatch) { setMatchedProduct(exactMatch); return; }
+
+          // Partial match (sku contains the C-number)
+          const { data: partialMatch } = await supabase
+            .from("products")
+            .select("*, categories(name)")
+            .eq("category_id", catData.id)
+            .ilike("sku", `%${lcsc}%`)
+            .maybeSingle();
+          if (partialMatch) { setMatchedProduct(partialMatch); return; }
+        }
       }
-      setMatchedProduct(data || "not_found");
+
+      // Fallback: search all products by SKU or MPN across all categories
+      if (lcsc || mpn) {
+        const orParts = [lcsc && `sku.ilike.${lcsc}`, mpn && `sku.ilike.${mpn}`].filter(Boolean).join(",");
+        const { data: fallback } = await supabase
+          .from("products")
+          .select("*, categories(name)")
+          .or(orParts)
+          .maybeSingle();
+        if (fallback) { setMatchedProduct(fallback); return; }
+      }
+
+      setMatchedProduct("not_found");
     } finally {
       setLookingUp(false);
     }
