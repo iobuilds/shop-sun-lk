@@ -22,6 +22,7 @@ import TrackOrder from "./pages/TrackOrder";
 import NotFound from "./pages/NotFound";
 import SitemapRedirect from "./pages/SitemapRedirect";
 import PreOrder from "./pages/PreOrder";
+import DealsPage from "./pages/DealsPage";
 
 const queryClient = new QueryClient();
 
