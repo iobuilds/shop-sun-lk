@@ -231,7 +231,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       scene.add(board);
 
       // Copper edge strip (gold rim)
-      const edgeGeo = new THREE.BoxGeometry(boardW + 0.2, boardDepth + 0.1, boardH + 0.2);
+      const edgeGeo = new (THREE as any).BoxGeometry(boardW + 0.2, boardDepth + 0.1, boardH + 0.2);
       const edgeMat = new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.7, transparent: true, opacity: 0.15 });
       const edge = new THREE.Mesh(edgeGeo, edgeMat);
       edge.rotation.x = board.rotation.x;
