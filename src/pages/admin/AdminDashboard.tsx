@@ -26,6 +26,7 @@ import NavbarManager from "@/components/admin/NavbarManager";
 import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
 import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager";
 import QRStockScanner from "@/components/admin/QRStockScanner";
+import AdminPreOrders from "@/components/admin/AdminPreOrders";
 
 type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders";
 
