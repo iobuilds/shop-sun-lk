@@ -3147,7 +3147,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Basic Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div><Label>Store / Company Name</Label><Input value={companyForm.store_name || ""} onChange={(e) => setCompanyForm({ ...companyForm, store_name: e.target.value })} placeholder="TechLK" /></div>
+                      <div><Label>Store / Company Name</Label><Input value={companyForm.store_name || ""} onChange={(e) => setCompanyForm({ ...companyForm, store_name: e.target.value })} placeholder="NanoCircuit.lk" /></div>
                       <div><Label>Tagline</Label><Input value={companyForm.tagline || ""} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
                     </div>
                     <div><Label>Short Description</Label><Textarea value={companyForm.description || ""} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} rows={2} placeholder="Brief description shown in footer" /></div>
