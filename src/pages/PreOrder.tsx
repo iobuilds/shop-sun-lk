@@ -771,6 +771,24 @@ export default function PreOrder() {
                                     </a>
                                   )}
                                 </div>
+                              ) : req.arrival_payment_status === "unpaid" && req.arrival_slip_url ? (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-xs text-destructive font-medium flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Slip rejected — please re-upload</p>
+                                  {canPayArrival && (
+                                    <div className="flex gap-2">
+                                      {stripeEnabled && (
+                                        <Button size="sm" className="gap-1 text-xs h-7" onClick={() => handleStripePayment(req.id, "arrival")} disabled={payingId === req.id}>
+                                          <CreditCard className="w-3 h-3" /> Pay with Card
+                                        </Button>
+                                      )}
+                                      {bankEnabled && (
+                                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => openBankTransfer(req.id, "arrival", arrivalChargesTotal)}>
+                                          <Building className="w-3 h-3" /> Re-upload Slip
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               ) : canPayArrival && (
                                 <div className="flex gap-2 mt-2">
                                   {stripeEnabled && (
