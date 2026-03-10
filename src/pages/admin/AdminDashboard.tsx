@@ -3185,7 +3185,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       <div><Label>Phone</Label><Input value={companyForm.phone || ""} onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })} placeholder="+94 77 123 4567" /></div>
                       <div><Label>WhatsApp</Label><Input value={companyForm.whatsapp || ""} onChange={(e) => setCompanyForm({ ...companyForm, whatsapp: e.target.value })} placeholder="+94771234567" /></div>
                     </div>
-                    <div><Label>Email</Label><Input value={companyForm.email || ""} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@techlk.lk" /></div>
+                    <div><Label>Email</Label><Input value={companyForm.email || ""} onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })} placeholder="info@nanocircuit.lk" /></div>
                     <div><Label>Business Hours</Label><Textarea value={companyForm.business_hours || ""} onChange={(e) => setCompanyForm({ ...companyForm, business_hours: e.target.value })} rows={3} placeholder={"Mon-Fri: 9AM-6PM\nSat: 9AM-2PM\nSun: Closed"} /></div>
                   </div>
 
