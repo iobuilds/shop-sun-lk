@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle, FileDown, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,8 @@ import { useQuery } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",  color: "text-yellow-600 bg-yellow-50 border-yellow-200",    icon: Clock },
