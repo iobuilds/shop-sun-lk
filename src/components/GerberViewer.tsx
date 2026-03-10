@@ -335,7 +335,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
           const yPos = layerDef.yMul * GAP;
           const color = layerDef.color ?? maskHex;
 
-          let mat: THREE.MeshStandardMaterial;
+          let mat: any;
 
           if (gerberStr) {
             const traceCol = layerDef.color ?? "#d4a84b";
