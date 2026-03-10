@@ -1991,15 +1991,15 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <p className="font-semibold text-foreground text-sm flex items-center gap-2">
                     <ExternalLink className="w-4 h-4 text-secondary" /> LCSC Auto-Import
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Enter an LCSC part number to instantly import component data — name, SKU, datasheet, specs & images.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Enter a part number (C93216) or paste a full LCSC product URL to instantly import component data.</p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                   <Input
-                    placeholder="e.g. C93216"
+                    placeholder="C93216 or lcsc.com/…/C93216.html"
                     value={lcscPartNumber}
-                    onChange={(e) => setLcscPartNumber(e.target.value.trim())}
+                    onChange={(e) => setLcscPartNumber(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { openAddMicroProduct(); } }}
-                    className="w-40"
+                    className="w-56 text-xs"
                   />
                   <Button
                     variant="secondary"
