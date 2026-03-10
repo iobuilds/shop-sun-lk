@@ -962,6 +962,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     setLcscFailedLcscNum("");
     setProductDialog(true);
   };
+  const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
     const imgs = p.images || [];
     setProductImagePreviews(imgs);
