@@ -487,20 +487,32 @@ export default function PreOrder() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {myRequests.map((req: any) => {
-                      const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
-                      const Icon = s.icon;
-                      return (
-                        <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
-                          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
-                              <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
-                                <Icon className="w-3 h-3" /> {s.label}
-                              </span>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
-                          </div>
+                     {myRequests.map((req: any) => {
+                       const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
+                       const Icon = s.icon;
+                       const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+                       const hasQuote = req.unit_cost_total > 0 || req.shipping_fee > 0 || req.tax_amount > 0;
+                       return (
+                         <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
+                           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                             <div className="flex items-center gap-2">
+                               <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
+                               <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
+                                 <Icon className="w-3 h-3" /> {s.label}
+                               </span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               {isQuoted && hasQuote && (
+                                 <button
+                                   onClick={() => generateUserPreOrderPDF(req)}
+                                   className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                                 >
+                                   <FileDown className="w-3 h-3" /> Download Quote
+                                 </button>
+                               )}
+                               <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
+                             </div>
+                           </div>
                           <div className="px-4 py-3 space-y-1.5">
                             {req.preorder_items?.map((it: any) => (
                               <div key={it.id} className="flex items-center justify-between text-sm">
