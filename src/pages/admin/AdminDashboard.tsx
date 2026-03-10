@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,8 +26,9 @@ import NavbarManager from "@/components/admin/NavbarManager";
 import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
 import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager";
 import QRStockScanner from "@/components/admin/QRStockScanner";
+import AdminPreOrders from "@/components/admin/AdminPreOrders";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -537,7 +538,21 @@ const AdminDashboard = () => {
 
   const unreadContacts = contactMessages?.filter((m: any) => !m.is_read).length || 0;
 
-// Searchable user picker for coupon assignments
+  // Pre-orders query
+  const { data: preorderRequests, refetch: refetchPreorders } = useQuery({
+    queryKey: ["admin-preorders"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("preorder_requests")
+        .select("*, preorder_items(*), profiles!inner(full_name, phone)")
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
+    enabled: isAdmin || isModerator,
+  });
+  const pendingPreorderCount = preorderRequests?.filter((r: any) => r.status === "pending").length || 0;
+
+
 const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   allProfiles: any[];
   selectedPhones: string;
@@ -677,6 +692,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       label: "Customer Support", icon: MessageSquare, defaultOpen: true, adminOnly: false,
       items: [
         { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
+        { id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount },
       ],
     },
     {
@@ -3733,6 +3749,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {tab === "qr_scan" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <QRStockScanner />
+            </motion.div>
+          )}
+
+          {/* ═══ Pre-Orders Tab ═══ */}
+          {tab === "preorders" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <AdminPreOrders
+                requests={preorderRequests || []}
+                onRefresh={refetchPreorders}
+                allProfiles={allProfiles || []}
+              />
             </motion.div>
           )}
 

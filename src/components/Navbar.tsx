@@ -299,11 +299,18 @@ const Navbar = () => {
             {config.show_daily_deals && (
               <Link
                 to="/daily-deals"
-                className="ml-auto px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
+                className="px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1"
               >
                 🔥 Daily Deals
               </Link>
             )}
+            {/* Pre-Order link */}
+            <Link
+              to="/pre-order"
+              className="ml-1 px-3 py-1.5 text-sm font-semibold text-secondary-foreground bg-secondary hover:bg-secondary/90 transition-colors rounded-md flex items-center gap-1"
+            >
+              📦 Pre-Order
+            </Link>
           </nav>
         </div>
       </div>
