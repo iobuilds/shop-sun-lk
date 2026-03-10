@@ -142,10 +142,10 @@ export default function GerberViewer({ file }: GerberViewerProps) {
         drill_mesh,
       ] = await Promise.all([
         layers.top_copper ? buildMesh(layers.top_copper, defaultColor.Copper) : Promise.resolve(null),
-        layers.top_mask   ? buildMesh(layers.top_mask,   defaultColor.SoldMask) : Promise.resolve(null),
+        layers.top_mask   ? buildMesh(layers.top_mask,   defaultColor.SolderMask) : Promise.resolve(null),
         layers.top_silk   ? buildMesh(layers.top_silk,   defaultColor.Silkscreen) : Promise.resolve(null),
         layers.btm_copper ? buildMesh(layers.btm_copper, defaultColor.Copper) : Promise.resolve(null),
-        layers.btm_mask   ? buildMesh(layers.btm_mask,   defaultColor.SoldMask) : Promise.resolve(null),
+        layers.btm_mask   ? buildMesh(layers.btm_mask,   defaultColor.SolderMask) : Promise.resolve(null),
         layers.btm_silk   ? buildMesh(layers.btm_silk,   defaultColor.Silkscreen) : Promise.resolve(null),
         layers.outline    ? buildMesh(layers.outline,    defaultColor.BaseBoard, true) : Promise.resolve(null),
         layers.drill      ? buildMesh(layers.drill,      defaultColor.Drill) : Promise.resolve(null),
