@@ -3883,7 +3883,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             </div>
             {/* LCSC Auto-Import — only for Micro Electronics category */}
             {!editingProductId && categories?.find(c => c.id === productForm.category_id && c.name.toLowerCase().includes("micro")) && (
-              <div className="border border-secondary/40 rounded-lg p-3 bg-secondary/5 space-y-2">
+              <div className={`border rounded-lg p-3 space-y-2 ${lcscFailed ? "border-destructive/50 bg-destructive/5" : "border-secondary/40 bg-secondary/5"}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
                   <ExternalLink className="w-4 h-4" />
                   LCSC Auto-Import
@@ -3892,7 +3892,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <Input
                     placeholder="C93216  or  lcsc.com/product-detail/C93216.html"
                     value={lcscPartNumber}
-                    onChange={(e) => setLcscPartNumber(e.target.value)}
+                    onChange={(e) => { setLcscPartNumber(e.target.value); setLcscFailed(false); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
                     className="flex-1 text-xs"
                   />
@@ -3907,7 +3907,51 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     {lcscLoading ? "Fetching..." : "Fetch from LCSC"}
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs. Then set price & stock.</p>
+                {!lcscFailed && (
+                  <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs. Then set price & stock.</p>
+                )}
+
+                {/* Manual fallback — shown when LCSC fetch fails */}
+                {lcscFailed && (
+                  <div className="space-y-2 pt-1 border-t border-destructive/20">
+                    <p className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                      <X className="w-3.5 h-3.5" /> Part not found on LCSC — fill in manually:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">LCSC Part Number (C‑number)</Label>
+                        <Input
+                          placeholder="e.g. C5381776"
+                          value={lcscFailedLcscNum}
+                          onChange={(e) => {
+                            setLcscFailedLcscNum(e.target.value);
+                            setProductForm((prev) => ({ ...prev, sku: e.target.value }));
+                          }}
+                          className="text-xs h-8 font-mono"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">MPN (Manufacturer Part Number)</Label>
+                        <Input
+                          placeholder="e.g. TP4054"
+                          value={lcscFailedMpn}
+                          onChange={(e) => {
+                            setLcscFailedMpn(e.target.value);
+                            setProductForm((prev) => ({
+                              ...prev,
+                              name: e.target.value || prev.name,
+                              slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || prev.slug,
+                            }));
+                          }}
+                          className="text-xs h-8 font-mono"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      LCSC number will be saved as SKU. Fill in the product name, description and other fields below.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
