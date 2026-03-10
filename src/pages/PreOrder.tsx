@@ -674,8 +674,18 @@ export default function PreOrder() {
                                 </span>
                               )}
                               {req.payment_status === "paid" && (
-                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-100 text-green-800">
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-50 text-green-700">
                                   <CheckCircle className="w-3 h-3" /> Paid
+                                </span>
+                              )}
+                              {req.payment_status === "under_review" && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">
+                                  <Clock className="w-3 h-3" /> Payment Under Review
+                                </span>
+                              )}
+                              {req.arrival_payment_status === "under_review" && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">
+                                  <Clock className="w-3 h-3" /> Arrival Payment Under Review
                                 </span>
                               )}
                             </div>
