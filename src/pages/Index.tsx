@@ -135,9 +135,7 @@ const Index = () => {
             },
             {
               "@type": "Organization",
-              name: "TechLK",
-              url: window.location.origin,
-              logo: `${window.location.origin}/favicon.ico`,
+              name: "NanoCircuit.lk",
             },
           ],
         }}
