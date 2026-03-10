@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle, FileDown, Store } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Trash2, Send, Package, ExternalLink, Clock, CheckCircle, XCircle, Truck, Search, ChevronRight, MessageSquare, ShoppingBag, Info, AlertCircle, FileDown, Store, CreditCard, RefreshCcw, AlertTriangle, Building } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
@@ -50,8 +50,14 @@ const generateUserPreOrderPDF = (req: any) => {
   doc.text(`Quote #: PO-${shortId}`, 145, 33);
   doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
 
+  if (req.quoted_at) {
+    doc.setTextColor(200, 50, 50);
+    doc.text("* Valid for 48 hours from issue date", 145, 45);
+    doc.setTextColor(80, 80, 80);
+  }
+
   doc.setDrawColor(220, 220, 220);
-  doc.line(20, 46, 190, 46);
+  doc.line(20, 50, 190, 50);
 
   const tableData = (req.preorder_items || []).map((it: any, i: number) => [
     String(i + 1),
@@ -62,7 +68,7 @@ const generateUserPreOrderPDF = (req: any) => {
   ]);
 
   autoTable(doc, {
-    startY: 54,
+    startY: 58,
     head: [["#", "Item", "Qty", "Unit Price", "Subtotal"]],
     body: tableData,
     theme: "grid",
@@ -87,13 +93,17 @@ const generateUserPreOrderPDF = (req: any) => {
   doc.setFont("helvetica", "normal");
 
   const unitTotal = Number(req.unit_cost_total) || 0;
-  const shipping = Number(req.shipping_fee) || 0;
-  const tax = Number(req.tax_amount) || 0;
-  const grand = unitTotal + shipping + tax;
+  const shipping = Number(req.shipping_fee);
+  const tax = Number(req.tax_amount);
+  const shippingTBA = shipping === -1;
+  const taxTBA = tax === -1;
+  const grand = unitTotal + (shippingTBA ? 0 : Math.max(0, shipping)) + (taxTBA ? 0 : Math.max(0, tax));
 
   if (unitTotal > 0) { doc.text("Items Total:", xL, sY); doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
-  if (shipping > 0) { doc.text("Shipping Fee:", xL, sY); doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
-  if (tax > 0) { doc.text("Tax / Custom Duty:", xL, sY); doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  if (!shippingTBA && shipping > 0) { doc.text("Shipping Fee:", xL, sY); doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  else if (shippingTBA) { doc.text("Shipping Fee:", xL, sY); doc.text("Price after arrival", xV, sY, { align: "right" }); sY += 6; }
+  if (!taxTBA && tax > 0) { doc.text("Tax / Custom Duty:", xL, sY); doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  else if (taxTBA) { doc.text("Tax / Custom Duty:", xL, sY); doc.text("Price after arrival", xV, sY, { align: "right" }); sY += 6; }
 
   doc.setDrawColor(200, 200, 200);
   doc.line(xL, sY - 2, xV, sY - 2);
@@ -101,7 +111,7 @@ const generateUserPreOrderPDF = (req: any) => {
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.text("Grand Total:", xL, sY + 3);
-  doc.text(`Rs. ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+  doc.text(`Rs. ${grand.toLocaleString()}${(shippingTBA || taxTBA) ? " + TBA" : ""}`, xV, sY + 3, { align: "right" });
 
   if (req.admin_notes) {
     doc.setFontSize(8);
@@ -137,14 +147,18 @@ const emptyItem = (): PreOrderItem => ({
 
 export default function PreOrder() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<any>(null);
-  const [tab, setTab] = useState<"new" | "my">("new");
+  const [tab, setTab] = useState<"new" | "my">(searchParams.get("tab") === "my" ? "my" : "new");
   const [customerNote, setCustomerNote] = useState("");
   const [items, setItems] = useState<PreOrderItem[]>([emptyItem()]);
   const [submitting, setSubmitting] = useState(false);
   const [productSearch, setProductSearch] = useState<Record<number, string>>({});
   const [productSearchOpen, setProductSearchOpen] = useState<Record<number, boolean>>({});
   const [viewRequest, setViewRequest] = useState<any>(null);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [bankTransferDialog, setBankTransferDialog] = useState<{open: boolean; preorderId: string; type: string; amount: number} | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
@@ -152,7 +166,40 @@ export default function PreOrder() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Product search per item
+  // Handle payment success/cancel from Stripe redirect
+  useEffect(() => {
+    const paymentStatus = searchParams.get("payment");
+    const preorderId = searchParams.get("id");
+    const paymentType = searchParams.get("type");
+
+    if (paymentStatus === "success" && preorderId) {
+      // Verify payment
+      const verify = async () => {
+        try {
+          const { data, error } = await supabase.functions.invoke("verify-preorder-payment", {
+            body: { preorder_id: preorderId, payment_type: paymentType || "quote" },
+          });
+          if (data?.status === "paid") {
+            toast({ title: "✅ Payment successful!", description: "Your payment has been confirmed." });
+          } else {
+            toast({ title: "Payment processing", description: "Your payment is being verified." });
+          }
+        } catch (err) {
+          console.error("Payment verification error:", err);
+        }
+        refetchRequests();
+      };
+      verify();
+      setTab("my");
+      // Clean URL
+      window.history.replaceState({}, '', '/pre-order?tab=my');
+    } else if (paymentStatus === "cancel") {
+      toast({ title: "Payment cancelled", variant: "destructive" });
+      window.history.replaceState({}, '', '/pre-order?tab=my');
+      setTab("my");
+    }
+  }, [searchParams]);
+
   const { data: allProducts } = useQuery({
     queryKey: ["preorder-products"],
     queryFn: async () => {
@@ -166,7 +213,6 @@ export default function PreOrder() {
     staleTime: 60000,
   });
 
-  // My requests
   const { data: myRequests, refetch: refetchRequests } = useQuery({
     queryKey: ["my-preorder-requests", session?.user?.id],
     queryFn: async () => {
@@ -180,6 +226,29 @@ export default function PreOrder() {
     },
     enabled: !!session?.user?.id,
   });
+
+  // Fetch bank accounts for bank transfer option
+  const { data: bankAccounts } = useQuery({
+    queryKey: ["bank-accounts-preorder"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "bank_accounts").single();
+      return (data?.value as any)?.accounts || [];
+    },
+    staleTime: 60000,
+  });
+
+  // Fetch payment methods setting
+  const { data: paymentSettings } = useQuery({
+    queryKey: ["payment-settings-preorder"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "payment_methods").single();
+      return data?.value as any || {};
+    },
+    staleTime: 60000,
+  });
+
+  const stripeEnabled = paymentSettings?.stripe !== false;
+  const bankEnabled = paymentSettings?.bank_transfer !== false;
 
   const filteredProducts = (idx: number) => {
     const q = (productSearch[idx] || "").toLowerCase();
@@ -246,13 +315,69 @@ export default function PreOrder() {
     }
   };
 
+  // Check if quote is expired (48hrs)
+  const isQuoteExpired = (req: any) => {
+    if (req.status !== "quoted" || !req.quoted_at) return false;
+    const expiresAt = new Date(req.quoted_at).getTime() + 48 * 60 * 60 * 1000;
+    return Date.now() > expiresAt;
+  };
+
+  const getQuoteTimeLeft = (req: any) => {
+    if (!req.quoted_at) return "";
+    const expiresAt = new Date(req.quoted_at).getTime() + 48 * 60 * 60 * 1000;
+    const diff = expiresAt - Date.now();
+    if (diff <= 0) return "Expired";
+    const hours = Math.floor(diff / (60 * 60 * 1000));
+    const mins = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+    return `${hours}h ${mins}m left`;
+  };
+
+  // Re-request quote (resets to pending)
+  const handleReRequest = async (reqId: string) => {
+    try {
+      const { error } = await supabase.from("preorder_requests").update({
+        status: "pending",
+        payment_status: "unpaid",
+        quoted_at: null,
+      }).eq("id", reqId);
+      if (error) throw error;
+      toast({ title: "Re-request sent", description: "We'll update the quote shortly." });
+      refetchRequests();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  // Pay via Stripe
+  const handleStripePayment = async (preorderId: string, paymentType: "quote" | "arrival") => {
+    setPayingId(preorderId);
+    try {
+      const { data, error } = await supabase.functions.invoke("preorder-checkout", {
+        body: { preorder_id: preorderId, payment_type: paymentType },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      toast({ title: "Payment error", description: err.message, variant: "destructive" });
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  // Open bank transfer dialog
+  const openBankTransfer = (preorderId: string, type: "quote" | "arrival", amount: number) => {
+    setBankTransferDialog({ open: true, preorderId, type, amount });
+  };
+
   return (
     <>
       <SEOHead title="Pre-Order Request | NanoCircuit.lk" description="Request items not in stock. Our team will source them for you." />
       <Navbar />
       <div className="min-h-screen bg-background pt-28 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
-          {/* Header */}
           <div className="mb-8">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
               <Link to="/" className="hover:text-foreground">Home</Link>
@@ -263,7 +388,6 @@ export default function PreOrder() {
             <p className="text-muted-foreground text-sm mt-1">Can't find what you need? Submit a pre-order — we'll source it for you and provide a price quote.</p>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-1 p-1 bg-muted rounded-lg mb-6 w-fit">
             {[
               { id: "new", label: "New Request" },
@@ -292,7 +416,6 @@ export default function PreOrder() {
                 )}
 
                 <div className="space-y-4">
-                  {/* Items */}
                   <div className="border border-border rounded-xl overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 bg-muted/40 border-b border-border">
                       <span className="font-semibold text-sm text-foreground">Items to Pre-Order</span>
@@ -313,7 +436,6 @@ export default function PreOrder() {
                             )}
                           </div>
 
-                          {/* Type toggle */}
                           <div className="flex gap-2">
                             {(["store", "external"] as const).map(t => (
                               <button
@@ -364,11 +486,9 @@ export default function PreOrder() {
                                   ))}
                                 </div>
                               )}
-                              {/* If no store product found, allow manual name */}
                               {item.type === "store" && !item.product_id && (
                                 <p className="text-[11px] text-muted-foreground mt-1">Can't find it? Switch to "External Link" or type the name below.</p>
                               )}
-                              {/* Manual name override if nothing selected */}
                               {!item.product_id && (
                                 <Input
                                   className="mt-2 text-sm h-9"
@@ -442,7 +562,6 @@ export default function PreOrder() {
                     </div>
                   </div>
 
-                  {/* Overall note */}
                   <div>
                     <Label className="text-sm font-medium">Overall Note (optional)</Label>
                     <Textarea
@@ -487,32 +606,52 @@ export default function PreOrder() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                     {myRequests.map((req: any) => {
-                       const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
-                       const Icon = s.icon;
-                       const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
-                       const hasQuote = req.unit_cost_total > 0 || req.shipping_fee > 0 || req.tax_amount > 0;
-                       return (
-                         <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
-                           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                             <div className="flex items-center gap-2">
-                               <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
-                               <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
-                                 <Icon className="w-3 h-3" /> {s.label}
-                               </span>
-                             </div>
-                             <div className="flex items-center gap-2">
-                               {isQuoted && hasQuote && (
-                                 <button
-                                   onClick={() => generateUserPreOrderPDF(req)}
-                                   className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
-                                 >
-                                   <FileDown className="w-3 h-3" /> Download Quote
-                                 </button>
-                               )}
-                               <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
-                             </div>
-                           </div>
+                    {myRequests.map((req: any) => {
+                      const s = STATUS_LABELS[req.status] || STATUS_LABELS.pending;
+                      const Icon = s.icon;
+                      const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+                      const hasQuote = req.unit_cost_total > 0 || req.grand_total > 0;
+                      const expired = isQuoteExpired(req);
+                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.grand_total > 0;
+                      const arrivalChargesTotal = (Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0);
+                      const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid";
+                      const shipping = Number(req.shipping_fee);
+                      const tax = Number(req.tax_amount);
+                      const shippingTBA = shipping === -1;
+                      const taxTBA = tax === -1;
+
+                      return (
+                        <div key={req.id} className="border border-border rounded-xl overflow-hidden bg-card hover:shadow-sm transition-shadow">
+                          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground font-mono">#{req.id.slice(0, 8).toUpperCase()}</span>
+                              <span className={`flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${s.color}`}>
+                                <Icon className="w-3 h-3" /> {s.label}
+                              </span>
+                              {expired && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-destructive/30 bg-destructive/10 text-destructive">
+                                  <AlertTriangle className="w-3 h-3" /> Expired
+                                </span>
+                              )}
+                              {req.payment_status === "paid" && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-100 text-green-800">
+                                  <CheckCircle className="w-3 h-3" /> Paid
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isQuoted && hasQuote && (
+                                <button
+                                  onClick={() => generateUserPreOrderPDF(req)}
+                                  className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                                >
+                                  <FileDown className="w-3 h-3" /> Download Quote
+                                </button>
+                              )}
+                              <span className="text-xs text-muted-foreground">{new Date(req.created_at).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+
                           <div className="px-4 py-3 space-y-1.5">
                             {req.preorder_items?.map((it: any) => (
                               <div key={it.id} className="flex items-center justify-between text-sm">
@@ -530,35 +669,109 @@ export default function PreOrder() {
                               </div>
                             ))}
                           </div>
+
                           {/* Quote section */}
-                          {(req.unit_cost_total > 0 || req.shipping_fee > 0 || req.tax_amount > 0) && (
+                          {hasQuote && (
                             <div className="px-4 pb-3 pt-2 border-t border-border bg-muted/30 space-y-1">
-                              <p className="text-xs font-semibold text-foreground">Quote from Admin</p>
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold text-foreground">Quote from Admin</p>
+                                {req.quoted_at && req.status === "quoted" && !expired && (
+                                  <span className="text-[11px] text-blue-600 flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> {getQuoteTimeLeft(req)}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-xs text-muted-foreground space-y-0.5">
                                 {req.unit_cost_total > 0 && <div className="flex justify-between"><span>Items</span><span>Rs. {Number(req.unit_cost_total).toLocaleString()}</span></div>}
-                                {req.shipping_fee > 0 && <div className="flex justify-between"><span>Shipping</span><span>Rs. {Number(req.shipping_fee).toLocaleString()}</span></div>}
-                                {req.tax_amount > 0 && <div className="flex justify-between"><span>Tax</span><span>Rs. {Number(req.tax_amount).toLocaleString()}</span></div>}
+                                {shippingTBA
+                                  ? <div className="flex justify-between"><span>Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                                  : shipping > 0 && <div className="flex justify-between"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
+                                {taxTBA
+                                  ? <div className="flex justify-between"><span>Tax</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                                  : tax > 0 && <div className="flex justify-between"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
                                 <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
-                                  <span>Total</span><span>Rs. {Number(req.grand_total).toLocaleString()}</span>
+                                  <span>Total</span><span>Rs. {Number(req.grand_total).toLocaleString()}{(shippingTBA || taxTBA) ? " + TBA" : ""}</span>
                                 </div>
                               </div>
                             </div>
                           )}
+
+                          {/* Arrival charges section */}
+                          {arrivalChargesTotal > 0 && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border bg-secondary/5 space-y-1">
+                              <p className="text-xs font-semibold text-foreground flex items-center gap-1"><Truck className="w-3 h-3" /> Arrival Charges</p>
+                              <div className="text-xs text-muted-foreground space-y-0.5">
+                                {req.arrival_shipping_fee > 0 && <div className="flex justify-between"><span>Shipping</span><span>Rs. {Number(req.arrival_shipping_fee).toLocaleString()}</span></div>}
+                                {req.arrival_tax_amount > 0 && <div className="flex justify-between"><span>Tax</span><span>Rs. {Number(req.arrival_tax_amount).toLocaleString()}</span></div>}
+                                <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
+                                  <span>Total</span><span>Rs. {arrivalChargesTotal.toLocaleString()}</span>
+                                </div>
+                              </div>
+                              {req.arrival_payment_status === "paid" ? (
+                                <p className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Paid</p>
+                              ) : canPayArrival && (
+                                <div className="flex gap-2 mt-2">
+                                  {stripeEnabled && (
+                                    <Button size="sm" className="gap-1 text-xs h-7" onClick={() => handleStripePayment(req.id, "arrival")} disabled={payingId === req.id}>
+                                      <CreditCard className="w-3 h-3" /> {payingId === req.id ? "Processing…" : "Pay with Card"}
+                                    </Button>
+                                  )}
+                                  {bankEnabled && (
+                                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={() => openBankTransfer(req.id, "arrival", arrivalChargesTotal)}>
+                                      <Building className="w-3 h-3" /> Bank Transfer
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Payment actions */}
+                          {canPay && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {stripeEnabled && (
+                                  <Button size="sm" className="gap-1 text-xs" onClick={() => handleStripePayment(req.id, "quote")} disabled={payingId === req.id}>
+                                    <CreditCard className="w-3 h-3" /> {payingId === req.id ? "Processing…" : "Pay with Card"}
+                                  </Button>
+                                )}
+                                {bankEnabled && (
+                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openBankTransfer(req.id, "quote", Number(req.grand_total))}>
+                                    <Building className="w-3 h-3" /> Bank Transfer
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Expired → re-request */}
+                          {expired && req.payment_status !== "paid" && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border">
+                              <div className="flex items-center gap-2 text-xs text-destructive mb-2">
+                                <AlertTriangle className="w-3.5 h-3.5" />
+                                <span>Quote expired. You can request a new quote.</span>
+                              </div>
+                              <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleReRequest(req.id)}>
+                                <RefreshCcw className="w-3 h-3" /> Re-Request Quote
+                              </Button>
+                            </div>
+                          )}
+
                           {req.admin_notes && (
                             <div className="px-4 pb-3 text-xs text-muted-foreground border-t border-border pt-2">
                               <span className="font-medium text-foreground">Admin note: </span>{req.admin_notes}
                             </div>
                           )}
                           {req.conversation_id && (
-                             <div className="px-4 pb-3">
-                               <Link
-                                 to={`/profile?tab=messages&convo=${req.conversation_id}`}
-                                 className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
-                               >
-                                 <MessageSquare className="w-3 h-3" /> View Conversation
-                               </Link>
-                             </div>
-                           )}
+                            <div className="px-4 pb-3">
+                              <Link
+                                to={`/profile?tab=messages&convo=${req.conversation_id}`}
+                                className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                              >
+                                <MessageSquare className="w-3 h-3" /> View Conversation
+                              </Link>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -567,6 +780,38 @@ export default function PreOrder() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Bank Transfer Dialog */}
+          <Dialog open={!!bankTransferDialog?.open} onOpenChange={() => setBankTransferDialog(null)}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Bank Transfer Payment</DialogTitle>
+              </DialogHeader>
+              {bankTransferDialog && (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Transfer <strong className="text-foreground">Rs. {bankTransferDialog.amount.toLocaleString()}</strong> to one of the following accounts.
+                    After transfer, please send your receipt via the conversation chat.
+                  </p>
+                  {bankAccounts?.length > 0 ? (
+                    <div className="space-y-2">
+                      {bankAccounts.map((acc: any, i: number) => (
+                        <div key={i} className="border border-border rounded-lg p-3 text-xs space-y-0.5">
+                          <p className="font-semibold text-foreground">{acc.bank_name}</p>
+                          {acc.branch && <p className="text-muted-foreground">Branch: {acc.branch}</p>}
+                          <p className="text-muted-foreground">A/C: <span className="font-mono text-foreground">{acc.account_number}</span></p>
+                          {acc.account_name && <p className="text-muted-foreground">Name: {acc.account_name}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Bank account details not available. Please contact us.</p>
+                  )}
+                  <Button variant="outline" className="w-full" onClick={() => setBankTransferDialog(null)}>Close</Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       <Footer />

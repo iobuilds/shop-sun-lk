@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle } from "lucide-react";
+import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle, Search, User, Phone, AlertTriangle, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +33,6 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   const doc = new jsPDF();
   const shortId = req.id.slice(0, 8).toUpperCase();
 
-  // Header
   doc.setFontSize(22);
   doc.setFont("helvetica", "bold");
   doc.text("NanoCircuit.lk", 20, 25);
@@ -42,13 +41,11 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.setTextColor(120, 120, 120);
   doc.text("Electronics & Components | Sri Lanka", 20, 32);
 
-  // Title
   doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.text("PRE-ORDER QUOTE", 145, 25);
 
-  // Meta
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(80, 80, 80);
@@ -56,23 +53,27 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
   doc.text(`Status: ${STATUS_OPTIONS.find(s => s.value === req.status)?.label || req.status}`, 145, 45);
 
-  // Divider
-  doc.setDrawColor(220, 220, 220);
-  doc.line(20, 52, 190, 52);
+  // Quote validity
+  if (req.quoted_at) {
+    doc.setTextColor(200, 50, 50);
+    doc.text("* This quote is valid for 48 hours from issue date.", 145, 51);
+    doc.setTextColor(80, 80, 80);
+  }
 
-  // Customer
+  doc.setDrawColor(220, 220, 220);
+  doc.line(20, 56, 190, 56);
+
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
-  doc.text("Customer:", 20, 61);
+  doc.text("Customer:", 20, 65);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
-  let y = 67;
+  let y = 71;
   if (profile?.full_name) { doc.text(profile.full_name, 20, y); y += 5; }
   if (profile?.phone) { doc.text(`Tel: ${profile.phone}`, 20, y); y += 5; }
 
-  // Items table
   const tableData = (req.preorder_items || []).map((it: any, i: number) => [
     String(i + 1),
     it.product_name || "Item",
@@ -83,7 +84,7 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   ]);
 
   autoTable(doc, {
-    startY: Math.max(y + 8, 85),
+    startY: Math.max(y + 8, 89),
     head: [["#", "Item", "Type", "Qty", "Unit Price", "Subtotal"]],
     body: tableData,
     theme: "grid",
@@ -100,7 +101,6 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
     margin: { left: 20, right: 20 },
   });
 
-  // Summary
   const finalY = (doc as any).lastAutoTable?.finalY || 200;
   let sY = finalY + 10;
   const xL = 130, xV = 185;
@@ -165,6 +165,7 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
 
 export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpenConversation }: AdminPreOrdersProps) {
   const [filterStatus, setFilterStatus] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editItems, setEditItems] = useState<any[]>([]);
@@ -178,11 +179,28 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   });
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Arrival charges dialog
+  const [arrivalDialog, setArrivalDialog] = useState(false);
+  const [arrivalTarget, setArrivalTarget] = useState<any>(null);
+  const [arrivalForm, setArrivalForm] = useState({ shipping: "", tax: "" });
+  const [arrivalSaving, setArrivalSaving] = useState(false);
 
-  const filtered = filterStatus === "all" ? requests : requests.filter(r => r.status === filterStatus);
+  // Filter by status and search by order ID
+  const filtered = requests.filter(r => {
+    const matchStatus = filterStatus === "all" || r.status === filterStatus;
+    const matchSearch = !searchQuery || r.id.toLowerCase().includes(searchQuery.toLowerCase().replace(/[^a-f0-9-]/g, ''));
+    return matchStatus && matchSearch;
+  });
 
   const getProfile = (userId: string) =>
     allProfiles.find((p: any) => p.user_id === userId);
+
+  // Check if quote is expired (48hrs)
+  const isQuoteExpired = (req: any) => {
+    if (req.status !== "quoted" || !req.quoted_at) return false;
+    const expiresAt = new Date(req.quoted_at).getTime() + 48 * 60 * 60 * 1000;
+    return Date.now() > expiresAt;
+  };
 
   const openEdit = (req: any) => {
     setEditTarget(req);
@@ -207,14 +225,12 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     setSaving(true);
     const wasQuoted = editTarget.status !== "quoted" && editForm.status === "quoted";
     try {
-      // Update each item's unit_price
       for (const item of editItems) {
         if (item.unit_price !== null && item.unit_price !== undefined && item.unit_price !== "") {
           await supabase.from("preorder_items").update({ unit_price: parseFloat(item.unit_price) || 0 }).eq("id", item.id);
         }
       }
 
-      // Calculate total from items
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
       const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
       const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
@@ -233,17 +249,25 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
 
       if (error) throw error;
 
-      // If status just became "quoted", send SMS to customer
+      // If status just became "quoted", send SMS + notification
       if (wasQuoted) {
         const profile = getProfile(editTarget.user_id);
         const phone = profile?.phone;
+        const shortId = editTarget.id.slice(0, 8).toUpperCase();
         if (phone) {
-          const shortId = editTarget.id.slice(0, 8).toUpperCase();
-          const message = `NanoCircuit.lk: Your pre-order PO-${shortId} has been quoted. Grand Total: Rs. ${grandTotal.toLocaleString()}. ${editForm.admin_notes ? editForm.admin_notes + " " : ""}Please log in to view your quote and details.`;
+          const message = `NanoCircuit.lk: Your pre-order PO-${shortId} has been quoted. Grand Total: Rs. ${grandTotal.toLocaleString()}. Quote valid for 48 hours. ${editForm.admin_notes ? editForm.admin_notes + " " : ""}Please log in to view and pay.`;
           await supabase.functions.invoke("send-sms", {
             body: { phone, message, order_id: editTarget.id, user_id: editTarget.user_id },
           });
         }
+        // Send in-app notification
+        await supabase.from("user_notifications").insert({
+          user_id: editTarget.user_id,
+          title: "Pre-Order Quoted",
+          message: `Your pre-order PO-${shortId} has been quoted at Rs. ${grandTotal.toLocaleString()}. Valid for 48 hours.`,
+          type: "order",
+          link_url: "/pre-order?tab=my",
+        });
       }
 
       toast({ title: "Pre-order updated" });
@@ -256,11 +280,66 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     }
   };
 
+  const openArrivalCharges = (req: any) => {
+    setArrivalTarget(req);
+    setArrivalForm({
+      shipping: req.arrival_shipping_fee ? String(req.arrival_shipping_fee) : "",
+      tax: req.arrival_tax_amount ? String(req.arrival_tax_amount) : "",
+    });
+    setArrivalDialog(true);
+  };
+
+  const handleArrivalSave = async () => {
+    if (!arrivalTarget) return;
+    setArrivalSaving(true);
+    try {
+      const shipping = parseFloat(arrivalForm.shipping) || 0;
+      const tax = parseFloat(arrivalForm.tax) || 0;
+      const { error } = await supabase.from("preorder_requests").update({
+        arrival_shipping_fee: shipping,
+        arrival_tax_amount: tax,
+        arrival_payment_status: "pending",
+      }).eq("id", arrivalTarget.id);
+      if (error) throw error;
+
+      // Notify user
+      const shortId = arrivalTarget.id.slice(0, 8).toUpperCase();
+      const total = shipping + tax;
+      await supabase.from("user_notifications").insert({
+        user_id: arrivalTarget.user_id,
+        title: "Arrival Charges Ready",
+        message: `Your pre-order PO-${shortId} has arrived! Shipping + Tax: Rs. ${total.toLocaleString()}. Please pay to complete.`,
+        type: "order",
+        link_url: "/pre-order?tab=my",
+      });
+
+      // SMS
+      const profile = getProfile(arrivalTarget.user_id);
+      if (profile?.phone) {
+        await supabase.functions.invoke("send-sms", {
+          body: {
+            phone: profile.phone,
+            message: `NanoCircuit.lk: Your pre-order PO-${shortId} has arrived! Arrival charges: Rs. ${total.toLocaleString()}. Please log in and pay to complete your order.`,
+            order_id: arrivalTarget.id,
+            user_id: arrivalTarget.user_id,
+          },
+        });
+      }
+
+      toast({ title: "Arrival charges saved & user notified" });
+      setArrivalDialog(false);
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setArrivalSaving(false);
+    }
+  };
+
   const openConversation = async (req: any) => {
     let convId = req.conversation_id;
     try {
       if (!convId) {
-        // Create a new conversation linked to this pre-order
         const { data: conv, error: convError } = await supabase
           .from("conversations")
           .insert({ user_id: req.user_id, subject: `Pre-Order #${req.id.slice(0, 8).toUpperCase()}` })
@@ -270,7 +349,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         convId = conv.id;
         onRefresh();
       }
-      // Navigate to contacts tab with this conversation pre-selected
       if (onOpenConversation) {
         onOpenConversation(convId);
       }
@@ -283,28 +361,39 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold font-display text-foreground">Pre-Order Requests</h2>
           <p className="text-sm text-muted-foreground mt-0.5">{requests.length} total requests</p>
         </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-44 h-8 text-xs">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {STATUS_OPTIONS.map(s => (
-              <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-8 h-8 w-48 text-xs"
+              placeholder="Search by order ID..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-44 h-8 text-xs">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {STATUS_OPTIONS.map(s => (
+                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground">
           <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p>No pre-order requests yet</p>
+          <p>No pre-order requests found</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -312,8 +401,11 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             const profile = getProfile(req.user_id);
             const si = statusInfo(req.status);
             const isExpanded = expandedId === req.id;
-            const grandTotal = (parseFloat(req.unit_cost_total) || 0) + (parseFloat(req.shipping_fee) || 0) + (parseFloat(req.tax_amount) || 0);
+            const shipping = Number(req.shipping_fee) || 0;
+            const tax = Number(req.tax_amount) || 0;
+            const grandTotal = (parseFloat(req.unit_cost_total) || 0) + (shipping === -1 ? 0 : Math.max(0, shipping)) + (tax === -1 ? 0 : Math.max(0, tax));
             const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
+            const expired = isQuoteExpired(req);
 
             return (
               <div key={req.id} className="border border-border rounded-xl bg-card overflow-hidden">
@@ -323,18 +415,36 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted-foreground">#{req.id.slice(0, 8).toUpperCase()}</span>
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${si.color}`}>{si.label}</span>
+                      {expired && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Expired
+                        </span>
+                      )}
+                      {req.payment_status === "paid" && (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-100 text-green-800 flex items-center gap-1">
+                          <CreditCard className="w-3 h-3" /> Paid
+                        </span>
+                      )}
                       {grandTotal > 0 && (
                         <span className="text-xs font-semibold text-foreground bg-muted px-2 py-0.5 rounded-full">
                           Rs. {grandTotal.toLocaleString()}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {profile?.full_name || "Unknown"} {profile?.phone && `· ${profile.phone}`}
-                      {" · "}{new Date(req.created_at).toLocaleDateString()}
+                    <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
+                      <User className="w-3 h-3" />
+                      <span className="font-medium text-foreground">{profile?.full_name || "Unknown"}</span>
+                      {profile?.phone && <><Phone className="w-3 h-3 ml-1" /><span>{profile.phone}</span></>}
+                      {profile?.city && <span>· {profile.city}</span>}
+                      <span>· {new Date(req.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {req.status === "arrived" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openArrivalCharges(req)}>
+                        <Truck className="w-3 h-3" /> Arrival Charges
+                      </Button>
+                    )}
                     {isQuoted && grandTotal > 0 && (
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => generatePreOrderInvoice(req, profile)}>
                         <FileDown className="w-3 h-3" /> PDF
@@ -388,6 +498,16 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                       className="border-t border-border overflow-hidden"
                     >
                       <div className="px-4 py-3 space-y-2">
+                        {/* Customer details card */}
+                        <div className="text-xs bg-muted/40 rounded-lg p-2 space-y-1">
+                          <p className="font-semibold text-foreground flex items-center gap-1"><User className="w-3 h-3" /> Customer Details</p>
+                          <div className="grid grid-cols-2 gap-1 text-muted-foreground">
+                            <span>Name: <span className="text-foreground">{profile?.full_name || "—"}</span></span>
+                            <span>Phone: <span className="text-foreground">{profile?.phone || "—"}</span></span>
+                            <span>City: <span className="text-foreground">{profile?.city || "—"}</span></span>
+                            <span>Address: <span className="text-foreground">{profile?.address_line1 || "—"}</span></span>
+                          </div>
+                        </div>
                         {req.customer_note && (
                           <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg p-2">
                             <span className="font-medium text-foreground">Customer note: </span>{req.customer_note}
@@ -398,7 +518,36 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                             <span className="font-medium text-foreground">Admin note: </span>{req.admin_notes}
                           </div>
                         )}
-                         {grandTotal > 0 && (
+                        {/* Quote expiry info */}
+                        {req.quoted_at && req.status === "quoted" && (
+                          <div className={`text-xs rounded-lg p-2 flex items-center gap-1 ${expired ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-blue-50 text-blue-700 border border-blue-200"}`}>
+                            <Clock className="w-3 h-3" />
+                            {expired
+                              ? "Quote expired — user can re-request pricing."
+                              : `Quote expires: ${new Date(new Date(req.quoted_at).getTime() + 48 * 60 * 60 * 1000).toLocaleString()}`}
+                          </div>
+                        )}
+                        {/* Payment status */}
+                        {req.payment_status && req.payment_status !== "unpaid" && (
+                          <div className="text-xs bg-green-50 border border-green-200 text-green-700 rounded-lg p-2 flex items-center gap-1">
+                            <CreditCard className="w-3 h-3" /> Payment: {req.payment_status}
+                          </div>
+                        )}
+                        {/* Arrival charges */}
+                        {(req.arrival_shipping_fee > 0 || req.arrival_tax_amount > 0) && (
+                          <div className="text-xs bg-secondary/5 border border-secondary/20 rounded-lg p-2 space-y-0.5">
+                            <p className="font-semibold text-foreground">Arrival Charges</p>
+                            {req.arrival_shipping_fee > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {Number(req.arrival_shipping_fee).toLocaleString()}</span></div>}
+                            {req.arrival_tax_amount > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {Number(req.arrival_tax_amount).toLocaleString()}</span></div>}
+                            <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
+                              <span>Total</span><span>Rs. {((Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0)).toLocaleString()}</span>
+                            </div>
+                            <span className={`font-medium ${req.arrival_payment_status === "paid" ? "text-green-600" : "text-yellow-600"}`}>
+                              {req.arrival_payment_status === "paid" ? "✓ Paid" : "⏳ Pending payment"}
+                            </span>
+                          </div>
+                        )}
+                        {grandTotal > 0 && (
                           <div className="text-xs space-y-0.5 bg-muted/30 rounded-lg p-2">
                             {req.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Items total</span><span>Rs. {Number(req.unit_cost_total).toLocaleString()}</span></div>}
                             {req.shipping_fee === -1
@@ -411,7 +560,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                               <span>Grand Total</span><span>Rs. {grandTotal.toLocaleString()}{(req.shipping_fee === -1 || req.tax_amount === -1) ? " + TBA" : ""}</span>
                             </div>
                           </div>
-                         )}
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -430,7 +579,21 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
           </DialogHeader>
           {editTarget && (
             <div className="space-y-4 mt-2">
-              {/* Status */}
+              {/* Customer info summary */}
+              {(() => {
+                const profile = getProfile(editTarget.user_id);
+                return profile ? (
+                  <div className="text-xs bg-muted/40 rounded-lg p-2 flex items-center gap-3">
+                    <User className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div>
+                      <span className="font-medium text-foreground">{profile.full_name || "Unknown"}</span>
+                      {profile.phone && <span className="text-muted-foreground ml-2">{profile.phone}</span>}
+                      {profile.city && <span className="text-muted-foreground ml-2">· {profile.city}</span>}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
               <div>
                 <Label className="text-sm">Status</Label>
                 <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
@@ -445,7 +608,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                 </Select>
               </div>
 
-              {/* Per-item pricing */}
               <div className="border border-border rounded-lg overflow-hidden">
                 <div className="px-3 py-2 bg-muted/40 border-b border-border text-xs font-semibold text-foreground flex items-center gap-1">
                   <ReceiptText className="w-3.5 h-3.5" /> Item Pricing
@@ -485,7 +647,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                 </div>
               </div>
 
-              {/* Shipping & Tax */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> Shipping Fee (Rs.)</Label>
@@ -529,22 +690,21 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                 </div>
               </div>
 
-              {/* Grand total preview */}
               {(() => {
                 const itemsTotal = editItems.reduce((s, it) => s + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
-                const shipping = editForm.shipping_after_arrival ? 0 : (parseFloat(editForm.shipping_fee) || 0);
-                const tax = editForm.tax_after_arrival ? 0 : (parseFloat(editForm.tax_amount) || 0);
-                const grand = itemsTotal + shipping + tax;
+                const shippingV = editForm.shipping_after_arrival ? 0 : (parseFloat(editForm.shipping_fee) || 0);
+                const taxV = editForm.tax_after_arrival ? 0 : (parseFloat(editForm.tax_amount) || 0);
+                const grand = itemsTotal + shippingV + taxV;
                 const hasTBA = editForm.shipping_after_arrival || editForm.tax_after_arrival;
                 return (itemsTotal > 0 || hasTBA) ? (
                   <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
                     {itemsTotal > 0 && <div className="flex justify-between text-muted-foreground"><span>Items</span><span>Rs. {itemsTotal.toLocaleString()}</span></div>}
                     {editForm.shipping_after_arrival
                       ? <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
-                      : shipping > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
+                      : shippingV > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shippingV.toLocaleString()}</span></div>}
                     {editForm.tax_after_arrival
                       ? <div className="flex justify-between text-muted-foreground"><span>Tax</span><span className="text-secondary font-medium">Price after arrival</span></div>
-                      : tax > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
+                      : taxV > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {taxV.toLocaleString()}</span></div>}
                     <div className="flex justify-between font-bold text-foreground border-t border-border pt-1">
                       <span>Grand Total</span>
                       <span>Rs. {grand.toLocaleString()}{hasTBA ? " + TBA" : ""}</span>
@@ -553,7 +713,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                 ) : null;
               })()}
 
-              {/* Admin notes */}
               <div>
                 <Label className="text-sm">Admin Note (visible to customer)</Label>
                 <Textarea
@@ -573,6 +732,38 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Arrival Charges Dialog */}
+      <Dialog open={arrivalDialog} onOpenChange={setArrivalDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Arrival Charges #{arrivalTarget?.id?.slice(0, 8).toUpperCase()}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">Add shipping & tax charges after item arrival. User will be notified to pay.</p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label className="text-sm">Shipping Fee (Rs.)</Label>
+              <Input type="number" min={0} className="mt-1" placeholder="0" value={arrivalForm.shipping} onChange={e => setArrivalForm(f => ({ ...f, shipping: e.target.value }))} />
+            </div>
+            <div>
+              <Label className="text-sm">Tax / Custom Duty (Rs.)</Label>
+              <Input type="number" min={0} className="mt-1" placeholder="0" value={arrivalForm.tax} onChange={e => setArrivalForm(f => ({ ...f, tax: e.target.value }))} />
+            </div>
+            {(parseFloat(arrivalForm.shipping) > 0 || parseFloat(arrivalForm.tax) > 0) && (
+              <div className="bg-muted/40 rounded-lg p-2 text-sm flex justify-between font-semibold">
+                <span>Total</span>
+                <span>Rs. {((parseFloat(arrivalForm.shipping) || 0) + (parseFloat(arrivalForm.tax) || 0)).toLocaleString()}</span>
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setArrivalDialog(false)}>Cancel</Button>
+              <Button onClick={handleArrivalSave} disabled={arrivalSaving}>
+                {arrivalSaving ? "Saving…" : "Save & Notify User"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
