@@ -619,6 +619,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
         { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
         { id: "stock" as Tab, label: "Stock", icon: Package, count: lowStockCount },
+        { id: "qr_scan" as Tab, label: "QR Stock Scan", icon: QrCode, count: 0 },
       ],
     },
     {
