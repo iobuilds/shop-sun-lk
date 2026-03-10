@@ -402,10 +402,10 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                           <div className="text-xs space-y-0.5 bg-muted/30 rounded-lg p-2">
                             {req.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Items total</span><span>Rs. {Number(req.unit_cost_total).toLocaleString()}</span></div>}
                             {req.shipping_fee === -1
-                              ? <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="text-yellow-600 font-medium">Price after arrival</span></div>
+                              ? <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
                               : req.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(req.shipping_fee).toLocaleString()}</span></div>}
                             {req.tax_amount === -1
-                              ? <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span className="text-yellow-600 font-medium">Price after arrival</span></div>
+                              ? <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span className="text-secondary font-medium">Price after arrival</span></div>
                               : req.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span>Rs. {Number(req.tax_amount).toLocaleString()}</span></div>}
                             <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
                               <span>Grand Total</span><span>Rs. {grandTotal.toLocaleString()}{(req.shipping_fee === -1 || req.tax_amount === -1) ? " + TBA" : ""}</span>
