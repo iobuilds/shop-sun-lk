@@ -711,6 +711,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       items: [
         { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
         { id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount },
+        { id: "pcb_orders" as Tab, label: "PCB Orders", icon: Layers, count: pendingPCBCount },
       ],
     },
     {
