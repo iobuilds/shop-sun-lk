@@ -159,6 +159,8 @@ export default function PreOrder() {
   const [viewRequest, setViewRequest] = useState<any>(null);
   const [payingId, setPayingId] = useState<string | null>(null);
   const [bankTransferDialog, setBankTransferDialog] = useState<{open: boolean; preorderId: string; type: string; amount: number} | null>(null);
+  const [slipUploading, setSlipUploading] = useState(false);
+  const [slipUrl, setSlipUrl] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
