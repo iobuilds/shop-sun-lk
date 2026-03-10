@@ -84,7 +84,7 @@ const DailyDeals = () => {
             Limited Time
           </span>
         </div>
-        <Button variant="ghost" size="sm" className="text-secondary hover:text-secondary/80">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/deals")} className="text-secondary hover:text-secondary/80">
           View All →
         </Button>
       </div>
