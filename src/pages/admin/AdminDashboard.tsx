@@ -1771,9 +1771,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
         </button>
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-            <span className="text-secondary-foreground font-bold text-sm font-display">T</span>
+            <span className="text-secondary-foreground font-bold text-sm font-display">N</span>
           </div>
-          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">TechLK</span>
+          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">NanoCircuit.lk</span>
         </Link>
         <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
           <span>/</span>

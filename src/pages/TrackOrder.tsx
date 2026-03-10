@@ -320,7 +320,7 @@ const TrackOrder = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEOHead title="Track Your Order — TechLK" description="Track your order status in real-time." />
+      <SEOHead title="Track Your Order — NanoCircuit.lk" description="Track your order status in real-time." />
       <Navbar />
       <main className="pt-[136px] md:pt-[160px] pb-12">
         <div className="container mx-auto px-4 max-w-3xl space-y-8 py-6">

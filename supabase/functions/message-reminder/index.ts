@@ -76,7 +76,7 @@ serve(async (req) => {
       }
 
       // Send SMS reminder
-      const smsMessage = `TechLK: You have a new message from support. Please check your dashboard messages.`;
+      const smsMessage = `NanoCircuit.lk: You have a new message from support. Please check your dashboard messages.`;
       
       const textlkApiKey = Deno.env.get("TEXTLK_API_KEY");
       if (textlkApiKey) {

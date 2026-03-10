@@ -131,7 +131,7 @@ export const generateInvoice = (order: InvoiceOrder) => {
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(150, 150, 150);
-  doc.text("Thank you for shopping with TechLK! | www.techlk.lk", 105, 280, { align: "center" });
+  doc.text("Thank you for shopping with NanoCircuit.lk! | www.nanocircuit.lk", 105, 280, { align: "center" });
 
-  doc.save(`TechLK-Invoice-${order.id.slice(0, 8).toUpperCase()}.pdf`);
+  doc.save(`NanoCircuit-Invoice-${order.id.slice(0, 8).toUpperCase()}.pdf`);
 };

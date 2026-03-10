@@ -210,9 +210,9 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-              <span className="text-secondary-foreground font-bold text-lg font-display">T</span>
+              <span className="text-secondary-foreground font-bold text-lg font-display">N</span>
             </div>
-            <span className="text-xl font-bold font-display text-foreground">TechLK</span>
+            <span className="text-xl font-bold font-display text-foreground">NanoCircuit.lk</span>
           </Link>
 
           {/* Desktop search */}
