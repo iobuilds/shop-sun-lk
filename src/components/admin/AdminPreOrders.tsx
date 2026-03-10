@@ -182,6 +182,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       admin_notes: req.admin_notes || "",
       shipping_fee: req.shipping_fee ? String(req.shipping_fee) : "",
       tax_amount: req.tax_amount ? String(req.tax_amount) : "",
+      shipping_after_arrival: req.shipping_fee === -1 || req.shipping_fee === null && req.status !== "pending",
+      tax_after_arrival: req.tax_amount === -1 || req.tax_amount === null && req.status !== "pending",
     });
     setEditDialog(true);
   };
