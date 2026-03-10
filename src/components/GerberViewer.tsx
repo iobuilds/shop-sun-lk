@@ -13,17 +13,34 @@ const LAYER_ROLE: Record<string, string> = {
   ".gko": "outline",
   ".gm1": "outline",
   ".gm2": "outline",
+  ".gm3": "outline",
   ".drl": "drill",
   ".xln": "drill",
   ".exc": "drill",
+  ".ncd": "drill",
+  ".txt": "drill",
   ".gbr": "top_copper",
   ".ger": "top_copper",
   ".g1":  "top_copper",
   ".g2":  "btm_copper",
+  ".sol": "btm_copper",
+  ".cmp": "top_copper",
+  ".plc": "top_silk",
+  ".pls": "btm_silk",
+  ".stc": "top_mask",
+  ".sts": "btm_mask",
 };
 
-// Colors matching solder mask options
-const MASK_COLORS: Record<string, string> = {
+const MASK_COLORS: Record<string, number> = {
+  green:  0x1a6b2e,
+  red:    0x8b0000,
+  blue:   0x0a3d8f,
+  black:  0x1a1a1a,
+  white:  0xe8e8e8,
+  yellow: 0xb8860b,
+};
+
+const MASK_HEX: Record<string, string> = {
   green:  "#1a6b2e",
   red:    "#8b0000",
   blue:   "#0a3d8f",
@@ -59,38 +76,69 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
   return layers;
 }
 
-// Render a single gerber to SVG string
-async function renderToSvg(gerberStr: string, isOutline = false): Promise<string | null> {
+// Render a single gerber layer to SVG string
+async function renderLayerToSvg(gerberStr: string): Promise<string | null> {
   try {
     const { parse, plot, renderSVG } = await import("web-gerber");
     const { toHtml } = await import("hast-util-to-html");
     const parsed = parse(gerberStr);
-    const plotted = plot(parsed, isOutline);
+    const plotted = plot(parsed);
     const svgTree = renderSVG(plotted);
-    return toHtml(svgTree as any);
-  } catch { return null; }
+    const html = toHtml(svgTree as any);
+    return html || null;
+  } catch {
+    return null;
+  }
 }
 
-// Convert an SVG string to a canvas ImageBitmap
+// Fix SVG: inject explicit width/height from viewBox so canvas can render it
+function fixSvgDimensions(svgStr: string, targetW: number, targetH: number): string {
+  // Add explicit width/height if missing or zero
+  let fixed = svgStr
+    .replace(/<svg([^>]*)>/, (match, attrs) => {
+      const hasWidth = /width="[^"]*"/.test(attrs);
+      const hasHeight = /height="[^"]*"/.test(attrs);
+      let newAttrs = attrs;
+      if (!hasWidth) newAttrs += ` width="${targetW}"`;
+      if (!hasHeight) newAttrs += ` height="${targetH}"`;
+      // Replace width="0" or height="0"
+      newAttrs = newAttrs
+        .replace(/width="0"/, `width="${targetW}"`)
+        .replace(/height="0"/, `height="${targetH}"`);
+      return `<svg${newAttrs}>`;
+    });
+  return fixed;
+}
+
+// Convert SVG string to ImageBitmap for Three.js texture
 async function svgToImageBitmap(svgStr: string, w: number, h: number): Promise<ImageBitmap | null> {
   try {
-    const blob = new Blob([svgStr], { type: "image/svg+xml" });
+    const fixed = fixSvgDimensions(svgStr, w, h);
+    const blob = new Blob([fixed], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
+
     const img = new Image();
-    img.width = w; img.height = h;
+    img.width = w;
+    img.height = h;
+
     await new Promise<void>((res, rej) => {
       img.onload = () => res();
-      img.onerror = rej;
+      img.onerror = () => rej(new Error("img load failed"));
       img.src = url;
     });
+
     const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "transparent";
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, w, h);
     ctx.drawImage(img, 0, 0, w, h);
     URL.revokeObjectURL(url);
     return await createImageBitmap(canvas);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerProps) {
@@ -100,11 +148,13 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [layerCount, setLayerCount] = useState(0);
-  const [view, setView] = useState<"3d" | "2d">("3d");
+  const [layerNames, setLayerNames] = useState<string[]>([]);
+  const [view, setView] = useState<"2d" | "3d">("2d");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [zoom2d, setZoom2d] = useState(1);
+  const [svgReady, setSvgReady] = useState(false);
 
-  const destroy = useCallback(() => {
+  const destroy3d = useCallback(() => {
     cancelAnimationFrame(animRef.current);
     if (rendererRef.current) {
       try { rendererRef.current.dispose?.(); } catch {}
@@ -113,16 +163,17 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
     if (containerRef.current) containerRef.current.innerHTML = "";
   }, []);
 
-  const initViewer = useCallback(async () => {
-    if (!containerRef.current) return;
+  // Load layers + build SVG preview
+  const loadLayers = useCallback(async () => {
     setLoading(true);
     setError(null);
-    destroy();
+    setSvgContent(null);
+    setSvgReady(false);
 
     try {
-      // ── 1. Extract layers ──────────────────────────────────────────────
       let layers: LayerMap = {};
       const ext = "." + file.name.split(".").pop()?.toLowerCase();
+
       if (ext === ".zip" || ext === ".rar") {
         layers = await extractLayersFromZip(file);
       } else {
@@ -132,117 +183,143 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
       const count = Object.keys(layers).length;
       setLayerCount(count);
+      setLayerNames(Object.keys(layers));
+
       if (count === 0) {
-        setError("No Gerber layers found. Please upload a valid ZIP with Gerber files.");
+        setError("No Gerber layers found. Ensure your ZIP contains .gtl, .gbl, .gko, or similar Gerber files.");
         setLoading(false);
         return;
       }
 
-      // ── 2. Render top + outline to SVG (for 2D view & texture) ────────
-      const primaryLayer = layers.top_copper || layers.btm_copper || layers.outline || Object.values(layers)[0];
-      const outlineSvg = layers.outline ? await renderToSvg(layers.outline, true) : null;
-      const topSvg = await renderToSvg(primaryLayer);
-      const displaySvg = topSvg || outlineSvg;
-      setSvgContent(displaySvg);
+      // Render primary layer to SVG for 2D view
+      const primaryLayer =
+        layers.top_copper ||
+        layers.btm_copper ||
+        layers.outline ||
+        Object.values(layers)[0];
 
-      // ── 3. Build 3D scene with Three.js ───────────────────────────────
+      const svgStr = await renderLayerToSvg(primaryLayer);
+
+      if (svgStr) {
+        // Make SVG fill a nice dark background with copper-colored traces
+        const coloredSvg = svgStr
+          .replace(/<svg/, '<svg style="background:#0d2318;"')
+          .replace(/fill="[^"]*"/g, 'fill="#c0a84b"')
+          .replace(/stroke="[^"]*"/g, 'stroke="#c0a84b"');
+        setSvgContent(coloredSvg);
+        setSvgReady(true);
+      } else {
+        setError("Could not render SVG preview for this Gerber file.");
+      }
+
+      setLoading(false);
+    } catch (err: any) {
+      console.error("GerberViewer load error:", err);
+      setError("Failed to parse Gerber file: " + (err?.message || "unknown error"));
+      setLoading(false);
+    }
+  }, [file]);
+
+  // Build 3D scene
+  const init3d = useCallback(async () => {
+    if (!containerRef.current || !svgContent) return;
+    setLoading(true);
+    destroy3d();
+
+    try {
       const THREE = await import("three");
       const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js" as any);
 
       const W = containerRef.current.clientWidth || 600;
       const H = 380;
 
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setSize(W, H);
-      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setClearColor(0x0d1117, 1);
       renderer.shadowMap.enabled = true;
       containerRef.current.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
-      camera.position.set(0, 60, 100);
+      scene.fog = new THREE.Fog(0x0d1117, 150, 400);
+
+      const camera = new THREE.PerspectiveCamera(40, W / H, 0.1, 1000);
+      camera.position.set(0, 70, 110);
       camera.lookAt(0, 0, 0);
 
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
-      controls.dampingFactor = 0.08;
-      controls.minDistance = 10;
-      controls.maxDistance = 300;
+      controls.dampingFactor = 0.07;
+      controls.minDistance = 20;
+      controls.maxDistance = 400;
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.8;
 
       // Lighting
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      dirLight.position.set(50, 80, 50);
-      dirLight.castShadow = true;
-      scene.add(dirLight);
-      const backLight = new THREE.DirectionalLight(0x8888ff, 0.3);
-      backLight.position.set(-30, -20, -30);
-      scene.add(backLight);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+      sun.position.set(60, 100, 60);
+      sun.castShadow = true;
+      scene.add(sun);
+      const fill = new THREE.DirectionalLight(0x88aaff, 0.4);
+      fill.position.set(-40, -20, -40);
+      scene.add(fill);
+      const rim = new THREE.DirectionalLight(0xffeecc, 0.3);
+      rim.position.set(0, -50, 80);
+      scene.add(rim);
 
-      // PCB board dimensions — parse outline bbox if available, else default
-      let boardW = 80, boardH = 60;
-      if (outlineSvg) {
-        const match = outlineSvg.match(/viewBox="([^"]+)"/);
-        if (match) {
-          const [, minX, minY, vbW, vbH] = match[1].split(" ").map(Number);
-          if (vbW > 0 && vbH > 0) {
-            const scale = 80 / Math.max(vbW, vbH);
-            boardW = vbW * scale;
-            boardH = vbH * scale;
-          }
+      // Board dimensions from SVG viewBox
+      let boardW = 80, boardD = 60;
+      const viewBoxMatch = svgContent.match(/viewBox="([^"]+)"/);
+      if (viewBoxMatch) {
+        const parts = viewBoxMatch[1].split(/\s+/).map(Number);
+        if (parts.length >= 4 && parts[2] > 0 && parts[3] > 0) {
+          const scale = 90 / Math.max(parts[2], parts[3]);
+          boardW = parts[2] * scale;
+          boardD = parts[3] * scale;
         }
       }
-      const boardDepth = 1.6;
+      const boardH = 1.6;
 
-      // Main PCB substrate
-      const maskColor = MASK_COLORS[(pcbColor || "green").toLowerCase()] || MASK_COLORS.green;
-      const boardGeo = new THREE.BoxGeometry(boardW, boardDepth, boardH);
+      const colorKey = (pcbColor || "green").toLowerCase();
+      const maskColor = MASK_COLORS[colorKey] ?? MASK_COLORS.green;
 
-      // Top surface: apply SVG as texture
-      let topMaterial: InstanceType<typeof THREE.MeshStandardMaterial>;
-      if (displaySvg) {
-        const bitmap = await svgToImageBitmap(displaySvg, 512, 512);
-        if (bitmap) {
-          const tex = new THREE.CanvasTexture(bitmap as any);
-          topMaterial = new THREE.MeshStandardMaterial({ map: tex, color: maskColor, roughness: 0.4, metalness: 0.1 });
-        } else {
-          topMaterial = new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.4 });
-        }
-      } else {
-        topMaterial = new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.4 });
-      }
+      // Build SVG texture for top face
+      const bitmap = await svgToImageBitmap(svgContent, 1024, 1024);
+      const topMat = bitmap
+        ? new THREE.MeshStandardMaterial({
+            map: new THREE.CanvasTexture(bitmap as any),
+            roughness: 0.35,
+            metalness: 0.15,
+          })
+        : new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.35, metalness: 0.1 });
 
-      const sideMaterial = new THREE.MeshStandardMaterial({ color: 0xd4a84b, roughness: 0.6 }); // FR4 edge gold
-      const btmMaterial = new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.5 });
+      const sideMat = new THREE.MeshStandardMaterial({ color: 0xd4c48a, roughness: 0.8 }); // FR4 edge
+      const btmMat = new THREE.MeshStandardMaterial({ color: maskColor, roughness: 0.45, metalness: 0.1 });
 
-      const materials = [
-        sideMaterial, sideMaterial, // +X, -X
-        topMaterial,                // +Y (top)
-        btmMaterial,                // -Y (bottom)
-        sideMaterial, sideMaterial, // +Z, -Z
-      ];
-
-      const board = new THREE.Mesh(boardGeo, materials);
-      board.rotation.x = -Math.PI / 12;
+      const boardGeo = new THREE.BoxGeometry(boardW, boardH, boardD);
+      const board = new THREE.Mesh(boardGeo, [
+        sideMat, sideMat,  // ±X
+        topMat,            // +Y top
+        btmMat,            // -Y bottom
+        sideMat, sideMat,  // ±Z
+      ]);
       board.castShadow = true;
       board.receiveShadow = true;
       scene.add(board);
 
-      // Copper edge strip (gold rim)
-      const edgeGeo = new (THREE as any).BoxGeometry(boardW + 0.2, boardDepth + 0.1, boardH + 0.2);
-      const edgeMat = new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.7, transparent: true, opacity: 0.15 });
-      const edge = new THREE.Mesh(edgeGeo, edgeMat);
-      edge.rotation.x = board.rotation.x;
-      scene.add(edge);
+      // Thin copper rim
+      const rimGeo = new THREE.BoxGeometry(boardW + 0.3, boardH + 0.2, boardD + 0.3);
+      const rimMat = new THREE.MeshStandardMaterial({ color: 0xb8860b, roughness: 0.8, transparent: true, opacity: 0.12 });
+      scene.add(new THREE.Mesh(rimGeo, rimMat));
 
-      // Grid ground plane
-      const grid = new THREE.GridHelper(300, 30, 0x1a2a3a, 0x1a2a3a);
-      grid.position.y = -20;
+      // Ground grid
+      const grid = new THREE.GridHelper(500, 40, 0x1a2a3a, 0x0f1a22);
+      grid.position.y = -15;
       scene.add(grid);
 
-      // Animation loop
+      // Animate
       const animate = () => {
         animRef.current = requestAnimationFrame(animate);
         controls.update();
@@ -250,43 +327,55 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       };
       animate();
 
-      // Handle resize
-      const resizeObserver = new ResizeObserver(() => {
+      // Resize handler
+      const ro = new ResizeObserver(() => {
         const w = containerRef.current?.clientWidth || W;
         renderer.setSize(w, H);
         camera.aspect = w / H;
         camera.updateProjectionMatrix();
       });
-      if (containerRef.current) resizeObserver.observe(containerRef.current);
+      if (containerRef.current) ro.observe(containerRef.current);
 
       setLoading(false);
     } catch (err: any) {
-      console.error("Gerber 3D init error:", err);
-      setError("3D render failed — switching to 2D view.");
+      console.error("3D init error:", err);
+      setError("3D render failed. Using 2D view.");
       setView("2d");
       setLoading(false);
     }
-  }, [file, pcbColor, destroy]);
+  }, [svgContent, pcbColor, destroy3d]);
 
+  // Load on mount / file change
   useEffect(() => {
-    initViewer();
-    return destroy;
-  }, [initViewer, destroy]);
+    loadLayers();
+    return destroy3d;
+  }, [file]); // eslint-disable-line
 
-  // When switching to 2d, destroy 3D renderer
+  // When switching views
   useEffect(() => {
-    if (view === "2d") {
-      destroy();
+    if (view === "3d" && svgReady) {
+      init3d();
     } else {
-      initViewer();
+      destroy3d();
+      setLoading(false);
     }
   }, [view]); // eslint-disable-line
+
+  // When SVG loads and we're in 3D mode, init 3D
+  useEffect(() => {
+    if (svgReady && view === "3d") {
+      init3d();
+    }
+  }, [svgReady]); // eslint-disable-line
+
+  const colorKey = (pcbColor || "green").toLowerCase();
+  const maskHex = MASK_HEX[colorKey] ?? MASK_HEX.green;
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Box className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">PCB Preview</span>
           {layerCount > 0 && (
@@ -294,96 +383,115 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
               {layerCount} layer{layerCount !== 1 ? "s" : ""}
             </span>
           )}
+          {layerNames.slice(0, 4).map(n => (
+            <span key={n} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+              {n.replace("_", " ")}
+            </span>
+          ))}
         </div>
         <div className="flex items-center gap-1">
-          {/* View toggle */}
           <div className="flex rounded-lg border border-border overflow-hidden mr-1">
-            <button onClick={() => setView("3d")}
-              className={`px-2.5 py-1 text-xs font-medium transition-colors ${view === "3d" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              3D
-            </button>
             <button onClick={() => setView("2d")}
               className={`px-2.5 py-1 text-xs font-medium transition-colors ${view === "2d" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
               2D
             </button>
+            <button onClick={() => setView("3d")}
+              className={`px-2.5 py-1 text-xs font-medium transition-colors ${view === "3d" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              3D
+            </button>
           </div>
           {view === "2d" && (
             <>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.max(0.3, z - 0.2))}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.max(0.2, z - 0.25))}>
                 <ZoomOut className="w-3.5 h-3.5" />
               </Button>
               <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom2d * 100)}%</span>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.min(4, z + 0.2))}>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.min(5, z + 0.25))}>
                 <ZoomIn className="w-3.5 h-3.5" />
               </Button>
             </>
           )}
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-            if (view === "3d") initViewer();
-            else setZoom2d(1);
+            if (view === "2d") setZoom2d(1);
+            else { destroy3d(); init3d(); }
           }} title="Reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={initViewer} title="Reload">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadLayers} title="Reload">
             <RefreshCw className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
       {/* Viewport */}
-      <div className="relative" style={{ height: 380, background: view === "3d" ? "#0d1117" : "#1a1a2e" }}>
-        {/* 3D canvas mounts here */}
-        {view === "3d" && <div ref={containerRef} className="absolute inset-0 w-full h-full" />}
+      <div className="relative" style={{ height: 380, background: view === "3d" ? "#0d1117" : "#0d2318" }}>
 
-        {/* 2D SVG view */}
+        {/* 2D view */}
         {view === "2d" && svgContent && !loading && (
-          <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4">
+          <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4"
+            style={{ background: "#0d2318" }}>
             <div
-              style={{ transform: `scale(${zoom2d})`, transformOrigin: "center center", transition: "transform 0.2s" }}
+              style={{
+                transform: `scale(${zoom2d})`,
+                transformOrigin: "center center",
+                transition: "transform 0.15s ease",
+                maxWidth: "100%",
+                maxHeight: "100%",
+              }}
               dangerouslySetInnerHTML={{ __html: svgContent }}
             />
           </div>
         )}
 
+        {/* 3D canvas */}
+        {view === "3d" && <div ref={containerRef} className="absolute inset-0 w-full h-full" />}
+
         {/* Loading overlay */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0d1117]/95 z-10">
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
-            <p className="text-xs text-muted-foreground">Rendering PCB preview...</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10"
+            style={{ background: "rgba(13,17,23,0.95)" }}>
+            <Loader2 className="w-7 h-7 text-primary animate-spin" />
+            <p className="text-xs text-muted-foreground">Parsing Gerber layers…</p>
           </div>
         )}
 
-        {/* Error overlay */}
-        {error && !loading && view !== "2d" && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 bg-[#0d1117]/95 z-10">
+        {/* Error state */}
+        {error && !loading && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-10"
+            style={{ background: "rgba(13,17,23,0.95)" }}>
             <AlertCircle className="w-7 h-7 text-destructive" />
             <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={initViewer}>
-                <RefreshCw className="w-3 h-3 mr-1" /> Retry 3D
-              </Button>
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setView("2d")}>
-                View 2D
-              </Button>
-            </div>
+            <Button size="sm" variant="outline" className="text-xs h-7" onClick={loadLayers}>
+              <RefreshCw className="w-3 h-3 mr-1" /> Retry
+            </Button>
           </div>
         )}
 
-        {/* 2D empty state */}
-        {view === "2d" && !svgContent && !loading && (
+        {/* 2D empty */}
+        {view === "2d" && !svgContent && !loading && !error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
             <AlertCircle className="w-6 h-6 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">No 2D preview available</p>
+            <p className="text-xs text-muted-foreground">No preview available</p>
+          </div>
+        )}
+
+        {/* Color indicator */}
+        {!loading && (
+          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/50 rounded-full px-2 py-1">
+            <div className="w-3 h-3 rounded-full border border-white/20" style={{ background: maskHex }} />
+            <span className="text-xs text-white/70">{pcbColor}</span>
           </div>
         )}
       </div>
 
-      {/* Footer hint */}
-      {!loading && (
-        <div className="px-3 py-2 bg-muted/30 border-t border-border flex items-center justify-between">
+      {/* Footer */}
+      {!loading && !error && (
+        <div className="px-3 py-2 bg-muted/30 border-t border-border">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Layers className="w-3 h-3" />
-            {view === "3d" ? "Drag to rotate · Scroll to zoom · Right-click to pan" : "PCB top copper layer preview"}
+            {view === "3d"
+              ? "Drag to rotate · Scroll to zoom · Auto-rotating"
+              : "Scroll to zoom · Top copper layer"}
           </p>
         </div>
       )}
