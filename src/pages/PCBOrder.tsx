@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Upload, ChevronRight, Clock, CheckCircle, XCircle, Truck, Package, Info, ShoppingBag, AlertCircle, FileDown, CreditCard, RefreshCcw, AlertTriangle, Building, Layers, Cpu } from "lucide-react";
+import GerberViewer from "@/components/GerberViewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -306,6 +307,13 @@ export default function PCBOrder() {
                       accept=".zip,.rar,.gbr,.ger,.gtl,.gbl,.gbs,.gts,.gko"
                       onChange={e => { const f = e.target.files?.[0]; if (f) validateAndSetGerber(f); }} />
                   </div>
+
+                  {/* Gerber Viewer */}
+                  {gerberFile && (
+                    <div className="mt-4">
+                      <GerberViewer file={gerberFile} />
+                    </div>
+                  )}
                 </div>
 
                 {/* Board Specs */}
