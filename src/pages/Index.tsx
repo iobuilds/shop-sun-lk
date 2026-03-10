@@ -108,7 +108,7 @@ const Index = () => {
             {
               "@type": "WebSite",
               "@id": `${window.location.origin}/#website`,
-              name: "TechLK",
+              name: "NanoCircuit.lk",
               url: window.location.origin,
               potentialAction: {
                 "@type": "SearchAction",
