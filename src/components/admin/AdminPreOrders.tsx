@@ -110,23 +110,33 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.setFont("helvetica", "normal");
 
   const unitTotal = Number(req.unit_cost_total) || 0;
-  const shipping = Number(req.shipping_fee) || 0;
-  const tax = Number(req.tax_amount) || 0;
-  const grand = unitTotal + shipping + tax;
+  const shipping = Number(req.shipping_fee);
+  const tax = Number(req.tax_amount);
+  const shippingTBA = shipping === -1;
+  const taxTBA = tax === -1;
+  const grand = unitTotal + (shippingTBA ? 0 : Math.max(0, shipping)) + (taxTBA ? 0 : Math.max(0, tax));
 
   if (unitTotal > 0) {
     doc.text("Items Total:", xL, sY);
     doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" });
     sY += 6;
   }
-  if (shipping > 0) {
+  if (!shippingTBA && shipping > 0) {
     doc.text("Shipping Fee:", xL, sY);
     doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" });
     sY += 6;
+  } else if (shippingTBA) {
+    doc.text("Shipping Fee:", xL, sY);
+    doc.text("Price after arrival", xV, sY, { align: "right" });
+    sY += 6;
   }
-  if (tax > 0) {
+  if (!taxTBA && tax > 0) {
     doc.text("Tax / Custom Duty:", xL, sY);
     doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" });
+    sY += 6;
+  } else if (taxTBA) {
+    doc.text("Tax / Custom Duty:", xL, sY);
+    doc.text("Price after arrival", xV, sY, { align: "right" });
     sY += 6;
   }
 
@@ -163,6 +173,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     admin_notes: "",
     shipping_fee: "",
     tax_amount: "",
+    shipping_after_arrival: false,
+    tax_after_arrival: false,
   });
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -180,6 +192,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       admin_notes: req.admin_notes || "",
       shipping_fee: req.shipping_fee ? String(req.shipping_fee) : "",
       tax_amount: req.tax_amount ? String(req.tax_amount) : "",
+      shipping_after_arrival: req.shipping_fee === -1 || req.shipping_fee === null && req.status !== "pending",
+      tax_after_arrival: req.tax_amount === -1 || req.tax_amount === null && req.status !== "pending",
     });
     setEditDialog(true);
   };
@@ -202,13 +216,17 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
 
       // Calculate total from items
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
-      const grandTotal = unitCostTotal + (parseFloat(editForm.shipping_fee) || 0) + (parseFloat(editForm.tax_amount) || 0);
+      const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
+      const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
+      const grandTotal = unitCostTotal
+        + (shippingVal > 0 ? shippingVal : 0)
+        + (taxVal > 0 ? taxVal : 0);
 
       const { error } = await supabase.from("preorder_requests").update({
         status: editForm.status,
         admin_notes: editForm.admin_notes || null,
-        shipping_fee: parseFloat(editForm.shipping_fee) || 0,
-        tax_amount: parseFloat(editForm.tax_amount) || 0,
+        shipping_fee: shippingVal,
+        tax_amount: taxVal,
         unit_cost_total: unitCostTotal,
         grand_total: grandTotal,
       }).eq("id", editTarget.id);
@@ -380,16 +398,20 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                             <span className="font-medium text-foreground">Admin note: </span>{req.admin_notes}
                           </div>
                         )}
-                        {grandTotal > 0 && (
+                         {grandTotal > 0 && (
                           <div className="text-xs space-y-0.5 bg-muted/30 rounded-lg p-2">
                             {req.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Items total</span><span>Rs. {Number(req.unit_cost_total).toLocaleString()}</span></div>}
-                            {req.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(req.shipping_fee).toLocaleString()}</span></div>}
-                            {req.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span>Rs. {Number(req.tax_amount).toLocaleString()}</span></div>}
+                            {req.shipping_fee === -1
+                              ? <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                              : req.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(req.shipping_fee).toLocaleString()}</span></div>}
+                            {req.tax_amount === -1
+                              ? <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                              : req.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax / Custom duty</span><span>Rs. {Number(req.tax_amount).toLocaleString()}</span></div>}
                             <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1 mt-1">
-                              <span>Grand Total</span><span>Rs. {grandTotal.toLocaleString()}</span>
+                              <span>Grand Total</span><span>Rs. {grandTotal.toLocaleString()}{(req.shipping_fee === -1 || req.tax_amount === -1) ? " + TBA" : ""}</span>
                             </div>
                           </div>
-                        )}
+                         )}
                       </div>
                     </motion.div>
                   )}
@@ -467,20 +489,41 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> Shipping Fee (Rs.)</Label>
+                  <div className="flex items-center gap-2 mt-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, shipping_after_arrival: !f.shipping_after_arrival, shipping_fee: f.shipping_after_arrival ? f.shipping_fee : "" }))}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.shipping_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Clock className="w-3 h-3" />
+                      Price after arrival
+                    </button>
+                  </div>
                   <Input
-                    type="number" min={0} className="mt-1 text-sm"
+                    type="number" min={0} className="text-sm"
                     placeholder="0"
-                    value={editForm.shipping_fee}
+                    disabled={editForm.shipping_after_arrival}
+                    value={editForm.shipping_after_arrival ? "" : editForm.shipping_fee}
                     onChange={e => setEditForm(f => ({ ...f, shipping_fee: e.target.value }))}
                   />
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Can be updated after arrival</p>
                 </div>
                 <div>
                   <Label className="text-sm">Tax / Custom Duty (Rs.)</Label>
+                  <div className="flex items-center gap-2 mt-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, tax_after_arrival: !f.tax_after_arrival, tax_amount: f.tax_after_arrival ? f.tax_amount : "" }))}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.tax_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Clock className="w-3 h-3" />
+                      Price after arrival
+                    </button>
+                  </div>
                   <Input
-                    type="number" min={0} className="mt-1 text-sm"
+                    type="number" min={0} className="text-sm"
                     placeholder="0"
-                    value={editForm.tax_amount}
+                    disabled={editForm.tax_after_arrival}
+                    value={editForm.tax_after_arrival ? "" : editForm.tax_amount}
                     onChange={e => setEditForm(f => ({ ...f, tax_amount: e.target.value }))}
                   />
                 </div>
@@ -489,16 +532,22 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
               {/* Grand total preview */}
               {(() => {
                 const itemsTotal = editItems.reduce((s, it) => s + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
-                const shipping = parseFloat(editForm.shipping_fee) || 0;
-                const tax = parseFloat(editForm.tax_amount) || 0;
+                const shipping = editForm.shipping_after_arrival ? 0 : (parseFloat(editForm.shipping_fee) || 0);
+                const tax = editForm.tax_after_arrival ? 0 : (parseFloat(editForm.tax_amount) || 0);
                 const grand = itemsTotal + shipping + tax;
-                return grand > 0 ? (
+                const hasTBA = editForm.shipping_after_arrival || editForm.tax_after_arrival;
+                return (itemsTotal > 0 || hasTBA) ? (
                   <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
                     {itemsTotal > 0 && <div className="flex justify-between text-muted-foreground"><span>Items</span><span>Rs. {itemsTotal.toLocaleString()}</span></div>}
-                    {shipping > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
-                    {tax > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
+                    {editForm.shipping_after_arrival
+                      ? <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                      : shipping > 0 && <div className="flex justify-between text-muted-foreground"><span>Shipping</span><span>Rs. {shipping.toLocaleString()}</span></div>}
+                    {editForm.tax_after_arrival
+                      ? <div className="flex justify-between text-muted-foreground"><span>Tax</span><span className="text-secondary font-medium">Price after arrival</span></div>
+                      : tax > 0 && <div className="flex justify-between text-muted-foreground"><span>Tax</span><span>Rs. {tax.toLocaleString()}</span></div>}
                     <div className="flex justify-between font-bold text-foreground border-t border-border pt-1">
-                      <span>Grand Total</span><span>Rs. {grand.toLocaleString()}</span>
+                      <span>Grand Total</span>
+                      <span>Rs. {grand.toLocaleString()}{hasTBA ? " + TBA" : ""}</span>
                     </div>
                   </div>
                 ) : null;
