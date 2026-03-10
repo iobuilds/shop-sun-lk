@@ -82,7 +82,7 @@ async function renderLayerToSvg(gerberStr: string): Promise<string | null> {
     const { parse, plot, renderSVG } = await import("web-gerber");
     const { toHtml } = await import("hast-util-to-html");
     const parsed = parse(gerberStr);
-    const plotted = plot(parsed);
+    const plotted = plot(parsed, false);
     const svgTree = renderSVG(plotted);
     const html = toHtml(svgTree as any);
     return html || null;
