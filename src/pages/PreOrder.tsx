@@ -550,15 +550,15 @@ export default function PreOrder() {
                             </div>
                           )}
                           {req.conversation_id && (
-                            <div className="px-4 pb-3">
-                              <Link
-                                to="/profile"
-                                className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
-                              >
-                                <MessageSquare className="w-3 h-3" /> View Conversation
-                              </Link>
-                            </div>
-                          )}
+                             <div className="px-4 pb-3">
+                               <Link
+                                 to={`/profile?tab=messages&convo=${req.conversation_id}`}
+                                 className="inline-flex items-center gap-1 text-xs text-secondary hover:underline"
+                               >
+                                 <MessageSquare className="w-3 h-3" /> View Conversation
+                               </Link>
+                             </div>
+                           )}
                         </div>
                       );
                     })}
