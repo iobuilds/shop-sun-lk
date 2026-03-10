@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
 
-const CountdownTimer = ({ endsAt }: { endsAt: string }) => {
+const CountdownTimer = forwardRef<HTMLDivElement, { endsAt: string }>(({ endsAt }, _ref) => {
   const [timeLeft, setTimeLeft] = useState({ h: 0, m: 0, s: 0 });
 
   useEffect(() => {
@@ -31,7 +31,8 @@ const CountdownTimer = ({ endsAt }: { endsAt: string }) => {
       </span>
     </div>
   );
-};
+});
+CountdownTimer.displayName = "CountdownTimer";
 
 const DailyDeals = () => {
   const { data: deals, isLoading } = useQuery({
