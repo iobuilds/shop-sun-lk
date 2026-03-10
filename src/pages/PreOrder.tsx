@@ -786,6 +786,16 @@ export default function PreOrder() {
                           )}
 
                           {/* Payment actions */}
+                          {req.payment_status === "under_review" && req.status === "quoted" && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5">
+                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Payment submitted — under admin review</p>
+                              {req.slip_url && (
+                                <a href={req.slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
+                                  <FileDown className="w-3 h-3" /> View uploaded slip
+                                </a>
+                              )}
+                            </div>
+                          )}
                           {canPay && (
                             <div className="px-4 pb-3 pt-2 border-t border-border">
                               <div className="flex items-center gap-2 flex-wrap">
