@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,8 +24,9 @@ import UserDetailDialog from "@/components/admin/UserDetailDialog";
 import AdminOrderDetailDialog from "@/components/admin/AdminOrderDetailDialog";
 import NavbarManager from "@/components/admin/NavbarManager";
 import InvoiceTemplateBuilder from "@/components/admin/InvoiceTemplateBuilder";
+import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -625,6 +626,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
         { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
         { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
@@ -3003,6 +3005,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <p>Loading SEO settings...</p>
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {/* ═══ Homepage Sections Manager Tab ═══ */}
+          {tab === "homepage_sections" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <HomepageSectionsManager />
             </motion.div>
           )}
 
