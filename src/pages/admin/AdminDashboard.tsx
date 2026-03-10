@@ -626,6 +626,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
         { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
         { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
