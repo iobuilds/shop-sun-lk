@@ -3760,6 +3760,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                 requests={preorderRequests || []}
                 onRefresh={refetchPreorders}
                 allProfiles={allProfiles || []}
+                onOpenConversation={(convId) => {
+                  setAdminSelectedConvo(convId);
+                  setTab("contacts");
+                }}
               />
             </motion.div>
           )}
