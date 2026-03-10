@@ -1100,6 +1100,56 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_receipts: {
+        Row: {
+          buy_date: string
+          buy_price: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lcsc_part_number: string | null
+          mpn: string | null
+          notes: string | null
+          order_reference: string | null
+          product_id: string
+          qty_received: number
+        }
+        Insert: {
+          buy_date?: string
+          buy_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lcsc_part_number?: string | null
+          mpn?: string | null
+          notes?: string | null
+          order_reference?: string | null
+          product_id: string
+          qty_received?: number
+        }
+        Update: {
+          buy_date?: string
+          buy_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lcsc_part_number?: string | null
+          mpn?: string | null
+          notes?: string | null
+          order_reference?: string | null
+          product_id?: string
+          qty_received?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_receipts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
