@@ -210,39 +210,40 @@ export default function PreOrder() {
 
                     <div className="divide-y divide-border">
                       {items.map((item, idx) => (
-                        <div key={idx} className="px-3 py-2.5 space-y-2">
-                          {/* Row: item label + type toggle + delete */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-semibold text-muted-foreground shrink-0">#{idx + 1}</span>
-                            <div className="flex gap-1 flex-1">
-                              {(["store", "external"] as const).map(t => (
-                                <button
-                                  key={t}
-                                  onClick={() => updateItem(idx, { type: t, product_id: undefined, product_name: "", external_url: "" })}
-                                  className={`flex-1 py-1 text-[11px] font-medium rounded border transition-all ${
-                                    item.type === t
-                                      ? "bg-secondary text-secondary-foreground border-secondary"
-                                      : "bg-background text-muted-foreground border-border hover:border-secondary/50"
-                                  }`}
-                                >
-                                  {t === "store" ? "🏪 Our Store" : "🔗 External Link"}
-                                </button>
-                              ))}
-                            </div>
+                        <div key={idx} className="p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-muted-foreground">Item {idx + 1}</span>
                             {items.length > 1 && (
-                              <button onClick={() => removeItem(idx)} className="text-destructive hover:text-destructive/80 transition-colors shrink-0">
+                              <button onClick={() => removeItem(idx)} className="text-destructive hover:text-destructive/80 transition-colors">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
 
-                          {/* Product input row */}
+                          {/* Type toggle */}
+                          <div className="flex gap-2">
+                            {(["store", "external"] as const).map(t => (
+                              <button
+                                key={t}
+                                onClick={() => updateItem(idx, { type: t, product_id: undefined, product_name: "", external_url: "" })}
+                                className={`flex-1 py-1.5 text-xs font-medium rounded-md border transition-all ${
+                                  item.type === t
+                                    ? "bg-secondary text-secondary-foreground border-secondary"
+                                    : "bg-background text-muted-foreground border-border hover:border-secondary/50"
+                                }`}
+                              >
+                                {t === "store" ? "🏪 From Our Store" : "🔗 External Link"}
+                              </button>
+                            ))}
+                          </div>
+
                           {item.type === "store" ? (
                             <div className="relative">
+                              <Label className="text-xs mb-1 block">Search Product</Label>
                               <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
-                                  className="pl-7 text-xs h-8"
+                                  className="pl-8 text-sm h-9"
                                   placeholder="Search by name or SKU…"
                                   value={productSearch[idx] ?? item.product_name}
                                   onChange={e => {
@@ -254,14 +255,14 @@ export default function PreOrder() {
                                 />
                               </div>
                               {productSearchOpen[idx] && filteredProducts(idx).length > 0 && (
-                                <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                                <div className="absolute z-10 top-full mt-1 left-0 right-0 bg-card border border-border rounded-lg shadow-lg overflow-hidden max-h-52 overflow-y-auto">
                                   {filteredProducts(idx).map(p => (
                                     <button
                                       key={p.id}
                                       onMouseDown={() => selectProduct(idx, p)}
-                                      className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-muted transition-colors text-left"
+                                      className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted transition-colors text-left"
                                     >
-                                      <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-7 h-7 rounded object-cover shrink-0 border border-border" />
+                                      <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-8 h-8 rounded object-cover shrink-0 border border-border" />
                                       <div className="min-w-0">
                                         <p className="text-xs font-medium text-foreground line-clamp-1">{p.name}</p>
                                         {p.sku && <p className="text-[10px] text-muted-foreground">SKU: {p.sku}</p>}
@@ -270,59 +271,75 @@ export default function PreOrder() {
                                   ))}
                                 </div>
                               )}
+                              {/* If no store product found, allow manual name */}
+                              {item.type === "store" && !item.product_id && (
+                                <p className="text-[11px] text-muted-foreground mt-1">Can't find it? Switch to "External Link" or type the name below.</p>
+                              )}
+                              {/* Manual name override if nothing selected */}
                               {!item.product_id && (
                                 <Input
-                                  className="mt-1.5 text-xs h-8"
+                                  className="mt-2 text-sm h-9"
                                   placeholder="Or type product name manually"
                                   value={item.product_name}
                                   onChange={e => updateItem(idx, { product_name: e.target.value })}
                                 />
                               )}
                               {item.product_id && item.product_image && (
-                                <div className="mt-1.5 flex items-center gap-2 p-1.5 bg-muted/40 rounded-lg">
-                                  <img src={item.product_image} alt="" className="w-8 h-8 rounded object-cover border border-border" />
-                                  <span className="text-xs font-medium text-foreground line-clamp-1">{item.product_name}</span>
+                                <div className="mt-2 flex items-center gap-2 p-2 bg-muted/40 rounded-lg">
+                                  <img src={item.product_image} alt="" className="w-10 h-10 rounded object-cover border border-border" />
+                                  <span className="text-xs font-medium text-foreground">{item.product_name}</span>
                                 </div>
                               )}
                             </div>
                           ) : (
-                            <div className="flex gap-1.5">
-                              <Input
-                                className="text-xs h-8 flex-1"
-                                placeholder="https://aliexpress.com/… or any URL"
-                                value={item.external_url || ""}
-                                onChange={e => updateItem(idx, { external_url: e.target.value })}
-                              />
-                              <Input
-                                className="text-xs h-8 flex-1"
-                                placeholder="Product name"
-                                value={item.product_name}
-                                onChange={e => updateItem(idx, { product_name: e.target.value })}
-                              />
+                            <div className="space-y-2">
+                              <div>
+                                <Label className="text-xs mb-1 block">Product Link (URL)</Label>
+                                <Input
+                                  className="text-sm h-9"
+                                  placeholder="https://aliexpress.com/... or any URL"
+                                  value={item.external_url || ""}
+                                  onChange={e => updateItem(idx, { external_url: e.target.value })}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs mb-1 block">Product Name</Label>
+                                <Input
+                                  className="text-sm h-9"
+                                  placeholder="Name or description of the item"
+                                  value={item.product_name}
+                                  onChange={e => updateItem(idx, { product_name: e.target.value })}
+                                />
+                              </div>
                             </div>
                           )}
 
-                          {/* Qty + Date + Note in one compact row */}
-                          <div className="flex gap-1.5 items-center">
-                            <div className="w-20 shrink-0">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs mb-1 block">Quantity</Label>
                               <Input
                                 type="number"
                                 min={1}
-                                className="text-xs h-7 text-center"
-                                placeholder="Qty"
+                                className="text-sm h-9"
                                 value={item.quantity}
                                 onChange={e => updateItem(idx, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                               />
                             </div>
+                            <div>
+                              <Label className="text-xs mb-1 block">Expected By (optional)</Label>
+                              <Input
+                                type="date"
+                                className="text-sm h-9"
+                                value={item.expected_date || ""}
+                                onChange={e => updateItem(idx, { expected_date: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs mb-1 block">Note for this item (optional)</Label>
                             <Input
-                              type="date"
-                              className="text-xs h-7 flex-1"
-                              value={item.expected_date || ""}
-                              onChange={e => updateItem(idx, { expected_date: e.target.value })}
-                            />
-                            <Input
-                              className="text-xs h-7 flex-1"
-                              placeholder="Note (colour, spec…)"
+                              className="text-sm h-9"
+                              placeholder="e.g. colour, spec, variant…"
                               value={item.notes || ""}
                               onChange={e => updateItem(idx, { notes: e.target.value })}
                             />
