@@ -652,9 +652,9 @@ export default function PreOrder() {
                       const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
                       const hasQuote = req.unit_cost_total > 0 || req.grand_total > 0;
                       const expired = isQuoteExpired(req);
-                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.grand_total > 0;
+                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.payment_status !== "under_review" && req.grand_total > 0;
                       const arrivalChargesTotal = (Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0);
-                      const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid";
+                      const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid" && req.arrival_payment_status !== "under_review";
                       const shipping = Number(req.shipping_fee);
                       const tax = Number(req.tax_amount);
                       const shippingTBA = shipping === -1;
