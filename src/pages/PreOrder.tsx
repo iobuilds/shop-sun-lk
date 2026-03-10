@@ -788,10 +788,12 @@ export default function PreOrder() {
                             </div>
                           )}
 
-                          {/* Payment actions */}
-                          {req.payment_status === "under_review" && req.status === "quoted" && (
-                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5">
-                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Payment submitted — under admin review</p>
+                          {/* Quote payment status */}
+                          {req.payment_status === "under_review" && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5 bg-amber-50/50">
+                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" /> Payment slip submitted — under admin review
+                              </p>
                               {req.slip_url && (
                                 <a href={req.slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
                                   <FileDown className="w-3 h-3" /> View uploaded slip
@@ -799,8 +801,19 @@ export default function PreOrder() {
                               )}
                             </div>
                           )}
+
+                          {/* Rejected slip — ask to re-upload */}
+                          {req.status === "quoted" && req.payment_status === "unpaid" && req.slip_url && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border bg-destructive/5 space-y-1.5">
+                              <p className="text-xs text-destructive font-medium flex items-center gap-1.5">
+                                <AlertTriangle className="w-3.5 h-3.5" /> Payment slip was rejected — please re-upload a valid slip.
+                              </p>
+                            </div>
+                          )}
+
                           {canPay && (
                             <div className="px-4 pb-3 pt-2 border-t border-border">
+                              <p className="text-xs text-muted-foreground mb-2">Make payment for your quote:</p>
                               <div className="flex items-center gap-2 flex-wrap">
                                 {stripeEnabled && (
                                   <Button size="sm" className="gap-1 text-xs" onClick={() => handleStripePayment(req.id, "quote")} disabled={payingId === req.id}>
@@ -808,7 +821,7 @@ export default function PreOrder() {
                                   </Button>
                                 )}
                                 {bankEnabled && (
-                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openBankTransfer(req.id, "quote", Number(req.grand_total))}>
+                                  <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => openBankTransfer(req.id, "quote", Number(req.grand_total || req.unit_cost_total))}>
                                     <Building className="w-3 h-3" /> Bank Transfer
                                   </Button>
                                 )}
