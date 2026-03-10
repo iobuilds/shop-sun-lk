@@ -77,7 +77,7 @@ export default function GerberViewer({ file }: GerberViewerProps) {
   const [layerCount, setLayerCount] = useState(0);
 
   const resetCamera = useCallback(() => {
-    rendererRef.current?.Controls?.reset?.();
+    (rendererRef.current as any)?.Controls?.reset?.();
   }, []);
 
   const initViewer = useCallback(async () => {
