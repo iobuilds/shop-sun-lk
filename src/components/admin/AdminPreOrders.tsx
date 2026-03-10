@@ -489,20 +489,41 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> Shipping Fee (Rs.)</Label>
+                  <div className="flex items-center gap-2 mt-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, shipping_after_arrival: !f.shipping_after_arrival, shipping_fee: f.shipping_after_arrival ? f.shipping_fee : "" }))}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.shipping_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Clock className="w-3 h-3" />
+                      Price after arrival
+                    </button>
+                  </div>
                   <Input
-                    type="number" min={0} className="mt-1 text-sm"
+                    type="number" min={0} className="text-sm"
                     placeholder="0"
-                    value={editForm.shipping_fee}
+                    disabled={editForm.shipping_after_arrival}
+                    value={editForm.shipping_after_arrival ? "" : editForm.shipping_fee}
                     onChange={e => setEditForm(f => ({ ...f, shipping_fee: e.target.value }))}
                   />
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Can be updated after arrival</p>
                 </div>
                 <div>
                   <Label className="text-sm">Tax / Custom Duty (Rs.)</Label>
+                  <div className="flex items-center gap-2 mt-1 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, tax_after_arrival: !f.tax_after_arrival, tax_amount: f.tax_after_arrival ? f.tax_amount : "" }))}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md border transition-colors ${editForm.tax_after_arrival ? "bg-secondary/10 border-secondary/40 text-secondary font-medium" : "border-border text-muted-foreground hover:bg-muted"}`}
+                    >
+                      <Clock className="w-3 h-3" />
+                      Price after arrival
+                    </button>
+                  </div>
                   <Input
-                    type="number" min={0} className="mt-1 text-sm"
+                    type="number" min={0} className="text-sm"
                     placeholder="0"
-                    value={editForm.tax_amount}
+                    disabled={editForm.tax_after_arrival}
+                    value={editForm.tax_after_arrival ? "" : editForm.tax_amount}
                     onChange={e => setEditForm(f => ({ ...f, tax_amount: e.target.value }))}
                   />
                 </div>
