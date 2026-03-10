@@ -542,10 +542,11 @@ const AdminDashboard = () => {
   const { data: preorderRequests, refetch: refetchPreorders } = useQuery({
     queryKey: ["admin-preorders"],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("preorder_requests")
-        .select("*, preorder_items(*), profiles!inner(full_name, phone)")
+        .select("*, preorder_items(*)")
         .order("created_at", { ascending: false });
+      if (error) throw error;
       return data || [];
     },
     enabled: isAdmin || isModerator,
