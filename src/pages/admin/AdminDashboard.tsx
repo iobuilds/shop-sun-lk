@@ -149,7 +149,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const handler = (e: any) => {
       const { lcsc, mpn } = e.detail || {};
-      const partToFetch = lcsc || mpn || "";
+      const partToFetch = parseLcscInput(lcsc || mpn || "");
       setLcscPartNumber(partToFetch);
       setProductDialog(true);
       setEditingProductId(null);
