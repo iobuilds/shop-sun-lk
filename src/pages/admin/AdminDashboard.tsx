@@ -3151,7 +3151,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       <div><Label>Tagline</Label><Input value={companyForm.tagline || ""} onChange={(e) => setCompanyForm({ ...companyForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
                     </div>
                     <div><Label>Short Description</Label><Textarea value={companyForm.description || ""} onChange={(e) => setCompanyForm({ ...companyForm, description: e.target.value })} rows={2} placeholder="Brief description shown in footer" /></div>
-                    <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 TechLK. All rights reserved." /></div>
+                    <div><Label>Copyright Text</Label><Input value={companyForm.copyright_text || ""} onChange={(e) => setCompanyForm({ ...companyForm, copyright_text: e.target.value })} placeholder="© 2026 NanoCircuit.lk. All rights reserved." /></div>
                     <div>
                       <Label>Company Logo</Label>
                       <div className="flex items-center gap-3 mt-1">
