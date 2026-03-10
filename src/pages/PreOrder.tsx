@@ -27,6 +27,97 @@ const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }>
   cancelled: { label: "Cancelled",       color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
 };
 
+const generateUserPreOrderPDF = (req: any) => {
+  const doc = new jsPDF();
+  const shortId = req.id.slice(0, 8).toUpperCase();
+
+  doc.setFontSize(22);
+  doc.setFont("helvetica", "bold");
+  doc.text("NanoCircuit.lk", 20, 25);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(120, 120, 120);
+  doc.text("Electronics & Components | Sri Lanka", 20, 32);
+
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("PRE-ORDER QUOTE", 145, 25);
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(80, 80, 80);
+  doc.text(`Quote #: PO-${shortId}`, 145, 33);
+  doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
+
+  doc.setDrawColor(220, 220, 220);
+  doc.line(20, 46, 190, 46);
+
+  const tableData = (req.preorder_items || []).map((it: any, i: number) => [
+    String(i + 1),
+    it.product_name || "Item",
+    String(it.quantity),
+    it.unit_price ? `Rs. ${Number(it.unit_price).toLocaleString()}` : "—",
+    it.unit_price ? `Rs. ${(Number(it.unit_price) * (it.quantity || 1)).toLocaleString()}` : "—",
+  ]);
+
+  autoTable(doc, {
+    startY: 54,
+    head: [["#", "Item", "Qty", "Unit Price", "Subtotal"]],
+    body: tableData,
+    theme: "grid",
+    headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 9 },
+    bodyStyles: { fontSize: 9, textColor: [60, 60, 60] },
+    columnStyles: {
+      0: { cellWidth: 10, halign: "center" },
+      1: { cellWidth: 85 },
+      2: { cellWidth: 15, halign: "center" },
+      3: { cellWidth: 35, halign: "right" },
+      4: { cellWidth: 35, halign: "right" },
+    },
+    margin: { left: 20, right: 20 },
+  });
+
+  const finalY = (doc as any).lastAutoTable?.finalY || 180;
+  let sY = finalY + 10;
+  const xL = 130, xV = 185;
+
+  doc.setFontSize(9);
+  doc.setTextColor(80, 80, 80);
+  doc.setFont("helvetica", "normal");
+
+  const unitTotal = Number(req.unit_cost_total) || 0;
+  const shipping = Number(req.shipping_fee) || 0;
+  const tax = Number(req.tax_amount) || 0;
+  const grand = unitTotal + shipping + tax;
+
+  if (unitTotal > 0) { doc.text("Items Total:", xL, sY); doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  if (shipping > 0) { doc.text("Shipping Fee:", xL, sY); doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+  if (tax > 0) { doc.text("Tax / Custom Duty:", xL, sY); doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6; }
+
+  doc.setDrawColor(200, 200, 200);
+  doc.line(xL, sY - 2, xV, sY - 2);
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.setFont("helvetica", "bold");
+  doc.text("Grand Total:", xL, sY + 3);
+  doc.text(`Rs. ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+
+  if (req.admin_notes) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Note: ${req.admin_notes}`, 20, sY + 12);
+  }
+
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(150, 150, 150);
+  doc.text("Thank you for your pre-order request! | NanoCircuit.lk", 105, 280, { align: "center" });
+
+  doc.save(`PreOrder-Quote-PO${shortId}.pdf`);
+};
+
 interface PreOrderItem {
   type: "store" | "external";
   product_id?: string;
