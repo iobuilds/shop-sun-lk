@@ -206,13 +206,17 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
 
       // Calculate total from items
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
-      const grandTotal = unitCostTotal + (parseFloat(editForm.shipping_fee) || 0) + (parseFloat(editForm.tax_amount) || 0);
+      const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
+      const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
+      const grandTotal = unitCostTotal
+        + (shippingVal > 0 ? shippingVal : 0)
+        + (taxVal > 0 ? taxVal : 0);
 
       const { error } = await supabase.from("preorder_requests").update({
         status: editForm.status,
         admin_notes: editForm.admin_notes || null,
-        shipping_fee: parseFloat(editForm.shipping_fee) || 0,
-        tax_amount: parseFloat(editForm.tax_amount) || 0,
+        shipping_fee: shippingVal,
+        tax_amount: taxVal,
         unit_cost_total: unitCostTotal,
         grand_total: grandTotal,
       }).eq("id", editTarget.id);
