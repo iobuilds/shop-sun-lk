@@ -395,10 +395,15 @@ export default function PreOrder() {
       const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
       const publicUrl = urlData.publicUrl;
       setSlipUrl(publicUrl);
-      // Store slip URL on the preorder record
+      // Store slip URL + mark payment as under_review
       const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
-      await supabase.from("preorder_requests").update({ [field]: publicUrl }).eq("id", bankTransferDialog.preorderId);
-      toast({ title: "Slip uploaded!", description: "Your payment slip has been saved." });
+      const statusField = bankTransferDialog.type === "arrival" ? "arrival_payment_status" : "payment_status";
+      await supabase.from("preorder_requests").update({
+        [field]: publicUrl,
+        [statusField]: "under_review",
+      }).eq("id", bankTransferDialog.preorderId);
+      toast({ title: "Slip uploaded!", description: "Your payment slip has been submitted for review." });
+      refetchRequests();
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
@@ -647,9 +652,9 @@ export default function PreOrder() {
                       const isQuoted = ["quoted", "approved", "sourcing", "arrived", "completed"].includes(req.status);
                       const hasQuote = req.unit_cost_total > 0 || req.grand_total > 0;
                       const expired = isQuoteExpired(req);
-                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.grand_total > 0;
+                      const canPay = req.status === "quoted" && !expired && req.payment_status !== "paid" && req.payment_status !== "under_review" && req.grand_total > 0;
                       const arrivalChargesTotal = (Number(req.arrival_shipping_fee) || 0) + (Number(req.arrival_tax_amount) || 0);
-                      const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid";
+                      const canPayArrival = req.status === "arrived" && arrivalChargesTotal > 0 && req.arrival_payment_status !== "paid" && req.arrival_payment_status !== "under_review";
                       const shipping = Number(req.shipping_fee);
                       const tax = Number(req.tax_amount);
                       const shippingTBA = shipping === -1;
@@ -669,8 +674,18 @@ export default function PreOrder() {
                                 </span>
                               )}
                               {req.payment_status === "paid" && (
-                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-100 text-green-800">
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-green-300 bg-green-50 text-green-700">
                                   <CheckCircle className="w-3 h-3" /> Paid
+                                </span>
+                              )}
+                              {req.payment_status === "under_review" && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">
+                                  <Clock className="w-3 h-3" /> Payment Under Review
+                                </span>
+                              )}
+                              {req.arrival_payment_status === "under_review" && (
+                                <span className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">
+                                  <Clock className="w-3 h-3" /> Arrival Payment Under Review
                                 </span>
                               )}
                             </div>
@@ -744,6 +759,15 @@ export default function PreOrder() {
                               </div>
                               {req.arrival_payment_status === "paid" ? (
                                 <p className="text-xs text-green-600 font-medium flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Paid</p>
+                              ) : req.arrival_payment_status === "under_review" ? (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-xs text-amber-700 font-medium flex items-center gap-1"><Clock className="w-3 h-3" /> Payment submitted — under admin review</p>
+                                  {req.arrival_slip_url && (
+                                    <a href={req.arrival_slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
+                                      <FileDown className="w-3 h-3" /> View uploaded slip
+                                    </a>
+                                  )}
+                                </div>
                               ) : canPayArrival && (
                                 <div className="flex gap-2 mt-2">
                                   {stripeEnabled && (
@@ -762,6 +786,16 @@ export default function PreOrder() {
                           )}
 
                           {/* Payment actions */}
+                          {req.payment_status === "under_review" && req.status === "quoted" && (
+                            <div className="px-4 pb-3 pt-2 border-t border-border space-y-1.5">
+                              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Payment submitted — under admin review</p>
+                              {req.slip_url && (
+                                <a href={req.slip_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary underline">
+                                  <FileDown className="w-3 h-3" /> View uploaded slip
+                                </a>
+                              )}
+                            </div>
+                          )}
                           {canPay && (
                             <div className="px-4 pb-3 pt-2 border-t border-border">
                               <div className="flex items-center gap-2 flex-wrap">
