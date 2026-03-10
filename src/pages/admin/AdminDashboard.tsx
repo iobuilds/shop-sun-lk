@@ -3008,6 +3008,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             </motion.div>
           )}
 
+          {/* ═══ Homepage Sections Manager Tab ═══ */}
+          {tab === "homepage_sections" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <HomepageSectionsManager />
+            </motion.div>
+          )}
+
           {/* ═══ Navbar Manager Tab ═══ */}
           {tab === "navbar" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
