@@ -109,6 +109,7 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   doc.setTextColor(80, 80, 80);
   doc.setFont("helvetica", "normal");
 
+  const unitTotal = Number(req.unit_cost_total) || 0;
   const shipping = Number(req.shipping_fee);
   const tax = Number(req.tax_amount);
   const shippingTBA = shipping === -1;
