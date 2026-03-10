@@ -231,8 +231,12 @@ export default function PreOrder() {
   const { data: bankAccounts } = useQuery({
     queryKey: ["bank-accounts-preorder"],
     queryFn: async () => {
-      const { data } = await supabase.from("site_settings").select("*").eq("key", "bank_accounts").single();
-      return (data?.value as any)?.accounts || [];
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "bank_details").single();
+      const val = data?.value as any;
+      // value is directly an array of account objects
+      if (Array.isArray(val)) return val;
+      if (Array.isArray(val?.accounts)) return val.accounts;
+      return [];
     },
     staleTime: 60000,
   });
