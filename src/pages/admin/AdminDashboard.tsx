@@ -628,9 +628,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             className="flex-1 h-9 px-2 text-sm bg-transparent outline-none placeholder:text-muted-foreground"
           />
         </div>
-        {showDropdown && filteredUsers.length > 0 && (
+        {showDropdown && filteredPickerUsers.length > 0 && (
           <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
-            {filteredUsers.map((p: any) => (
+            {filteredPickerUsers.map((p: any) => (
               <button
                 key={p.id}
                 onClick={() => addUser(p.phone)}
@@ -645,7 +645,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
             ))}
           </div>
         )}
-        {showDropdown && searchTerm.length >= 2 && filteredUsers.length === 0 && (
+        {showDropdown && searchTerm.length >= 2 && filteredPickerUsers.length === 0 && (
           <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg p-3 text-sm text-muted-foreground text-center">
             No users found
           </div>
