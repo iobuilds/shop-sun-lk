@@ -201,7 +201,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       const boardGeo = new THREE.BoxGeometry(boardW, boardDepth, boardH);
 
       // Top surface: apply SVG as texture
-      let topMaterial: THREE.Material;
+      let topMaterial: InstanceType<typeof THREE.MeshStandardMaterial>;
       if (displaySvg) {
         const bitmap = await svgToImageBitmap(displaySvg, 512, 512);
         if (bitmap) {
