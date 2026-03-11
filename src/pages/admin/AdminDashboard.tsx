@@ -3255,6 +3255,55 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">Recommended: PNG with transparent background, 200×60px or similar</p>
                     </div>
+
+                    {/* Navbar Branding Config */}
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <Label className="text-sm font-semibold">Navbar Branding Display</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { value: "logo_text", label: "Logo + Text", icon: "🖼️ Abc" },
+                          { value: "logo_only", label: "Logo Only", icon: "🖼️" },
+                          { value: "text_only", label: "Text Only", icon: "Abc" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setCompanyForm({ ...companyForm, navbar_brand_mode: opt.value })}
+                            className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-xs font-medium transition-colors ${
+                              (companyForm.navbar_brand_mode || "logo_text") === opt.value
+                                ? "border-primary bg-primary/5 text-primary"
+                                : "border-border text-muted-foreground hover:border-primary/40"
+                            }`}
+                          >
+                            <span className="text-base">{opt.icon}</span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div>
+                        <Label className="text-sm">Logo Size (height in px)</Label>
+                        <div className="flex items-center gap-3 mt-1">
+                          <input
+                            type="range" min={24} max={72} step={4}
+                            value={companyForm.navbar_logo_height || 36}
+                            onChange={(e) => setCompanyForm({ ...companyForm, navbar_logo_height: Number(e.target.value) })}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-mono w-10 text-center text-foreground">{companyForm.navbar_logo_height || 36}px</span>
+                        </div>
+                      </div>
+                      {companyForm.logo_url && (
+                        <div className="flex items-center gap-3 bg-muted/50 rounded-lg px-4 py-3">
+                          <span className="text-xs text-muted-foreground">Preview:</span>
+                          {(companyForm.navbar_brand_mode || "logo_text") !== "text_only" && (
+                            <img src={companyForm.logo_url} alt="Logo preview" style={{ height: `${companyForm.navbar_logo_height || 36}px` }} className="object-contain" />
+                          )}
+                          {(companyForm.navbar_brand_mode || "logo_text") !== "logo_only" && (
+                            <span className="text-base font-bold font-display text-foreground">{companyForm.store_name || "Store Name"}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">

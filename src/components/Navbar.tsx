@@ -303,14 +303,24 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
-            {company?.logo_url ? (
-              <img src={company.logo_url} alt={storeName} className="h-9 w-auto object-contain" />
-            ) : (
-              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
-              </div>
-            )}
-            <span className="text-xl font-bold font-display text-foreground">{storeName}</span>
+            {(() => {
+              const mode = company?.navbar_brand_mode || "logo_text";
+              const height = company?.navbar_logo_height || 36;
+              return (
+                <>
+                  {mode !== "text_only" && company?.logo_url ? (
+                    <img src={company.logo_url} alt={storeName} style={{ height: `${height}px` }} className="object-contain" />
+                  ) : mode !== "text_only" ? (
+                    <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                      <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
+                    </div>
+                  ) : null}
+                  {mode !== "logo_only" && (
+                    <span className="text-xl font-bold font-display text-foreground">{storeName}</span>
+                  )}
+                </>
+              );
+            })()}
           </Link>
 
           {/* Desktop search */}
