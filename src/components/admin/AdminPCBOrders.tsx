@@ -734,6 +734,37 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       </div>
                     )}
 
+                    {/* Revision payment slip review */}
+                    {order.status === "revision_paying" && (() => {
+                      const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+                      const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                      const revExtra = (() => {
+                        const el = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_extra]:"));
+                        return el ? parseFloat(el.replace("[revision_extra]:", "")) || 0 : 0;
+                      })();
+                      return slipUrl ? (
+                        <div className="border border-amber-200 bg-amber-50 rounded-lg p-3">
+                          <p className="text-sm font-medium text-amber-800 mb-1">Revision Payment Slip — Review Required</p>
+                          {revExtra > 0 && <p className="text-xs text-amber-700 mb-2">Extra amount: Rs. {revExtra.toLocaleString()}</p>}
+                          <a href={slipUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={slipUrl} alt="Revision slip" className="max-h-40 rounded border border-amber-200 mb-3 object-contain bg-white" onError={e => (e.currentTarget.style.display = "none")} />
+                          </a>
+                          <div className="flex gap-2">
+                            <Button size="sm" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "approve")} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                              <ThumbsUp className="w-3.5 h-3.5" /> Approve — Resume Manufacturing
+                            </Button>
+                            <Button size="sm" variant="destructive" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "reject")} className="gap-1.5">
+                              <ThumbsDown className="w-3.5 h-3.5" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          ⏳ Waiting for customer to upload revision payment slip
+                        </div>
+                      );
+                    })()}
+
                     {/* Customer note */}
                     {order.customer_note && (
                       <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg px-3 py-2 italic">"{order.customer_note}"</div>
