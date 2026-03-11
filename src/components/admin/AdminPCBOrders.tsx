@@ -658,42 +658,45 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
               <Checkbox
                 checked={selectedOrders.has(order.id)}
                 onCheckedChange={() => toggleSelectOrder(order.id)}
-                onClick={e => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 className="mt-1 shrink-0"
               />
               <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
                 <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-foreground">PCB-{shortId}</span>
-                  <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
-                  {(order.payment_status === "under_review" || order.arrival_payment_status === "under_review") && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-yellow-100 text-yellow-800 border-yellow-300">Payment Review</span>
-                  )}
-                  {order.status === "under_review" && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-orange-100 text-orange-800 border-orange-300">User Approval Needed</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {order.quantity} pcs · {order.layer_count}L · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
-                </p>
-                {profile && (
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><User className="w-3 h-3" /> {profile.full_name || "Unknown"}</span>
-                    {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {profile.phone}</span>}
+                  <div>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-semibold text-foreground">PCB-{shortId}</span>
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
+                      {(order.payment_status === "under_review" || order.arrival_payment_status === "under_review") && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-yellow-100 text-yellow-800 border-yellow-300">Payment Review</span>
+                      )}
+                      {order.status === "under_review" && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-orange-100 text-orange-800 border-orange-300">User Approval Needed</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {order.quantity} pcs · {order.layer_count}L · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
+                    </p>
+                    {profile && (
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><User className="w-3 h-3" /> {profile.full_name || "Unknown"}</span>
+                        {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {profile.phone}</span>}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {hasInvoice && (
-                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
-                    disabled={downloadingInvoice === order.id}
-                    onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(order); }}>
-                    <Download className="w-3 h-3" />
-                    {downloadingInvoice === order.id ? "…" : "Invoice"}
-                  </Button>
-                )}
-                <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
-                {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasInvoice && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
+                        disabled={downloadingInvoice === order.id}
+                        onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(order); }}>
+                        <Download className="w-3 h-3" />
+                        {downloadingInvoice === order.id ? "…" : "Invoice"}
+                      </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </div>
               </div>
             </div>
 
