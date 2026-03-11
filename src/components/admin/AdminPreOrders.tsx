@@ -612,6 +612,19 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
           <p>No pre-order requests found</p>
         </div>
       ) : (
+        <>
+          {selectedRequests.size > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2.5 mb-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <Checkbox checked={filtered.every((r: any) => selectedRequests.has(r.id))} onCheckedChange={toggleSelectAll} />
+              <span className="text-sm font-medium text-primary">{selectedRequests.size} selected</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeletePreOrders}>
+                  <XCircle className="w-3.5 h-3.5" /> Delete Selected
+                </Button>
+                <button onClick={() => setSelectedRequests(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
+              </div>
+            </div>
+          )}
         <div className="space-y-3">
           {filtered.map((req: any) => {
             const profile = getProfile(req.user_id);
@@ -626,9 +639,15 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             const hasArrivalSlip = !!req.arrival_slip_url;
 
             return (
-              <div key={req.id} className="border border-border rounded-xl bg-card overflow-hidden">
+              <div key={req.id} className={`border rounded-xl bg-card overflow-hidden transition-colors ${selectedRequests.has(req.id) ? "border-primary/40 bg-primary/5" : "border-border"}`}>
                 {/* Header row */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                  <Checkbox
+                    checked={selectedRequests.has(req.id)}
+                    onCheckedChange={() => toggleSelectRequest(req.id)}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    className="shrink-0"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted-foreground">#{req.id.slice(0, 8).toUpperCase()}</span>
