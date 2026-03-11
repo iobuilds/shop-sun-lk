@@ -349,21 +349,23 @@ export default function PCBOrder() {
     setBankTransferDialog({ open: true, orderId, type, amount });
   };
 
-  const handleSlipUpload = async (file: File) => {
-    if (!bankTransferDialog) return;
+  const handleSlipUpload = async (file: File, existingSlipUrl?: string) => {
+    const orderId = bankTransferDialog?.orderId;
+    const type = bankTransferDialog?.type;
+    if (!orderId || !type) return;
     if (file.size > 10 * 1024 * 1024) { toast({ title: "File too large", description: "Max 10MB.", variant: "destructive" }); return; }
     setSlipUploading(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `pcb-slips/${bankTransferDialog.orderId}-${bankTransferDialog.type}-${Date.now()}.${ext}`;
+      const path = `pcb-slips/${orderId}-${type}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const publicUrl = supabase.storage.from("images").getPublicUrl(path).data.publicUrl;
       setSlipUrl(publicUrl);
-      const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
-      const statusField = bankTransferDialog.type === "arrival" ? "arrival_payment_status" : "payment_status";
-      await (supabase as any).from("pcb_order_requests").update({ [field]: publicUrl, [statusField]: "under_review" }).eq("id", bankTransferDialog.orderId);
-      toast({ title: "Slip uploaded!", description: "Payment under review. We'll notify you once approved." });
+      const field = type === "arrival" ? "arrival_slip_url" : "slip_url";
+      const statusField = type === "arrival" ? "arrival_payment_status" : "payment_status";
+      await (supabase as any).from("pcb_order_requests").update({ [field]: publicUrl, [statusField]: "under_review" }).eq("id", orderId);
+      toast({ title: "Slip uploaded!", description: "Your payment is now under review. We'll notify you once approved." });
       refetchOrders();
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -731,6 +733,7 @@ export default function PCBOrder() {
                         if (status === "pending") return 1;
                         if (status === "quoted") return 3;
                         if (status === "under_review") return 5;
+                        if (status === "revision_paying") return 5;
                         if (status === "approved") return 4;
                         if (status === "sourcing") return 4;
                         if (status === "arrived") return 7;
@@ -870,7 +873,7 @@ export default function PCBOrder() {
                                     <div className="flex justify-between font-bold"><span>Additional Amount Due</span><span className="text-amber-800">Rs. {revExtra.toLocaleString()}</span></div>
                                   </div>
                                 )}
-                                <p className="text-xs text-amber-700 mb-2">Please upload your bank transfer slip for the revision amount. Manufacturing will resume once approved.</p>
+                                <p className="text-xs text-amber-700 mb-2">Upload your bank transfer slip for the revision amount. Manufacturing resumes once approved.</p>
                                 <label className="flex items-center gap-2 border border-amber-300 bg-background rounded-lg px-3 py-2 cursor-pointer hover:border-amber-500 transition-colors text-sm text-muted-foreground">
                                   <Upload className="w-4 h-4 text-amber-600 shrink-0" />
                                   Click to upload revision payment slip
@@ -885,15 +888,28 @@ export default function PCBOrder() {
                           {revisionSlipUnderReview(order) && (() => {
                             const revExtra = getRevisionExtra(order);
                             const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
-                            const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                            const uploadedSlipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
                             return (
                               <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 mb-3">
-                                <p className="text-sm font-semibold text-amber-800 mb-1 flex items-center gap-1.5">
-                                  <Clock className="w-4 h-4" /> Revision Payment Under Review
+                                <p className="text-sm font-semibold text-amber-800 mb-1.5 flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" /> Revision Payment — Under Review
                                 </p>
-                                <p className="text-xs text-amber-700 mb-2">Your revision payment slip has been submitted. Manufacturing will resume once our team approves it.</p>
-                                {revExtra > 0 && <p className="text-xs text-amber-700 mb-1">Amount: Rs. {revExtra.toLocaleString()}</p>}
-                                {slipUrl && <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View submitted slip</a>}
+                                <p className="text-xs text-amber-700 mb-2">Your slip has been submitted. Manufacturing resumes once our team approves it.</p>
+                                {revExtra > 0 && <p className="text-xs font-medium text-amber-800 mb-2">Amount: Rs. {revExtra.toLocaleString()}</p>}
+                                {uploadedSlipUrl && (
+                                  <div className="mb-2">
+                                    <a href={uploadedSlipUrl} target="_blank" rel="noopener noreferrer">
+                                      <img src={uploadedSlipUrl} alt="Revision slip" className="max-h-32 rounded-lg border border-amber-200 object-contain bg-white mb-1.5" onError={e => (e.currentTarget.style.display = "none")} />
+                                    </a>
+                                    <a href={uploadedSlipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View full slip ↗</a>
+                                  </div>
+                                )}
+                                {/* Allow re-submission */}
+                                <label className="inline-flex items-center gap-1.5 text-xs text-amber-700 underline cursor-pointer hover:text-amber-900 mt-1">
+                                  <Upload className="w-3 h-3" /> Re-upload slip
+                                  <input type="file" accept="image/*,.pdf" className="hidden"
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) handleRevisionSlipUpload(f, order.id, order.admin_notes || ""); }} />
+                                </label>
                               </div>
                             );
                           })()}
@@ -920,9 +936,24 @@ export default function PCBOrder() {
                           )}
 
                           {order.payment_status === "under_review" && (
-                            <div className="flex items-center gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-3">
-                              <Clock className="w-3.5 h-3.5" /> Payment slip submitted — under review
-                              {order.slip_url && <a href={order.slip_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-primary hover:underline">View slip</a>}
+                            <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-3 mb-3">
+                              <p className="text-xs font-semibold text-yellow-800 mb-1.5 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" /> Payment slip submitted — under review
+                              </p>
+                              {order.slip_url && (
+                                <div className="mb-1.5">
+                                  <a href={order.slip_url} target="_blank" rel="noopener noreferrer">
+                                    <img src={order.slip_url} alt="Payment slip" className="max-h-28 rounded border border-yellow-200 object-contain bg-white mb-1" onError={e => (e.currentTarget.style.display = "none")} />
+                                  </a>
+                                  <a href={order.slip_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View full slip ↗</a>
+                                </div>
+                              )}
+                              {/* Allow re-submission */}
+                              <label className="inline-flex items-center gap-1.5 text-xs text-yellow-700 underline cursor-pointer hover:text-yellow-900 mt-0.5">
+                                <Upload className="w-3 h-3" /> Re-upload slip
+                                <input type="file" accept="image/*,.pdf" className="hidden"
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) openBankTransfer(order.id, "quote", order.grand_total); }} />
+                              </label>
                             </div>
                           )}
                           {order.payment_status === "unpaid" && order.slip_url === null && order.status === "quoted" && !expired && (
@@ -931,9 +962,23 @@ export default function PCBOrder() {
                             </div>
                           )}
                           {order.arrival_payment_status === "under_review" && (
-                            <div className="flex items-center gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-3">
-                              <Clock className="w-3.5 h-3.5" /> Arrival payment under review
-                              {order.arrival_slip_url && <a href={order.arrival_slip_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-primary hover:underline">View slip</a>}
+                            <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-3 mb-3">
+                              <p className="text-xs font-semibold text-yellow-800 mb-1.5 flex items-center gap-1.5">
+                                <Clock className="w-3.5 h-3.5" /> Arrival payment slip submitted — under review
+                              </p>
+                              {order.arrival_slip_url && (
+                                <div className="mb-1.5">
+                                  <a href={order.arrival_slip_url} target="_blank" rel="noopener noreferrer">
+                                    <img src={order.arrival_slip_url} alt="Arrival slip" className="max-h-28 rounded border border-yellow-200 object-contain bg-white mb-1" onError={e => (e.currentTarget.style.display = "none")} />
+                                  </a>
+                                  <a href={order.arrival_slip_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View full slip ↗</a>
+                                </div>
+                              )}
+                              <label className="inline-flex items-center gap-1.5 text-xs text-yellow-700 underline cursor-pointer hover:text-yellow-900 mt-0.5">
+                                <Upload className="w-3 h-3" /> Re-upload slip
+                                <input type="file" accept="image/*,.pdf" className="hidden"
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) openBankTransfer(order.id, "arrival", arrivalTotal); }} />
+                              </label>
                             </div>
                           )}
 
@@ -1036,9 +1081,22 @@ export default function PCBOrder() {
             <div>
               <Label className="text-sm font-medium mb-2 block">Upload Payment Slip</Label>
               {slipUrl ? (
-                <div className="border border-green-200 bg-green-50 rounded-lg p-3 flex items-center gap-2 text-sm text-green-700">
-                  <CheckCircle className="w-4 h-4" /> Slip uploaded successfully
-                  <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-primary text-xs hover:underline">View</a>
+                <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-700">
+                    <CheckCircle className="w-4 h-4" /> 
+                    <span className="font-medium">Payment slip submitted — under review</span>
+                  </div>
+                  <a href={slipUrl} target="_blank" rel="noopener noreferrer">
+                    <img src={slipUrl} alt="Payment slip" className="max-h-40 rounded border border-green-200 object-contain bg-white w-full" onError={e => (e.currentTarget.style.display = "none")} />
+                  </a>
+                  <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block">View full slip ↗</a>
+                  {/* Allow re-submission */}
+                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline cursor-pointer hover:text-foreground border border-border rounded-lg px-3 py-1.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    {slipUploading ? "Uploading..." : "Submit a different slip"}
+                    <input type="file" accept="image/*,.pdf" className="hidden" disabled={slipUploading}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleSlipUpload(f); }} />
+                  </label>
                 </div>
               ) : (
                 <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
@@ -1049,7 +1107,8 @@ export default function PCBOrder() {
                 </label>
               )}
             </div>
-            <Button onClick={() => setBankTransferDialog(null)} variant="outline" className="w-full">Close</Button>
+            {!slipUrl && <p className="text-xs text-muted-foreground text-center">Once uploaded, your payment will show as "under review" until we confirm it.</p>}
+            <Button onClick={() => setBankTransferDialog(null)} variant="outline" className="w-full">{slipUrl ? "Done" : "Cancel"}</Button>
           </div>
         </DialogContent>
       </Dialog>
