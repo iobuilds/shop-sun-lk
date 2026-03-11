@@ -756,7 +756,7 @@ export default function PCBOrder() {
                             <div>
                               <p className="font-semibold text-foreground">PCB-{shortId}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                {order.quantity} pcs · {order.layer_count} Layer · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
+                                {order.quantity} pcs · {order.pcb_color} · {order.board_thickness}
                               </p>
                               <p className="text-xs text-muted-foreground mt-0.5">{new Date(order.created_at).toLocaleDateString()}</p>
                             </div>
