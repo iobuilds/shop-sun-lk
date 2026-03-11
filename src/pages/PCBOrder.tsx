@@ -163,6 +163,14 @@ export default function PCBOrder() {
     },
   });
 
+  const { data: pcbNotice } = useQuery({
+    queryKey: ["pcb-process-notice"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "pcb_process_notice").maybeSingle();
+      return (data as any)?.value as { steps?: string[]; enabled?: boolean } | null;
+    },
+  });
+
   const bankEnabled = paymentSettings?.bank_transfer_enabled === true || paymentSettings?.bank_transfer === true;
   const stripeEnabled = paymentSettings?.stripe_enabled !== false;
 
