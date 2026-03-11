@@ -105,6 +105,33 @@ const Navbar = () => {
 
   const unreadCount = notifications?.filter((n) => !n.is_read).length || 0;
 
+  // Unread messages (admin replies not yet read by user)
+  const { data: unreadMessages } = useQuery({
+    queryKey: ["unread-messages-count", session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return [];
+      // Get user's conversations then count unread admin messages
+      const { data: convos } = await supabase
+        .from("conversations" as any)
+        .select("id")
+        .eq("user_id", session.user.id);
+      if (!convos?.length) return [];
+      const convoIds = convos.map((c: any) => c.id);
+      const { data, error } = await supabase
+        .from("conversation_messages" as any)
+        .select("id")
+        .in("conversation_id", convoIds)
+        .eq("sender_type", "admin")
+        .eq("is_read", false);
+      if (error) return [];
+      return data as any[];
+    },
+    enabled: !!session?.user?.id,
+    refetchInterval: 15000,
+  });
+
+  const unreadMsgCount = unreadMessages?.length || 0;
+
   const markAllRead = async () => {
     if (!session?.user?.id || unreadCount === 0) return;
     await supabase
@@ -361,8 +388,13 @@ const Navbar = () => {
             )}
             {/* Messages icon — only for logged-in users */}
             {session && (
-              <Link to="/profile?tab=messages" className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/profile?tab=messages" className="hidden sm:flex relative p-2 text-muted-foreground hover:text-foreground transition-colors">
                 <MessageSquare className="w-5 h-5" />
+                {unreadMsgCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
+                    {unreadMsgCount > 9 ? "9+" : unreadMsgCount}
+                  </span>
+                )}
               </Link>
             )}
 
