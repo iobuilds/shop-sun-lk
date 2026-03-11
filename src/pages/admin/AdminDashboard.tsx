@@ -1418,16 +1418,31 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   // ── Admin conversation reply ──
   const sendAdminReply = async () => {
-    if (!adminReplyText.trim() || !adminSelectedConvo) return;
+    if (!adminReplyText.trim() && !adminPendingFile || !adminSelectedConvo) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     setAdminSendingReply(true);
     try {
+      let messageText = adminReplyText.trim();
+
+      if (adminPendingFile) {
+        setAdminAttachingFile(true);
+        const ext = adminPendingFile.name.split(".").pop();
+        const filePath = `chat-attachments/${adminSelectedConvo}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("images").upload(filePath, adminPendingFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("images").getPublicUrl(filePath);
+        const fileMsg = `[attachment:${urlData.publicUrl}:${adminPendingFile.name}]`;
+        messageText = messageText ? `${messageText}\n${fileMsg}` : fileMsg;
+        setAdminAttachingFile(false);
+        setAdminPendingFile(null);
+      }
+
       const { error } = await supabase.from("conversation_messages" as any).insert({
         conversation_id: adminSelectedConvo,
         sender_id: session.user.id,
         sender_type: "admin",
-        message: adminReplyText.trim(),
+        message: messageText,
       });
       if (error) throw error;
       setAdminReplyText("");
@@ -1438,6 +1453,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setAdminSendingReply(false);
+      setAdminAttachingFile(false);
     }
   };
 
