@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck, Paperclip, FileText, X, Image as ImageIcon } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
