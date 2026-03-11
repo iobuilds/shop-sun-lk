@@ -245,7 +245,10 @@ const Profile = () => {
   const [selectedConvo, setSelectedConvo] = useState<string | null>(searchParams.get("convo") || null);
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [attachingFile, setAttachingFile] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     full_name: "",
