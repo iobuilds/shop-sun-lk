@@ -627,6 +627,20 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         </Select>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedOrders.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl">
+          <Checkbox checked={filtered.length > 0 && filtered.every(o => selectedOrders.has(o.id))} onCheckedChange={toggleSelectAll} />
+          <span className="text-sm font-medium text-primary">{selectedOrders.size} selected</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeletePCBOrders}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete Selected
+            </Button>
+            <button onClick={() => setSelectedOrders(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">No PCB orders found</div>
       ) : filtered.map(order => {
@@ -638,10 +652,17 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         const hasInvoice = order.grand_total > 0;
 
         return (
-          <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-xl overflow-hidden">
+          <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`bg-card border rounded-xl overflow-hidden transition-colors ${selectedOrders.has(order.id) ? "border-primary/40 bg-primary/5" : "border-border"}`}>
             {/* Header */}
-            <div className="p-4 flex items-start justify-between gap-3 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
-              <div className="flex-1 min-w-0">
+            <div className="p-4 flex items-start gap-3">
+              <Checkbox
+                checked={selectedOrders.has(order.id)}
+                onCheckedChange={() => toggleSelectOrder(order.id)}
+                onClick={e => e.stopPropagation()}
+                className="mt-1 shrink-0"
+              />
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-semibold text-foreground">PCB-{shortId}</span>
                   <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
