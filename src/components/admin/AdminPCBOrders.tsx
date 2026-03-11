@@ -677,6 +677,16 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       <Button size="sm" variant="outline" onClick={() => openEdit(order)} className="gap-1.5">
                         <DollarSign className="w-3.5 h-3.5" /> Quote / Update
                       </Button>
+                      {/* Revision button — during manufacturing */}
+                      {order.status === "sourcing" && (
+                        <Button size="sm" variant="outline" onClick={() => openRevision(order)} className="gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50">
+                          <RefreshCcw className="w-3.5 h-3.5" /> Send Revision
+                        </Button>
+                      )}
+                      {/* Chat button */}
+                      <Button size="sm" variant="outline" onClick={() => openChat(order)} className="gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5" /> Chat
+                      </Button>
       {order.status === "approved" && (
                         <Button size="sm" variant="outline" onClick={async () => {
                           await (supabase as any).from("pcb_order_requests").update({ status: "sourcing" }).eq("id", order.id);
