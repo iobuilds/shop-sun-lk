@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Layers, Loader2, AlertCircle, RotateCcw, Box, RefreshCw,
-  ZoomIn, ZoomOut, Maximize2, Minimize2
+  ZoomIn, ZoomOut, CheckCircle2, XCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -19,17 +19,17 @@ const LAYER_ROLE: Record<string, string> = {
   ".gbr": "top_copper",  ".ger": "top_copper",
 };
 
-// ─── Colors per layer role ────────────────────────────────────────────────
-const LAYER_TRACE_COLOR: Record<string, string> = {
-  top_copper: "#d4a84b",
-  btm_copper: "#d4a84b",
-  top_silk:   "#ffffff",
-  btm_silk:   "#ffffff",
-  top_mask:   "rgba(0,180,80,0.55)",
-  btm_mask:   "rgba(0,180,80,0.55)",
-  outline:    "#888888",
-  drill:      "#333333",
-};
+// ─── Layer stack definition (for sidebar display) ─────────────────────────
+const LAYER_STACK = [
+  { role: "top_silk",   label: "Top Silkscreen",  color: "#e0e0e0", dot: "#ffffff" },
+  { role: "top_mask",   label: "Top Solder Mask",  color: "#1a6b2e", dot: "#22c55e" },
+  { role: "top_copper", label: "Top Copper",        color: "#d4a84b", dot: "#f59e0b" },
+  { role: "outline",    label: "Board Outline",     color: "#888888", dot: "#94a3b8" },
+  { role: "drill",      label: "Drill",             color: "#555555", dot: "#64748b" },
+  { role: "btm_copper", label: "Bot Copper",        color: "#d4a84b", dot: "#f59e0b" },
+  { role: "btm_mask",   label: "Bot Solder Mask",  color: "#1a6b2e", dot: "#22c55e" },
+  { role: "btm_silk",   label: "Bot Silkscreen",   color: "#e0e0e0", dot: "#ffffff" },
+];
 
 const MASK_HEX: Record<string, string> = {
   green:  "#1a6b2e", red: "#8b0000", blue: "#0a3d8f",
@@ -40,17 +40,6 @@ const MASK_NUM: Record<string, number> = {
   green:  0x1a6b2e, red: 0x8b0000, blue: 0x0a3d8f,
   black:  0x1a1a1a, white: 0xe8e8e8, yellow: 0xb8860b,
 };
-
-// Exploded-view layer stack definition
-const EXPLODED_LAYERS = [
-  { role: "top_silk",   label: "Top Silk",   color: "#e0e0e0", yMul:  3 },
-  { role: "top_mask",   label: "Top Mask",   color: null,      yMul:  2 },
-  { role: "top_copper", label: "Top Copper", color: "#c8a44a", yMul:  1 },
-  { role: "outline",    label: "Outline",    color: "#888888", yMul:  0 },
-  { role: "btm_copper", label: "Bot Copper", color: "#c8a44a", yMul: -1 },
-  { role: "btm_mask",   label: "Bot Mask",   color: null,      yMul: -2 },
-  { role: "btm_silk",   label: "Bot Silk",   color: "#e0e0e0", yMul: -3 },
-];
 
 type LayerMap = Record<string, string>;
 
@@ -94,7 +83,6 @@ async function renderLayerToCanvas(
     let svgStr = toHtml(svgTree as any);
     if (!svgStr || svgStr.length < 30) return null;
 
-    // Inject explicit size and override trace colors; background stays transparent
     svgStr = svgStr
       .replace(/<svg([^>]*)>/, (m, attrs) => {
         let a = attrs
@@ -112,7 +100,7 @@ async function renderLayerToCanvas(
     const img = new Image();
     await new Promise<void>((res, rej) => {
       img.onload = () => res();
-      img.onerror = (_e) => rej(new Error("svg img load fail"));
+      img.onerror = () => rej(new Error("svg img load fail"));
       img.src = url;
     });
     URL.revokeObjectURL(url);
@@ -147,10 +135,10 @@ async function buildFaceTexture(
   const copperLayer = layers[`${prefix}_copper`];
   if (copperLayer) {
     const c = await renderLayerToCanvas(copperLayer, size, size, "#d4a84b");
-    if (c) { ctx.drawImage(c, 0, 0); }
+    if (c) ctx.drawImage(c, 0, 0);
   }
 
-  // 3. Exposed pad brightening via mask layer
+  // 3. Mask highlights
   const maskLayer = layers[`${prefix}_mask`];
   if (maskLayer) {
     const c = await renderLayerToCanvas(maskLayer, size, size, "#e8c060");
@@ -161,7 +149,7 @@ async function buildFaceTexture(
     }
   }
 
-  // 4. Silkscreen (white text/markings)
+  // 4. Silkscreen
   const silkLayer = layers[`${prefix}_silk`];
   if (silkLayer) {
     const c = await renderLayerToCanvas(silkLayer, size, size, "#ffffff");
@@ -175,9 +163,8 @@ async function buildFaceTexture(
   return canvas;
 }
 
-/** Build a 2D composite SVG string for the 2D view mode */
+/** Build a 2D composite SVG string */
 async function buildComposite2dSvg(layers: LayerMap, maskHex: string): Promise<string | null> {
-  // Prefer top_copper as the main display layer
   const primary = layers.top_copper || layers.btm_copper || layers.outline;
   if (!primary) return null;
   try {
@@ -195,7 +182,7 @@ async function buildComposite2dSvg(layers: LayerMap, maskHex: string): Promise<s
   } catch { return null; }
 }
 
-/** Get board dimensions from outline SVG viewBox, scaled to target size */
+/** Get board dimensions from outline layer */
 async function getBoardDimensions(outlineStr: string | undefined): Promise<{ w: number; d: number }> {
   const fallback = { w: 80, d: 60 };
   if (!outlineStr) return fallback;
@@ -222,11 +209,10 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerMap>({});
-  const [layerCount, setLayerCount] = useState(0);
   const [view, setView] = useState<"2d" | "3d">("3d");
-  const [mode3d, setMode3d] = useState<"solid" | "exploded">("solid");
   const [svgContent, setSvgContent] = useState<string | null>(null);
   const [zoom2d, setZoom2d] = useState(1);
+  const [showStack, setShowStack] = useState(true);
 
   const colorKey = (pcbColor || "green").toLowerCase();
   const maskHex = MASK_HEX[colorKey] ?? MASK_HEX.green;
@@ -260,7 +246,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
       const count = Object.keys(parsed).length;
       setLayers(parsed);
-      setLayerCount(count);
 
       if (count === 0) {
         setError("No Gerber layers found. Ensure your ZIP contains .gtl / .gbl / .gko files.");
@@ -268,7 +253,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         return;
       }
 
-      // Build 2D SVG for fallback/2d mode
       const svg2d = await buildComposite2dSvg(parsed, maskHex);
       setSvgContent(svg2d);
       setLoading(false);
@@ -278,8 +262,8 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
     }
   }, [file, maskHex, destroy3d]);
 
-  // ── Build 3D scene ──────────────────────────────────────────────────────
-  const init3d = useCallback(async (layerData: LayerMap, exploded: boolean) => {
+  // ── Build 3D scene (solid combined view only) ───────────────────────────
+  const init3d = useCallback(async (layerData: LayerMap) => {
     if (!container3dRef.current || Object.keys(layerData).length === 0) return;
     setLoading(true);
     destroy3d();
@@ -325,125 +309,40 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       const { w: boardW, d: boardD } = await getBoardDimensions(layerData.outline);
       const boardH = 1.6;
 
-      if (exploded) {
-        // ── EXPLODED VIEW: individual layer planes ───────────────────────
-        const GAP = 8; // gap between layers
-        const planeGeo = new THREE.PlaneGeometry(boardW, boardD);
+      // Build composite textures for both faces
+      const [topCanvas, btmCanvas] = await Promise.all([
+        buildFaceTexture(layerData, "top", maskHex, 1024),
+        buildFaceTexture(layerData, "btm", maskHex, 1024),
+      ]);
 
-        for (const layerDef of EXPLODED_LAYERS) {
-          const gerberStr = layerData[layerDef.role];
-          const yPos = layerDef.yMul * GAP;
-          const color = layerDef.color ?? maskHex;
+      const topTex = new THREE.CanvasTexture(topCanvas);
+      const btmTex = new THREE.CanvasTexture(btmCanvas);
 
-          let mat: any;
+      const topMat = new THREE.MeshStandardMaterial({ map: topTex, roughness: 0.35, metalness: 0.1 });
+      const btmMat = new THREE.MeshStandardMaterial({ map: btmTex, roughness: 0.4, metalness: 0.1 });
+      const sideMat = new THREE.MeshStandardMaterial({ color: 0xd4c48a, roughness: 0.85 });
 
-          if (gerberStr) {
-            const traceCol = layerDef.color ?? "#d4a84b";
-            const c = await renderLayerToCanvas(gerberStr, 512, 512, traceCol);
-            if (c) {
-              const tex = new THREE.CanvasTexture(c);
-              // bg canvas with color
-              const bgCanvas = document.createElement("canvas");
-              bgCanvas.width = 512; bgCanvas.height = 512;
-              const bgCtx = bgCanvas.getContext("2d")!;
-              bgCtx.fillStyle = layerDef.role.includes("mask") ? maskHex : "#111111";
-              bgCtx.fillRect(0, 0, 512, 512);
-              bgCtx.drawImage(c, 0, 0);
-              const bgTex = new THREE.CanvasTexture(bgCanvas);
-              mat = new THREE.MeshStandardMaterial({
-                map: bgTex,
-                roughness: 0.4,
-                metalness: layerDef.role.includes("copper") ? 0.6 : 0.05,
-                transparent: layerDef.role.includes("mask"),
-                opacity: layerDef.role.includes("mask") ? 0.75 : 1.0,
-                side: THREE.DoubleSide,
-              });
-            } else {
-              mat = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
-            }
-          } else {
-            // Layer not present — show faint placeholder
-            mat = new THREE.MeshStandardMaterial({
-              color: 0x333333, transparent: true, opacity: 0.15, side: THREE.DoubleSide
-            });
-          }
+      const boardGeo = new THREE.BoxGeometry(boardW, boardH, boardD);
+      const board = new THREE.Mesh(boardGeo, [
+        sideMat, sideMat,
+        topMat,
+        btmMat,
+        sideMat, sideMat,
+      ]);
+      board.castShadow = true;
+      board.receiveShadow = true;
+      scene.add(board);
 
-          const mesh = new THREE.Mesh(planeGeo, mat);
-          mesh.rotation.x = -Math.PI / 2;
-          mesh.position.set(0, yPos, 0);
-          scene.add(mesh);
-
-          // Label sprite
-          const labelCanvas = document.createElement("canvas");
-          labelCanvas.width = 256; labelCanvas.height = 64;
-          const lCtx = labelCanvas.getContext("2d")!;
-          lCtx.fillStyle = "rgba(0,0,0,0.6)";
-          lCtx.roundRect(2, 2, 252, 60, 8);
-          lCtx.fill();
-          lCtx.fillStyle = color === "#e0e0e0" ? "#ffffff" : color;
-          lCtx.font = "bold 26px monospace";
-          lCtx.textAlign = "center";
-          lCtx.textBaseline = "middle";
-          lCtx.fillText(layerDef.label, 128, 32);
-          const lTex = new THREE.CanvasTexture(labelCanvas);
-          const lMat = new THREE.SpriteMaterial({ map: lTex, transparent: true });
-          const sprite = new THREE.Sprite(lMat);
-          sprite.scale.set(18, 4.5, 1);
-          sprite.position.set(boardW / 2 + 12, yPos, 0);
-          scene.add(sprite);
-
-          // Connector line (thin cylinder)
-          if (layerDef.yMul !== 0) {
-            const lineGeo = new THREE.CylinderGeometry(0.15, 0.15, Math.abs(yPos), 4);
-            const lineMat = new THREE.MeshBasicMaterial({ color: 0x444444 });
-            const lineMesh = new THREE.Mesh(lineGeo, lineMat);
-            lineMesh.position.set(-boardW / 2 - 2, yPos / 2, 0);
-            scene.add(lineMesh);
-          }
-        }
-
-        camera.position.set(0, 0, 160);
-        camera.lookAt(0, 0, 0);
-        controls.minDistance = 60;
-        controls.maxDistance = 500;
-        controls.autoRotateSpeed = 0.3;
-
-      } else {
-        // ── SOLID VIEW: composite textures on PCB box ────────────────────
-        const [topCanvas, btmCanvas] = await Promise.all([
-          buildFaceTexture(layerData, "top", maskHex, 1024),
-          buildFaceTexture(layerData, "btm", maskHex, 1024),
-        ]);
-
-        const topTex = new THREE.CanvasTexture(topCanvas);
-        const btmTex = new THREE.CanvasTexture(btmCanvas);
-
-        const topMat = new THREE.MeshStandardMaterial({ map: topTex, roughness: 0.35, metalness: 0.1 });
-        const btmMat = new THREE.MeshStandardMaterial({ map: btmTex, roughness: 0.4, metalness: 0.1 });
-        const sideMat = new THREE.MeshStandardMaterial({ color: 0xd4c48a, roughness: 0.85 }); // FR4 edge
-
-        const boardGeo = new THREE.BoxGeometry(boardW, boardH, boardD);
-        const board = new THREE.Mesh(boardGeo, [
-          sideMat, sideMat,  // ±X
-          topMat,            // +Y (top face)
-          btmMat,            // -Y (bottom face)
-          sideMat, sideMat,  // ±Z
-        ]);
-        board.castShadow = true;
-        board.receiveShadow = true;
-        scene.add(board);
-
-        // Thin copper rim bevel
-        const rimGeo = new THREE.BoxGeometry(boardW + 0.4, boardH + 0.3, boardD + 0.4);
-        const rimMat = new THREE.MeshStandardMaterial({
-          color: 0xb8860b, roughness: 0.9, transparent: true, opacity: 0.1
-        });
-        scene.add(new THREE.Mesh(rimGeo, rimMat));
-      }
+      // Copper rim bevel
+      const rimGeo = new THREE.BoxGeometry(boardW + 0.4, boardH + 0.3, boardD + 0.4);
+      const rimMat = new THREE.MeshStandardMaterial({
+        color: 0xb8860b, roughness: 0.9, transparent: true, opacity: 0.1
+      });
+      scene.add(new THREE.Mesh(rimGeo, rimMat));
 
       // Grid floor
       const grid = new THREE.GridHelper(500, 40, 0x1a2a3a, 0x0f1a22);
-      grid.position.y = exploded ? -40 : -15;
+      grid.position.y = -15;
       scene.add(grid);
 
       // Animate
@@ -470,35 +369,34 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       setView("2d");
       setLoading(false);
     }
-  }, [maskHex, maskNum, destroy3d]);
+  }, [maskHex, destroy3d]);
 
-  // ── Effect: load on file change ─────────────────────────────────────────
   useEffect(() => {
     loadLayers();
     return destroy3d;
   }, [file]); // eslint-disable-line
 
-  // ── Effect: init 3D when layers ready or mode changes ───────────────────
   useEffect(() => {
     if (view === "3d" && Object.keys(layers).length > 0 && !loading) {
-      init3d(layers, mode3d === "exploded");
+      init3d(layers);
     } else if (view === "2d") {
       destroy3d();
     }
-  }, [view, mode3d, layers]); // eslint-disable-line
+  }, [view, layers]); // eslint-disable-line
 
-  // ── Effect: after initial load, trigger 3D ──────────────────────────────
   useEffect(() => {
     if (!loading && view === "3d" && Object.keys(layers).length > 0) {
-      init3d(layers, mode3d === "exploded");
+      init3d(layers);
     }
   }, [loading]); // eslint-disable-line
+
+  const layerCount = Object.keys(layers).length;
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card">
       {/* ── Toolbar ── */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border flex-wrap gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <Box className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">PCB Preview</span>
           {layerCount > 0 && (
@@ -506,11 +404,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
               {layerCount} layer{layerCount !== 1 ? "s" : ""}
             </span>
           )}
-          {Object.keys(layers).map(n => (
-            <span key={n} className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono hidden sm:inline">
-              {n.replace(/_/g, " ")}
-            </span>
-          ))}
         </div>
 
         <div className="flex items-center gap-1">
@@ -526,21 +419,13 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </button>
           </div>
 
-          {/* 3D sub-mode toggle */}
-          {view === "3d" && (
-            <div className="flex rounded-lg border border-border overflow-hidden ml-1">
-              <button onClick={() => setMode3d("solid")}
-                title="Solid view — all layers composited"
-                className={`px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 ${mode3d === "solid" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                <Minimize2 className="w-3 h-3" /> Solid
-              </button>
-              <button onClick={() => setMode3d("exploded")}
-                title="Exploded view — all layers separated"
-                className={`px-2.5 py-1 text-xs font-medium transition-colors flex items-center gap-1 ${mode3d === "exploded" ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                <Maximize2 className="w-3 h-3" /> Layers
-              </button>
-            </div>
-          )}
+          {/* Layer stack toggle */}
+          <button
+            onClick={() => setShowStack(s => !s)}
+            title="Toggle layer stack"
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border transition-colors ml-1 ${showStack ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <Layers className="w-3 h-3" /> Stack
+          </button>
 
           {/* 2D zoom controls */}
           {view === "2d" && (
@@ -557,7 +442,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
             if (view === "2d") setZoom2d(1);
-            else { destroy3d(); init3d(layers, mode3d === "exploded"); }
+            else { destroy3d(); init3d(layers); }
           }} title="Reset view">
             <RotateCcw className="w-3.5 h-3.5" />
           </Button>
@@ -567,61 +452,100 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         </div>
       </div>
 
-      {/* ── Viewport ── */}
-      <div className="relative" style={{ height: 400, background: "#0d1117" }}>
+      {/* ── Main content: viewer + layer stack ── */}
+      <div className="flex">
+        {/* ── Viewport ── */}
+        <div className="relative flex-1" style={{ height: 400, background: "#0d1117" }}>
 
-        {/* 3D canvas */}
-        <div ref={container3dRef} className={`absolute inset-0 w-full h-full ${view !== "3d" ? "hidden" : ""}`} />
+          {/* 3D canvas */}
+          <div ref={container3dRef} className={`absolute inset-0 w-full h-full ${view !== "3d" ? "hidden" : ""}`} />
 
-        {/* 2D SVG view */}
-        {view === "2d" && svgContent && !loading && (
-          <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4"
-            style={{ background: "#0a180f" }}>
-            <div
-              style={{ transform: `scale(${zoom2d})`, transformOrigin: "center", transition: "transform 0.15s" }}
-              dangerouslySetInnerHTML={{ __html: svgContent }}
-            />
-          </div>
-        )}
+          {/* 2D SVG view */}
+          {view === "2d" && svgContent && !loading && (
+            <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4"
+              style={{ background: "#0a180f" }}>
+              <div
+                style={{ transform: `scale(${zoom2d})`, transformOrigin: "center", transition: "transform 0.15s" }}
+                dangerouslySetInnerHTML={{ __html: svgContent }}
+              />
+            </div>
+          )}
 
-        {/* Loading overlay */}
-        {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-20"
-            style={{ background: "rgba(13,17,23,0.96)" }}>
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-            <p className="text-sm text-muted-foreground">
-              {view === "3d" && mode3d === "exploded"
-                ? "Rendering all Gerber layers…"
-                : "Building PCB preview…"}
-            </p>
-          </div>
-        )}
+          {/* Loading overlay */}
+          {loading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-20"
+              style={{ background: "rgba(13,17,23,0.96)" }}>
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <p className="text-sm text-muted-foreground">Building PCB preview…</p>
+            </div>
+          )}
 
-        {/* Error state */}
-        {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-20"
-            style={{ background: "rgba(13,17,23,0.96)" }}>
-            <AlertCircle className="w-7 h-7 text-destructive" />
-            <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
-            <Button size="sm" variant="outline" className="text-xs h-7" onClick={loadLayers}>
-              <RefreshCw className="w-3 h-3 mr-1" /> Retry
-            </Button>
-          </div>
-        )}
+          {/* Error state */}
+          {error && !loading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-20"
+              style={{ background: "rgba(13,17,23,0.96)" }}>
+              <AlertCircle className="w-7 h-7 text-destructive" />
+              <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={loadLayers}>
+                <RefreshCw className="w-3 h-3 mr-1" /> Retry
+              </Button>
+            </div>
+          )}
 
-        {/* 2D empty state */}
-        {view === "2d" && !svgContent && !loading && !error && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-            <AlertCircle className="w-6 h-6 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">No preview available</p>
-          </div>
-        )}
+          {/* 2D empty state */}
+          {view === "2d" && !svgContent && !loading && !error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+              <AlertCircle className="w-6 h-6 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">No preview available</p>
+            </div>
+          )}
 
-        {/* PCB color chip */}
-        {!loading && !error && (
-          <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1 z-10">
-            <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: maskHex }} />
-            <span className="text-xs text-white/70">{pcbColor}</span>
+          {/* PCB color chip */}
+          {!loading && !error && (
+            <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1 z-10">
+              <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: maskHex }} />
+              <span className="text-xs text-white/70">{pcbColor}</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Layer Stack Panel ── */}
+        {showStack && (
+          <div className="w-48 border-l border-border bg-muted/20 flex flex-col" style={{ height: 400 }}>
+            <div className="px-3 py-2 border-b border-border">
+              <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Layers className="w-3 h-3 text-primary" />
+                Gerber Stack
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2">
+              {LAYER_STACK.map((layer, i) => {
+                const present = !!layers[layer.role];
+                return (
+                  <div key={layer.role} className={`flex items-center gap-2 px-3 py-1.5 ${present ? "" : "opacity-35"}`}>
+                    {/* Order number */}
+                    <span className="text-[10px] text-muted-foreground w-3 shrink-0 font-mono">{i + 1}</span>
+                    {/* Color dot */}
+                    <div
+                      className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
+                      style={{ background: present ? layer.dot : "#374151" }}
+                    />
+                    {/* Label */}
+                    <span className="text-[11px] text-foreground leading-tight flex-1">{layer.label}</span>
+                    {/* Present indicator */}
+                    {present
+                      ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
+                      : <XCircle className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+                    }
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-3 py-2 border-t border-border">
+              <p className="text-[10px] text-muted-foreground">
+                {layerCount} / {LAYER_STACK.length} layers detected
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -632,9 +556,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Layers className="w-3 h-3" />
             {view === "3d"
-              ? mode3d === "exploded"
-                ? "All PCB layers separated · Drag to rotate · Scroll to zoom"
-                : "All layers composited · Drag to rotate · Scroll to zoom"
+              ? "All layers composited · Drag to rotate · Scroll to zoom"
               : "Top copper + silkscreen · 2D flat view"}
           </p>
         </div>
