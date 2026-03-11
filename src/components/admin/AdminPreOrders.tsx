@@ -12,6 +12,35 @@ import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+function hexToRgbPO(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  return { r, g, b };
+}
+
+async function loadPreorderTemplate() {
+  try {
+    const { data } = await (supabase as any).from("site_settings").select("value").eq("key", "preorder_invoice_template").maybeSingle();
+    return (data as any)?.value || {};
+  } catch { return {}; }
+}
+
+function loadLogoImage(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext("2d")?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 const STATUS_OPTIONS = [
   { value: "pending",   label: "Pending Review",  color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
   { value: "quoted",    label: "Quoted",           color: "bg-blue-100 text-blue-800 border-blue-300" },
@@ -30,46 +59,63 @@ interface AdminPreOrdersProps {
   onOpenConversation?: (conversationId: string) => void;
 }
 
-const generatePreOrderInvoice = (req: any, profile: any) => {
-  const doc = new jsPDF();
+const generatePreOrderInvoice = async (req: any, profile: any, companySettings?: any) => {
+  const tpl = await loadPreorderTemplate();
+
+  const primaryColor = tpl.primaryColor || "#323232";
+  const accentColor = tpl.accentColor || "#dddddd";
+  const fontFamily = tpl.fontFamily || "helvetica";
+  const paperSize = tpl.paperSize || "a4";
+  const currencySymbol = tpl.currencySymbol || "Rs.";
+  const logoUrl = tpl.logoUrl || companySettings?.logo_url || "";
+
+  const primRgb = hexToRgbPO(primaryColor);
+  const accRgb = hexToRgbPO(accentColor);
+
+  const doc = new jsPDF({ format: paperSize });
+  const storeName = companySettings?.store_name || "NanoCircuit.lk";
   const shortId = req.id.slice(0, 8).toUpperCase();
 
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.text("NanoCircuit.lk", 20, 25);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(120, 120, 120);
-  doc.text("Electronics & Components | Sri Lanka", 20, 32);
+  // Header
+  let headerY = 25;
+  if (logoUrl) {
+    try {
+      const img = await loadLogoImage(logoUrl);
+      doc.addImage(img, "PNG", 20, 12, 40, 16);
+      headerY = 32;
+    } catch {
+      doc.setFontSize(22); doc.setFont(fontFamily, "bold"); doc.text(storeName, 20, 25);
+    }
+  } else {
+    doc.setFontSize(22); doc.setFont(fontFamily, "bold"); doc.text(storeName, 20, 25);
+  }
 
-  doc.setFontSize(14);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
-  doc.text("PRE-ORDER QUOTE", 145, 25);
+  doc.setFontSize(8); doc.setFont(fontFamily, "normal"); doc.setTextColor(120, 120, 120);
+  let compY = headerY + 5;
+  if (companySettings?.address) { doc.text(companySettings.address, 20, compY); compY += 4; }
+  if (companySettings?.phone) { doc.text(`Tel: ${companySettings.phone}`, 20, compY); compY += 4; }
+  if (companySettings?.email) { doc.text(companySettings.email, 20, compY); compY += 4; }
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(80, 80, 80);
-  doc.text(`Quote #: PO-${shortId}`, 145, 33);
-  doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 145, 39);
-  doc.text(`Status: ${STATUS_OPTIONS.find(s => s.value === req.status)?.label || req.status}`, 145, 45);
+  doc.setFontSize(14); doc.setTextColor(0, 0, 0); doc.setFont(fontFamily, "bold");
+  doc.text("PRE-ORDER INVOICE", 190, 22, { align: "right" });
+
+  doc.setFontSize(9); doc.setFont(fontFamily, "normal"); doc.setTextColor(80, 80, 80);
+  doc.text(`Invoice #: PRE-${shortId}`, 190, 30, { align: "right" });
+  doc.text(`Date: ${new Date(req.updated_at || req.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 190, 37, { align: "right" });
+  doc.text(`Status: ${STATUS_OPTIONS.find(s => s.value === req.status)?.label || req.status}`, 190, 44, { align: "right" });
 
   if (req.quoted_at) {
     doc.setTextColor(200, 50, 50);
-    doc.text("* This quote is valid for 48 hours from issue date.", 145, 51);
+    doc.text("* Quote valid for 48 hours from issue date.", 190, 51, { align: "right" });
     doc.setTextColor(80, 80, 80);
   }
 
-  doc.setDrawColor(220, 220, 220);
+  doc.setDrawColor(accRgb.r, accRgb.g, accRgb.b);
   doc.line(20, 56, 190, 56);
 
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont(fontFamily, "bold");
   doc.text("Customer:", 20, 65);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
+  doc.setFont(fontFamily, "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
   let y = 71;
   if (profile?.full_name) { doc.text(profile.full_name, 20, y); y += 5; }
   if (profile?.phone) { doc.text(`Tel: ${profile.phone}`, 20, y); y += 5; }
@@ -79,8 +125,8 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
     it.product_name || "Item",
     it.external_url ? "External" : "Store",
     String(it.quantity),
-    it.unit_price ? `Rs. ${Number(it.unit_price).toLocaleString()}` : "—",
-    it.unit_price ? `Rs. ${(Number(it.unit_price) * (it.quantity || 1)).toLocaleString()}` : "—",
+    it.unit_price ? `${currencySymbol} ${Number(it.unit_price).toLocaleString()}` : "—",
+    it.unit_price ? `${currencySymbol} ${(Number(it.unit_price) * (it.quantity || 1)).toLocaleString()}` : "—",
   ]);
 
   autoTable(doc, {
@@ -88,8 +134,8 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
     head: [["#", "Item", "Type", "Qty", "Unit Price", "Subtotal"]],
     body: tableData,
     theme: "grid",
-    headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: [60, 60, 60] },
+    headStyles: { fillColor: [primRgb.r, primRgb.g, primRgb.b], textColor: 255, fontSize: 9, font: fontFamily },
+    bodyStyles: { fontSize: 9, textColor: [60, 60, 60], font: fontFamily },
     columnStyles: {
       0: { cellWidth: 10, halign: "center" },
       1: { cellWidth: 65 },
@@ -105,62 +151,73 @@ const generatePreOrderInvoice = (req: any, profile: any) => {
   let sY = finalY + 10;
   const xL = 130, xV = 185;
 
-  doc.setFontSize(9);
-  doc.setTextColor(80, 80, 80);
-  doc.setFont("helvetica", "normal");
+  // Quote Summary header
+  doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont(fontFamily, "bold");
+  doc.text("Quote Summary", 20, sY); sY += 8;
+
+  doc.setFontSize(9); doc.setTextColor(80, 80, 80); doc.setFont(fontFamily, "normal");
 
   const unitTotal = Number(req.unit_cost_total) || 0;
   const shipping = Number(req.shipping_fee);
   const tax = Number(req.tax_amount);
   const shippingTBA = shipping === -1;
   const taxTBA = tax === -1;
-  const grand = unitTotal + (shippingTBA ? 0 : Math.max(0, shipping)) + (taxTBA ? 0 : Math.max(0, tax));
 
   if (unitTotal > 0) {
     doc.text("Items Total:", xL, sY);
-    doc.text(`Rs. ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" });
+    doc.text(`${currencySymbol} ${unitTotal.toLocaleString()}`, xV, sY, { align: "right" });
     sY += 6;
   }
-  if (!shippingTBA && shipping > 0) {
-    doc.text("Shipping Fee:", xL, sY);
-    doc.text(`Rs. ${shipping.toLocaleString()}`, xV, sY, { align: "right" });
-    sY += 6;
-  } else if (shippingTBA) {
-    doc.text("Shipping Fee:", xL, sY);
-    doc.text("Price after arrival", xV, sY, { align: "right" });
-    sY += 6;
-  }
-  if (!taxTBA && tax > 0) {
-    doc.text("Tax / Custom Duty:", xL, sY);
-    doc.text(`Rs. ${tax.toLocaleString()}`, xV, sY, { align: "right" });
-    sY += 6;
-  } else if (taxTBA) {
-    doc.text("Tax / Custom Duty:", xL, sY);
-    doc.text("Price after arrival", xV, sY, { align: "right" });
-    sY += 6;
-  }
+  doc.text("Shipping Fee:", xL, sY);
+  doc.text(shippingTBA ? "TBA (After Arrival)" : `${currencySymbol} ${Math.max(0, shipping).toLocaleString()}`, xV, sY, { align: "right" });
+  sY += 6;
 
-  doc.setDrawColor(200, 200, 200);
-  doc.line(xL, sY - 2, xV, sY - 2);
-  doc.setFontSize(11);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
+  doc.text("Tax / Custom Duty:", xL, sY);
+  doc.text(taxTBA ? "TBA (After Arrival)" : `${currencySymbol} ${Math.max(0, tax).toLocaleString()}`, xV, sY, { align: "right" });
+  sY += 8;
+
+  doc.setDrawColor(200, 200, 200); doc.line(xL, sY - 2, xV, sY - 2);
+  doc.setFontSize(11); doc.setTextColor(0, 0, 0); doc.setFont(fontFamily, "bold");
+  const grand = unitTotal + (shippingTBA ? 0 : Math.max(0, shipping)) + (taxTBA ? 0 : Math.max(0, tax));
   doc.text("Grand Total:", xL, sY + 3);
-  doc.text(`Rs. ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+  doc.text(`${currencySymbol} ${grand.toLocaleString()}`, xV, sY + 3, { align: "right" });
+  sY += 14;
+
+  // Arrival charges
+  const arrShipping = Number(req.arrival_shipping_fee || 0);
+  const arrTax = Number(req.arrival_tax_amount || 0);
+  if (arrShipping > 0 || arrTax > 0) {
+    doc.setFontSize(10); doc.setFont(fontFamily, "bold"); doc.setTextColor(0, 0, 0);
+    doc.text("Arrival Charges", 20, sY); sY += 7;
+    doc.setFontSize(9); doc.setFont(fontFamily, "normal"); doc.setTextColor(80, 80, 80);
+    doc.text("Arrival Shipping:", xL, sY);
+    doc.text(`${currencySymbol} ${arrShipping.toLocaleString()}`, xV, sY, { align: "right" }); sY += 6;
+    doc.text("Arrival Tax / Customs:", xL, sY);
+    doc.text(`${currencySymbol} ${arrTax.toLocaleString()}`, xV, sY, { align: "right" }); sY += 8;
+    doc.setDrawColor(200, 200, 200); doc.line(xL, sY - 2, xV, sY - 2);
+    doc.setFontSize(11); doc.setFont(fontFamily, "bold"); doc.setTextColor(0, 0, 0);
+    doc.text("Arrival Total:", xL, sY + 3);
+    doc.text(`${currencySymbol} ${(arrShipping + arrTax).toLocaleString()}`, xV, sY + 3, { align: "right" });
+    sY += 14;
+  }
 
   if (req.admin_notes) {
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Note: ${req.admin_notes}`, 20, sY + 12);
+    const SKIP = ["stripe_session:", "[revision_images]:", "[revision_extra]:", "[revision_note]:", "[revision_slip]:"];
+    const cleanNotes = req.admin_notes.split("\n").filter((l: string) => !SKIP.some(p => l.startsWith(p))).join("\n").trim();
+    if (cleanNotes) {
+      doc.setFontSize(8); doc.setFont(fontFamily, "italic"); doc.setTextColor(100, 100, 100);
+      const lines = doc.splitTextToSize(`Note: ${cleanNotes}`, 165);
+      doc.text(lines, 20, sY); sY += lines.length * 5;
+    }
   }
 
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(150, 150, 150);
-  doc.text("Thank you for your pre-order request! | NanoCircuit.lk", 105, 280, { align: "center" });
+  const footerY = paperSize === "letter" ? 265 : 280;
+  const footerBlock = tpl.blocks?.find((b: any) => b.type === "footer" && b.visible !== false);
+  const footerText = footerBlock?.content || `Thank you for your pre-order! | ${storeName}`;
+  doc.setFontSize(8); doc.setFont(fontFamily, "normal"); doc.setTextColor(150, 150, 150);
+  doc.text(footerText, 105, footerY, { align: "center" });
 
-  doc.save(`PreOrder-Quote-PO${shortId}.pdf`);
+  doc.save(`PreOrder-Invoice-PRE${shortId}.pdf`);
 };
 
 export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpenConversation }: AdminPreOrdersProps) {
@@ -587,7 +644,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                     )}
                     {isQuoted && grandTotal > 0 && (
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => generatePreOrderInvoice(req, profile)}>
-                        <FileDown className="w-3 h-3" /> PDF
+                        <FileDown className="w-3 h-3" /> Invoice PDF
                       </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openConversation(req)}>
