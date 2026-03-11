@@ -377,7 +377,25 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const openRevision = (order: any) => {
     setRevisionTarget(order);
     setRevisionForm({ extra_amount: "", notes: "" });
+    setRevisionImages([]);
     setRevisionDialog(true);
+  };
+
+  const handleRevisionImageUpload = async (file: File) => {
+    setRevisionImgUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `pcb-revisions/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(path);
+      setRevisionImages(prev => [...prev, publicUrl]);
+    } catch (err: any) {
+      toast({ title: "Image upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRevisionImgUploading(false);
+      if (revisionImgRef.current) revisionImgRef.current.value = "";
+    }
   };
 
   const handleRevisionSave = async () => {
