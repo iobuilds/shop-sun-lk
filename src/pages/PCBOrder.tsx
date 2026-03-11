@@ -4,7 +4,7 @@ import {
   Upload, ChevronRight, Clock, CheckCircle, XCircle, Truck, Package,
   Info, AlertCircle, FileDown, Building, RefreshCcw,
   AlertTriangle, Layers, Cpu, FileText, Wrench, X, ImageIcon,
-  Plus, Eye, ExternalLink
+  Plus, Eye, ExternalLink, FlaskConical, Download
 } from "lucide-react";
 import GerberViewer from "@/components/GerberViewer";
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
   quoted:    { label: "Quoted",                        color: "text-blue-600 bg-blue-50 border-blue-200",            icon: Info },
+  under_review: { label: "Approval Pending",           color: "text-orange-600 bg-orange-50 border-orange-200",     icon: AlertCircle },
   approved:  { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
   sourcing:  { label: "Manufacturing",                 color: "text-purple-600 bg-purple-50 border-purple-200",     icon: Cpu },
   arrived:   { label: "Boards Ready — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
@@ -51,15 +53,23 @@ interface GerberEntry {
   board_thickness: string;
   pcb_color: string;
   showPreview: boolean;
+  stencil_needed: boolean;
+  assembly_needed: boolean;
+  pnpFile: File | null;
+  bomFile: File | null;
 }
 
-const defaultGerberSpec = () => ({
+const defaultGerberSpec = (): Omit<GerberEntry, "file"> => ({
   quantity: "5",
   layer_count: "2",
   surface_finish: "HASL",
   board_thickness: "1.6mm",
   pcb_color: "Green",
   showPreview: false,
+  stencil_needed: false,
+  assembly_needed: false,
+  pnpFile: null,
+  bomFile: null,
 });
 
 export default function PCBOrder() {
@@ -67,8 +77,6 @@ export default function PCBOrder() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const pnpInputRef = useRef<HTMLInputElement>(null);
-  const bomInputRef = useRef<HTMLInputElement>(null);
   const noteImageInputRef = useRef<HTMLInputElement>(null);
   const [session, setSession] = useState<any>(null);
   const [tab, setTab] = useState<"new" | "my">(searchParams.get("tab") === "my" ? "my" : "new");
@@ -77,17 +85,12 @@ export default function PCBOrder() {
   const [gerberEntries, setGerberEntries] = useState<GerberEntry[]>([]);
   const [gerberDragging, setGerberDragging] = useState(false);
 
-  // Global options (shared note, assembly, stencil)
-  const [form, setForm] = useState({
-    customer_note: "",
-    stencil_needed: false,
-    assembly_needed: false,
-  });
-  const [pnpFile, setPnpFile] = useState<File | null>(null);
-  const [bomFile, setBomFile] = useState<File | null>(null);
+  // Global note and images (shared across all boards)
+  const [customerNote, setCustomerNote] = useState("");
   const [noteImages, setNoteImages] = useState<File[]>([]);
   const [noteImagePreviews, setNoteImagePreviews] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
 
   // Payment state
   const [bankTransferDialog, setBankTransferDialog] = useState<{ open: boolean; orderId: string; type: "quote" | "arrival"; amount: number } | null>(null);
@@ -109,9 +112,8 @@ export default function PCBOrder() {
       const verify = async () => {
         try {
           const field = type === "arrival" ? "arrival_payment_status" : "payment_status";
-          const statusVal = type === "arrival" ? "paid" : "paid";
           const extraUpdate = type !== "arrival" ? { status: "approved" } : {};
-          await (supabase as any).from("pcb_order_requests").update({ [field]: statusVal, ...extraUpdate }).eq("id", orderId);
+          await (supabase as any).from("pcb_order_requests").update({ [field]: "paid", ...extraUpdate }).eq("id", orderId);
           toast({ title: "✅ Payment confirmed!", description: "Your PCB order has been updated." });
           refetchOrders();
         } catch { /* silent */ }
@@ -150,6 +152,14 @@ export default function PCBOrder() {
     queryFn: async () => {
       const { data } = await supabase.from("site_settings").select("*").eq("key", "payment_methods").single();
       return data?.value as any || {};
+    },
+  });
+
+  const { data: siteSettings } = useQuery({
+    queryKey: ["site-settings-invoice"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "company_info").maybeSingle();
+      return (data as any)?.value as any || {};
     },
   });
 
@@ -220,13 +230,11 @@ export default function PCBOrder() {
   /** Bundle multiple files into one ZIP and upload it */
   const bundleAndUploadGerbers = async (entries: GerberEntry[], uid: string, ts: number): Promise<{ url: string; names: string }> => {
     if (entries.length === 1) {
-      // Single file — upload directly
       const f = entries[0].file;
       const ext = f.name.split(".").pop();
       const url = await uploadFile(f, `pcb-gerbers/${uid}-${ts}.${ext}`);
       return { url, names: f.name };
     }
-    // Multiple files — zip them
     const JSZip = (await import("jszip")).default;
     const zip = new JSZip();
     for (const entry of entries) {
@@ -249,6 +257,14 @@ export default function PCBOrder() {
         toast({ title: "Minimum 5 pcs", description: `${entry.file.name}: minimum order is 5 boards.`, variant: "destructive" });
         return;
       }
+      if (entry.assembly_needed && !entry.pnpFile) {
+        toast({ title: "PnP file required", description: `${entry.file.name}: Please upload a Pick & Place file for assembly.`, variant: "destructive" });
+        return;
+      }
+      if (entry.assembly_needed && !entry.bomFile) {
+        toast({ title: "BOM file required", description: `${entry.file.name}: Please upload a BOM file for assembly.`, variant: "destructive" });
+        return;
+      }
     }
     setSubmitting(true);
     try {
@@ -258,13 +274,26 @@ export default function PCBOrder() {
       // Bundle all gerber files
       const { url: gerberUrl, names: gerberFileNames } = await bundleAndUploadGerbers(gerberEntries, uid, ts);
 
-      // Upload PnP / BOM if assembly
-      let pnpUrl: string | null = null;
-      if (form.assembly_needed && pnpFile)
-        pnpUrl = await uploadFile(pnpFile, `pcb-extras/${uid}-${ts}-pnp.${pnpFile.name.split(".").pop()}`);
-      let bomUrl: string | null = null;
-      if (form.assembly_needed && bomFile)
-        bomUrl = await uploadFile(bomFile, `pcb-extras/${uid}-${ts}-bom.${bomFile.name.split(".").pop()}`);
+      // Upload per-board assembly files
+      const boardNoteParts: string[] = [];
+      for (let i = 0; i < gerberEntries.length; i++) {
+        const entry = gerberEntries[i];
+        const boardLabel = gerberEntries.length > 1 ? `Board ${i + 1} (${entry.file.name})` : entry.file.name;
+
+        let boardNote = `[${boardLabel}] qty=${entry.quantity} layers=${entry.layer_count} finish=${entry.surface_finish} thick=${entry.board_thickness} color=${entry.pcb_color}`;
+        if (entry.stencil_needed) boardNote += " [STENCIL]";
+        if (entry.assembly_needed) boardNote += " [ASSEMBLY]";
+
+        if (entry.assembly_needed && entry.pnpFile) {
+          const pnpUrl = await uploadFile(entry.pnpFile, `pcb-extras/${uid}-${ts}-b${i}-pnp.${entry.pnpFile.name.split(".").pop()}`);
+          boardNote += `\n  PnP: ${pnpUrl}`;
+        }
+        if (entry.assembly_needed && entry.bomFile) {
+          const bomUrl = await uploadFile(entry.bomFile, `pcb-extras/${uid}-${ts}-b${i}-bom.${entry.bomFile.name.split(".").pop()}`);
+          boardNote += `\n  BOM: ${bomUrl}`;
+        }
+        boardNoteParts.push(boardNote);
+      }
 
       // Note images
       const noteImageUrls: string[] = [];
@@ -273,12 +302,11 @@ export default function PCBOrder() {
         noteImageUrls.push(url);
       }
 
-      // Build per-board specs string for multi-gerber
-      const specsNote = gerberEntries.length > 1
-        ? gerberEntries.map((e, i) =>
-            `[Board ${i + 1}: ${e.file.name}] qty=${e.quantity} layers=${e.layer_count} finish=${e.surface_finish} thick=${e.board_thickness} color=${e.pcb_color}`
-          ).join("\n")
-        : "";
+      const fullNote = [
+        ...boardNoteParts,
+        customerNote.trim() || "",
+        noteImageUrls.length > 0 ? `[Reference Images]: ${noteImageUrls.join(", ")}` : "",
+      ].filter(Boolean).join("\n");
 
       const firstEntry = gerberEntries[0];
 
@@ -289,15 +317,7 @@ export default function PCBOrder() {
         surface_finish: firstEntry.surface_finish,
         board_thickness: firstEntry.board_thickness,
         pcb_color: firstEntry.pcb_color,
-        customer_note: [
-          specsNote,
-          form.customer_note.trim(),
-          form.stencil_needed ? "[STENCIL NEEDED]" : "",
-          form.assembly_needed ? "[ASSEMBLY NEEDED]" : "",
-          pnpUrl ? `[PnP File]: ${pnpUrl}` : "",
-          bomUrl ? `[BOM File]: ${bomUrl}` : "",
-          noteImageUrls.length > 0 ? `[Note Images]: ${noteImageUrls.join(", ")}` : "",
-        ].filter(Boolean).join("\n") || null,
+        customer_note: fullNote || null,
         gerber_file_url: gerberUrl,
         gerber_file_name: gerberEntries.length > 1 ? `${gerberEntries.length} files: ${gerberFileNames}` : firstEntry.file.name,
       });
@@ -305,8 +325,7 @@ export default function PCBOrder() {
 
       toast({ title: "✅ PCB order submitted!", description: "We'll review and provide a quote shortly." });
       setGerberEntries([]);
-      setForm({ customer_note: "", stencil_needed: false, assembly_needed: false });
-      setPnpFile(null); setBomFile(null);
+      setCustomerNote("");
       setNoteImages([]); setNoteImagePreviews([]);
       setTab("my"); refetchOrders();
     } catch (err: any) {
@@ -366,8 +385,32 @@ export default function PCBOrder() {
     }
   };
 
+  const handleApproveQuote = async (orderId: string) => {
+    try {
+      await (supabase as any).from("pcb_order_requests").update({ status: "quoted" }).eq("id", orderId);
+      toast({ title: "Quote approved! You can now proceed to payment." });
+      refetchOrders();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDownloadInvoice = async (order: any) => {
+    setDownloadingInvoice(order.id);
+    try {
+      const profile = session?.user?.id ? null : null; // profile fetched separately if needed
+      await generatePCBInvoice(order, siteSettings || {});
+    } catch (err: any) {
+      toast({ title: "Failed to generate invoice", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingInvoice(null);
+    }
+  };
+
   const canPay = (o: any) => o.status === "quoted" && !isQuoteExpired(o) && o.payment_status !== "paid" && o.payment_status !== "under_review" && o.grand_total > 0;
   const canPayArrival = (o: any) => o.status === "arrived" && o.arrival_payment_status !== "paid" && o.arrival_payment_status !== "under_review" && ((o.arrival_shipping_fee || 0) + (o.arrival_tax_amount || 0)) > 0;
+  // Order needs user approval when admin updated quote (status = under_review for approval)
+  const needsApproval = (o: any) => o.status === "under_review";
 
   return (
     <>
@@ -411,7 +454,7 @@ export default function PCBOrder() {
                   <h2 className="font-semibold text-foreground mb-1 flex items-center gap-2">
                     <Upload className="w-4 h-4 text-primary" /> Upload Gerber Files
                   </h2>
-                  <p className="text-xs text-muted-foreground mb-4">You can add multiple boards — each with its own specs. They'll be submitted as one order.</p>
+                  <p className="text-xs text-muted-foreground mb-4">You can add multiple boards — each with its own specs and services. They'll be submitted as one order.</p>
 
                   {/* Drop zone */}
                   <div
@@ -435,95 +478,13 @@ export default function PCBOrder() {
                   {gerberEntries.length > 0 && (
                     <div className="mt-4 space-y-4">
                       {gerberEntries.map((entry, idx) => (
-                        <div key={idx} className="border border-border rounded-xl overflow-hidden">
-                          {/* Card header */}
-                          <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">{entry.file.name}</p>
-                                <p className="text-xs text-muted-foreground">{(entry.file.size / 1024).toFixed(1)} KB</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0 ml-2">
-                              <button
-                                onClick={() => updateGerberEntry(idx, { showPreview: !entry.showPreview })}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-background hover:bg-muted transition-colors">
-                                <Eye className="w-3 h-3" /> {entry.showPreview ? "Hide" : "Preview"}
-                              </button>
-                              <button onClick={() => removeGerberEntry(idx)}
-                                className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors">
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Per-board specs */}
-                          <div className="px-4 py-3 grid grid-cols-2 gap-3">
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Quantity <span className="text-primary">(min. 5)</span></Label>
-                              <Input type="number" min="5" value={entry.quantity}
-                                onChange={e => updateGerberEntry(idx, { quantity: e.target.value })}
-                                placeholder="min. 5" className="h-8 text-sm" />
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Layer Count</Label>
-                              <Select value={entry.layer_count} onValueChange={v => updateGerberEntry(idx, { layer_count: v })}>
-                                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {LAYER_COUNTS.map(l => <SelectItem key={l} value={String(l)}>{l} Layer{l > 1 ? "s" : ""}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Surface Finish</Label>
-                              <Select value={entry.surface_finish} onValueChange={v => updateGerberEntry(idx, { surface_finish: v })}>
-                                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {SURFACE_FINISHES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Board Thickness</Label>
-                              <Select value={entry.board_thickness} onValueChange={v => updateGerberEntry(idx, { board_thickness: v })}>
-                                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {THICKNESSES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="col-span-2">
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Solder Mask Color</Label>
-                              <div className="flex gap-2 flex-wrap">
-                                {PCB_COLORS.map(c => (
-                                  <button key={c} onClick={() => updateGerberEntry(idx, { pcb_color: c })}
-                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border-2 transition-all ${entry.pcb_color === c ? "border-primary bg-primary/5 text-primary font-semibold" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                                    <span className="w-3 h-3 rounded-full border border-border/50 shrink-0" style={{ background: COLOR_SWATCHES[c] }} />
-                                    {c}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Preview */}
-                          <AnimatePresence>
-                            {entry.showPreview && (
-                              <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: "auto", opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="overflow-hidden border-t border-border"
-                              >
-                                <div className="p-3">
-                                  <GerberViewer file={entry.file} pcbColor={entry.pcb_color} />
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
+                        <GerberEntryCard
+                          key={idx}
+                          entry={entry}
+                          idx={idx}
+                          onUpdate={(updates) => updateGerberEntry(idx, updates)}
+                          onRemove={() => removeGerberEntry(idx)}
+                        />
                       ))}
 
                       {/* Add more button */}
@@ -536,83 +497,14 @@ export default function PCBOrder() {
                   )}
                 </div>
 
-                {/* ── Services ── */}
-                <div className="bg-card border border-border rounded-xl p-5 mb-5">
-                  <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                    <Wrench className="w-4 h-4 text-primary" /> Additional Services
-                  </h2>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between py-3 border border-border rounded-xl px-4">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Stencil Needed</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Include a solder paste stencil with the order</p>
-                      </div>
-                      <Switch checked={form.stencil_needed} onCheckedChange={v => setForm(f => ({ ...f, stencil_needed: v }))} />
-                    </div>
-
-                    <div className="border border-border rounded-xl overflow-hidden">
-                      <div className="flex items-center justify-between px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">PCB Assembly (PCBA)</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">We solder components onto your boards</p>
-                        </div>
-                        <Switch checked={form.assembly_needed} onCheckedChange={v => setForm(f => ({ ...f, assembly_needed: v }))} />
-                      </div>
-                      <AnimatePresence>
-                        {form.assembly_needed && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
-                            <div className="border-t border-border px-4 py-4 bg-muted/30 space-y-3">
-                              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assembly Files</p>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                                  <FileText className="w-3.5 h-3.5" /> Pick &amp; Place File (CSV/XLS)
-                                </Label>
-                                {pnpFile ? (
-                                  <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2 text-sm">
-                                    <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                                    <span className="flex-1 truncate text-foreground">{pnpFile.name}</span>
-                                    <button onClick={() => setPnpFile(null)} className="text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
-                                  </div>
-                                ) : (
-                                  <label className="flex items-center gap-2 border-2 border-dashed border-border rounded-lg px-4 py-2.5 cursor-pointer hover:border-primary/50 transition-colors text-sm text-muted-foreground">
-                                    <Upload className="w-4 h-4" /><span>Upload PnP file</span>
-                                    <input ref={pnpInputRef} type="file" accept=".csv,.xls,.xlsx,.txt" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setPnpFile(f); }} />
-                                  </label>
-                                )}
-                              </div>
-                              <div>
-                                <Label className="text-xs text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-                                  <FileText className="w-3.5 h-3.5" /> Bill of Materials / BOM (CSV/XLS)
-                                </Label>
-                                {bomFile ? (
-                                  <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-2 text-sm">
-                                    <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
-                                    <span className="flex-1 truncate text-foreground">{bomFile.name}</span>
-                                    <button onClick={() => setBomFile(null)} className="text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
-                                  </div>
-                                ) : (
-                                  <label className="flex items-center gap-2 border-2 border-dashed border-border rounded-lg px-4 py-2.5 cursor-pointer hover:border-primary/50 transition-colors text-sm text-muted-foreground">
-                                    <Upload className="w-4 h-4" /><span>Upload BOM file</span>
-                                    <input ref={bomInputRef} type="file" accept=".csv,.xls,.xlsx,.txt" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setBomFile(f); }} />
-                                  </label>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Additional Notes ── */}
+                {/* ── Additional Notes (global) ── */}
                 <div className="bg-card border border-border rounded-xl p-5 mb-5">
                   <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-primary" /> Additional Notes
                   </h2>
                   <Textarea
-                    value={form.customer_note}
-                    onChange={e => setForm(f => ({ ...f, customer_note: e.target.value }))}
+                    value={customerNote}
+                    onChange={e => setCustomerNote(e.target.value)}
                     placeholder="e.g. special requirements, IPC class, controlled impedance, reference designators to skip..."
                     rows={3} className="mb-3"
                   />
@@ -691,6 +583,7 @@ export default function PCBOrder() {
                               <p className="text-xs text-muted-foreground mt-0.5">
                                 {order.quantity} pcs · {order.layer_count} Layer · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
                               </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{new Date(order.created_at).toLocaleDateString()}</p>
                             </div>
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${statusInfo.color}`}>
                               <StatusIcon className="w-3 h-3" />
@@ -705,7 +598,32 @@ export default function PCBOrder() {
                             </a>
                           )}
 
-                          {(order.status === "quoted" || order.grand_total > 0) && !expired && (
+                          {/* Approval alert when admin revised quote */}
+                          {needsApproval(order) && (
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+                              <p className="text-sm font-semibold text-orange-800 mb-1 flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4" /> Quote Updated — Your Approval Required
+                              </p>
+                              <p className="text-xs text-orange-700 mb-2">
+                                The quoted price has been revised. Please review the updated quote and approve to proceed with payment.
+                              </p>
+                              {order.grand_total > 0 && (
+                                <div className="bg-white border border-orange-200 rounded-lg p-2 mb-3 text-sm space-y-1">
+                                  {order.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Board Cost</span><span>Rs. {Number(order.unit_cost_total).toLocaleString()}</span></div>}
+                                  {order.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(order.shipping_fee).toLocaleString()}</span></div>}
+                                  {order.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>Rs. {Number(order.tax_amount).toLocaleString()}</span></div>}
+                                  {order.grand_total > 0 && <div className="flex justify-between font-bold text-orange-800 pt-1 border-t border-orange-100"><span>New Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>}
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Button size="sm" onClick={() => handleApproveQuote(order.id)} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                                  <CheckCircle className="w-3.5 h-3.5" /> Approve & Proceed to Pay
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {(order.status === "quoted" || (order.grand_total > 0 && order.status !== "under_review")) && !expired && order.status !== "under_review" && (
                             <div className="bg-muted/50 rounded-lg p-3 mb-3 text-sm space-y-1">
                               {order.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Board Cost</span><span>Rs. {Number(order.unit_cost_total).toLocaleString()}</span></div>}
                               {order.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(order.shipping_fee).toLocaleString()}</span></div>}
@@ -742,9 +660,10 @@ export default function PCBOrder() {
                             </div>
                           )}
 
-                          {order.admin_notes && (
-                            <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-3 italic">"{order.admin_notes}"</p>
-                          )}
+                          {order.admin_notes && (() => {
+                            const cleanNotes = order.admin_notes.split("\n").filter((l: string) => !l.startsWith("stripe_session:")).join("\n").trim();
+                            return cleanNotes ? <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-3 italic">"{cleanNotes}"</p> : null;
+                          })()}
 
                           <div className="flex gap-2 flex-wrap">
                             {canPay(order) && stripeEnabled && (
@@ -770,6 +689,14 @@ export default function PCBOrder() {
                             {expired && order.status === "quoted" && (
                               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleReRequest(order.id)}>
                                 <RefreshCcw className="w-3.5 h-3.5" /> Re-request Quote
+                              </Button>
+                            )}
+                            {/* Download invoice if quoted or beyond */}
+                            {order.grand_total > 0 && ["quoted", "under_review", "approved", "sourcing", "arrived", "shipped", "completed"].includes(order.status) && (
+                              <Button size="sm" variant="outline" className="gap-1.5"
+                                disabled={downloadingInvoice === order.id}
+                                onClick={() => handleDownloadInvoice(order)}>
+                                <Download className="w-3.5 h-3.5" /> {downloadingInvoice === order.id ? "Generating…" : "Download Invoice"}
                               </Button>
                             )}
                           </div>
@@ -828,5 +755,191 @@ export default function PCBOrder() {
 
       <Footer />
     </>
+  );
+}
+
+// ─── Per-Gerber Entry Card ───────────────────────────────────────────────────
+
+interface GerberEntryCardProps {
+  entry: GerberEntry;
+  idx: number;
+  onUpdate: (updates: Partial<GerberEntry>) => void;
+  onRemove: () => void;
+}
+
+function GerberEntryCard({ entry, idx, onUpdate, onRemove }: GerberEntryCardProps) {
+  const pnpRef = useRef<HTMLInputElement>(null);
+  const bomRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className="border border-border rounded-xl overflow-hidden">
+      {/* Card header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
+        <div className="flex items-center gap-2 min-w-0">
+          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground truncate">{entry.file.name}</p>
+            <p className="text-xs text-muted-foreground">Board {idx + 1} · {(entry.file.size / 1024).toFixed(1)} KB</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <button
+            onClick={() => onUpdate({ showPreview: !entry.showPreview })}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border bg-background hover:bg-muted transition-colors">
+            <Eye className="w-3 h-3" /> {entry.showPreview ? "Hide" : "Preview"}
+          </button>
+          <button onClick={onRemove}
+            className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Per-board specs */}
+      <div className="px-4 py-3 grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Quantity <span className="text-primary">(min. 5)</span></Label>
+          <Input type="number" min="5" value={entry.quantity}
+            onChange={e => onUpdate({ quantity: e.target.value })}
+            placeholder="min. 5" className="h-8 text-sm" />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Layer Count</Label>
+          <Select value={entry.layer_count} onValueChange={v => onUpdate({ layer_count: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {LAYER_COUNTS.map(l => <SelectItem key={l} value={String(l)}>{l} Layer{l > 1 ? "s" : ""}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Surface Finish</Label>
+          <Select value={entry.surface_finish} onValueChange={v => onUpdate({ surface_finish: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {SURFACE_FINISHES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Board Thickness</Label>
+          <Select value={entry.board_thickness} onValueChange={v => onUpdate({ board_thickness: v })}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {THICKNESSES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="col-span-2">
+          <Label className="text-xs text-muted-foreground mb-1.5 block">Solder Mask Color</Label>
+          <div className="flex gap-2 flex-wrap">
+            {PCB_COLORS.map(c => (
+              <button key={c} onClick={() => onUpdate({ pcb_color: c })}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border-2 transition-all ${entry.pcb_color === c ? "border-primary bg-primary/5 text-primary font-semibold" : "border-border text-muted-foreground hover:border-primary/40"}`}>
+                <span className="w-3 h-3 rounded-full border border-border/50 shrink-0" style={{ background: COLOR_SWATCHES[c] }} />
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Per-board Additional Services ── */}
+      <div className="border-t border-border px-4 py-3 bg-muted/20 space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+          <Wrench className="w-3.5 h-3.5" /> Additional Services for this board
+        </p>
+
+        {/* Stencil */}
+        <div className="flex items-center justify-between py-2 px-3 border border-border rounded-lg bg-background">
+          <div>
+            <p className="text-sm font-medium text-foreground">Stencil Needed</p>
+            <p className="text-xs text-muted-foreground">Include a solder paste stencil</p>
+          </div>
+          <Switch checked={entry.stencil_needed} onCheckedChange={v => onUpdate({ stencil_needed: v })} />
+        </div>
+
+        {/* Assembly */}
+        <div className="border border-border rounded-lg overflow-hidden bg-background">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div>
+              <p className="text-sm font-medium text-foreground">PCB Assembly (PCBA)</p>
+              <p className="text-xs text-muted-foreground">We solder components onto your board</p>
+            </div>
+            <Switch checked={entry.assembly_needed} onCheckedChange={v => onUpdate({ assembly_needed: v, pnpFile: null, bomFile: null })} />
+          </div>
+          <AnimatePresence>
+            {entry.assembly_needed && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                <div className="border-t border-border px-3 py-3 bg-muted/30 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assembly Files</p>
+                  {/* PnP */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> Pick &amp; Place File (CSV/XLS) <span className="text-destructive">*</span>
+                    </Label>
+                    {entry.pnpFile ? (
+                      <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-1.5 text-sm">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <span className="flex-1 truncate text-foreground text-xs">{entry.pnpFile.name}</span>
+                        <button onClick={() => onUpdate({ pnpFile: null })} className="text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2 cursor-pointer hover:border-primary/50 transition-colors text-xs text-muted-foreground">
+                        <Upload className="w-3.5 h-3.5" /><span>Upload PnP file</span>
+                        <input ref={pnpRef} type="file" accept=".csv,.xls,.xlsx,.txt" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) onUpdate({ pnpFile: f }); }} />
+                      </label>
+                    )}
+                  </div>
+                  {/* BOM */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-1 block flex items-center gap-1">
+                      <FileText className="w-3 h-3" /> Bill of Materials (CSV/XLS) <span className="text-destructive">*</span>
+                    </Label>
+                    {entry.bomFile ? (
+                      <div className="flex items-center gap-2 bg-background border border-border rounded-lg px-3 py-1.5 text-sm">
+                        <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                        <span className="flex-1 truncate text-foreground text-xs">{entry.bomFile.name}</span>
+                        <button onClick={() => onUpdate({ bomFile: null })} className="text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2 cursor-pointer hover:border-primary/50 transition-colors text-xs text-muted-foreground">
+                        <Upload className="w-3.5 h-3.5" /><span>Upload BOM file</span>
+                        <input ref={bomRef} type="file" accept=".csv,.xls,.xlsx,.txt" className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) onUpdate({ bomFile: f }); }} />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Gerber Preview */}
+      <AnimatePresence>
+        {entry.showPreview && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden border-t border-border"
+          >
+            {/* Experimental banner */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-700">
+              <FlaskConical className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-medium">Experimental Preview</span>
+              <span className="text-amber-600">— This is an approximate reference view only, not a final manufacturing preview.</span>
+            </div>
+            <div className="p-3">
+              <GerberViewer file={entry.file} pcbColor={entry.pcb_color} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
