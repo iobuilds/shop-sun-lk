@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText, Info, Edit2, Plus, X, MessageSquare, RefreshCcw, ImagePlus, Trash2 } from "lucide-react";
+import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText, Info, Edit2, Plus, X, MessageSquare, RefreshCcw, ImagePlus, Trash2, Square, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +38,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
@@ -132,6 +134,30 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     const matchSearch = !searchQuery || o.id.toLowerCase().includes(searchQuery.toLowerCase().replace(/[^a-f0-9-]/g, ""));
     return matchStatus && matchSearch;
   });
+
+  const bulkDeletePCBOrders = async () => {
+    if (selectedOrders.size === 0) return;
+    if (!confirm(`Delete ${selectedOrders.size} selected PCB order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await (supabase as any).from("pcb_order_requests").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} PCB order(s) deleted` });
+    setSelectedOrders(new Set());
+    onRefresh();
+  };
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrders(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+
+  const toggleSelectAll = () => {
+    if (filtered.every(o => selectedOrders.has(o.id))) {
+      setSelectedOrders(prev => { const next = new Set(prev); filtered.forEach(o => next.delete(o.id)); return next; });
+    } else {
+      setSelectedOrders(prev => { const next = new Set(prev); filtered.forEach(o => next.add(o.id)); return next; });
+    }
+  };
 
   const openEdit = (order: any) => {
     setEditTarget(order);
@@ -601,6 +627,20 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         </Select>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedOrders.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-xl">
+          <Checkbox checked={filtered.length > 0 && filtered.every(o => selectedOrders.has(o.id))} onCheckedChange={toggleSelectAll} />
+          <span className="text-sm font-medium text-primary">{selectedOrders.size} selected</span>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeletePCBOrders}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete Selected
+            </Button>
+            <button onClick={() => setSelectedOrders(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
+          </div>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">No PCB orders found</div>
       ) : filtered.map(order => {
@@ -612,41 +652,51 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         const hasInvoice = order.grand_total > 0;
 
         return (
-          <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-xl overflow-hidden">
+          <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`bg-card border rounded-xl overflow-hidden transition-colors ${selectedOrders.has(order.id) ? "border-primary/40 bg-primary/5" : "border-border"}`}>
             {/* Header */}
-            <div className="p-4 flex items-start justify-between gap-3 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-foreground">PCB-{shortId}</span>
-                  <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
-                  {(order.payment_status === "under_review" || order.arrival_payment_status === "under_review") && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-yellow-100 text-yellow-800 border-yellow-300">Payment Review</span>
-                  )}
-                  {order.status === "under_review" && (
-                    <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-orange-100 text-orange-800 border-orange-300">User Approval Needed</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {order.quantity} pcs · {order.layer_count}L · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
-                </p>
-                {profile && (
-                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><User className="w-3 h-3" /> {profile.full_name || "Unknown"}</span>
-                    {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {profile.phone}</span>}
+            <div className="p-4 flex items-start gap-3">
+              <Checkbox
+                checked={selectedOrders.has(order.id)}
+                onCheckedChange={() => toggleSelectOrder(order.id)}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                className="mt-1 shrink-0"
+              />
+              <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : order.id)}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="font-semibold text-foreground">PCB-{shortId}</span>
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
+                      {(order.payment_status === "under_review" || order.arrival_payment_status === "under_review") && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-yellow-100 text-yellow-800 border-yellow-300">Payment Review</span>
+                      )}
+                      {order.status === "under_review" && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-orange-100 text-orange-800 border-orange-300">User Approval Needed</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {order.quantity} pcs · {order.layer_count}L · {order.surface_finish} · {order.pcb_color} · {order.board_thickness}
+                    </p>
+                    {profile && (
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><User className="w-3 h-3" /> {profile.full_name || "Unknown"}</span>
+                        {profile.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" /> {profile.phone}</span>}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {hasInvoice && (
-                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
-                    disabled={downloadingInvoice === order.id}
-                    onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(order); }}>
-                    <Download className="w-3 h-3" />
-                    {downloadingInvoice === order.id ? "…" : "Invoice"}
-                  </Button>
-                )}
-                <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
-                {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  <div className="flex items-center gap-2 shrink-0">
+                    {hasInvoice && (
+                      <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
+                        disabled={downloadingInvoice === order.id}
+                        onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(order); }}>
+                        <Download className="w-3 h-3" />
+                        {downloadingInvoice === order.id ? "…" : "Invoice"}
+                      </Button>
+                    )}
+                    <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </div>
               </div>
             </div>
 

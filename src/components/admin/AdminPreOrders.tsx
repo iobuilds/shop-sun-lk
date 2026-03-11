@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Package, ExternalLink, MessageSquare, Clock, ShoppingBag, Info, ChevronDown, ChevronUp, DollarSign, Truck, ReceiptText, FileDown, CheckCircle, XCircle, Search, User, Phone, AlertTriangle, CreditCard, Eye, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -223,6 +224,7 @@ const generatePreOrderInvoice = async (req: any, profile: any, companySettings?:
 export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpenConversation }: AdminPreOrdersProps) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRequests, setSelectedRequests] = useState<Set<string>>(new Set());
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editItems, setEditItems] = useState<any[]>([]);
@@ -249,6 +251,35 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     const matchSearch = !searchQuery || r.id.toLowerCase().includes(searchQuery.toLowerCase().replace(/[^a-f0-9-]/g, ''));
     return matchStatus && matchSearch;
   });
+
+  const bulkDeletePreOrders = async () => {
+    if (selectedRequests.size === 0) return;
+    if (!confirm(`Delete ${selectedRequests.size} selected pre-order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedRequests);
+    for (const id of ids) {
+      await supabase.from("preorder_items").delete().eq("preorder_id", id);
+      await supabase.from("preorder_requests").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} pre-order(s) deleted` });
+    setSelectedRequests(new Set());
+    onRefresh();
+  };
+
+  const toggleSelectRequest = (id: string) => {
+    setSelectedRequests(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (filtered.every((r: any) => selectedRequests.has(r.id))) {
+      setSelectedRequests(prev => { const next = new Set(prev); filtered.forEach((r: any) => next.delete(r.id)); return next; });
+    } else {
+      setSelectedRequests(prev => { const next = new Set(prev); filtered.forEach((r: any) => next.add(r.id)); return next; });
+    }
+  };
 
   const getProfile = (userId: string) =>
     allProfiles.find((p: any) => p.user_id === userId);
@@ -581,6 +612,19 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
           <p>No pre-order requests found</p>
         </div>
       ) : (
+        <>
+          {selectedRequests.size > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2.5 mb-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <Checkbox checked={filtered.every((r: any) => selectedRequests.has(r.id))} onCheckedChange={toggleSelectAll} />
+              <span className="text-sm font-medium text-primary">{selectedRequests.size} selected</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeletePreOrders}>
+                  <XCircle className="w-3.5 h-3.5" /> Delete Selected
+                </Button>
+                <button onClick={() => setSelectedRequests(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
+              </div>
+            </div>
+          )}
         <div className="space-y-3">
           {filtered.map((req: any) => {
             const profile = getProfile(req.user_id);
@@ -595,9 +639,15 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             const hasArrivalSlip = !!req.arrival_slip_url;
 
             return (
-              <div key={req.id} className="border border-border rounded-xl bg-card overflow-hidden">
+              <div key={req.id} className={`border rounded-xl bg-card overflow-hidden transition-colors ${selectedRequests.has(req.id) ? "border-primary/40 bg-primary/5" : "border-border"}`}>
                 {/* Header row */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+                  <Checkbox
+                    checked={selectedRequests.has(req.id)}
+                    onCheckedChange={() => toggleSelectRequest(req.id)}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    className="shrink-0"
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-muted-foreground">#{req.id.slice(0, 8).toUpperCase()}</span>
@@ -849,6 +899,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             );
           })}
         </div>
+        </>
       )}
 
       {/* Edit / Quote Dialog */}
