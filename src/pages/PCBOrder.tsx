@@ -578,12 +578,14 @@ export default function PCBOrder() {
 
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8">
-            {(["new", "my"] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)}
-                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${tab === t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                {t === "new" ? "New PCB Order" : "My Orders"}
-              </button>
-            ))}
+            <button onClick={() => setTab("new")}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${tab === "new" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              New PCB Order
+            </button>
+            <button onClick={() => setTab("my")}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${tab === "my" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              My Orders {myOrders && myOrders.length > 0 && <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{myOrders.length}</span>}
+            </button>
           </div>
 
           <AnimatePresence mode="wait">
