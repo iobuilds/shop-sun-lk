@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText } from "lucide-react";
+import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText, Info, Edit2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const STATUS_OPTIONS = [
   { value: "pending",      label: "Pending Review",      color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
