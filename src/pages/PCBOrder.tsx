@@ -615,6 +615,35 @@ export default function PCBOrder() {
                       const shortId = order.id.slice(0, 8).toUpperCase();
                       const arrivalTotal = (order.arrival_shipping_fee || 0) + (order.arrival_tax_amount || 0);
 
+                      // 9-step workflow stage mapping
+                      const WORKFLOW_STEPS = [
+                        { label: "Order Submitted", statuses: ["pending"], step: 1 },
+                        { label: "Review & Quote", statuses: ["quoted", "under_review"], step: 2 },
+                        { label: "Pay Initial Quote", statuses: ["quoted"], step: 3 },
+                        { label: "Production Starts", statuses: ["approved", "sourcing"], step: 4 },
+                        { label: "Price Revision", statuses: ["under_review"], step: 5 },
+                        { label: "Final Payment", statuses: ["approved"], step: 6 },
+                        { label: "Boards Arrived", statuses: ["arrived"], step: 7 },
+                        { label: "Pay Shipping & Tax", statuses: ["arrived"], step: 8 },
+                        { label: "Shipped to You", statuses: ["shipped", "completed"], step: 9 },
+                      ];
+
+                      const getActiveStep = (status: string): number => {
+                        if (status === "pending") return 1;
+                        if (status === "quoted") return 3;
+                        if (status === "under_review") return 5;
+                        if (status === "approved") return 4;
+                        if (status === "sourcing") return 4;
+                        if (status === "arrived") return 7;
+                        if (status === "shipped") return 9;
+                        if (status === "completed") return 9;
+                        if (status === "cancelled") return 0;
+                        return 1;
+                      };
+
+                      const activeStep = getActiveStep(order.status);
+                      const isCancelled = order.status === "cancelled";
+
                       return (
                         <motion.div key={order.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           className="bg-card border border-border rounded-xl p-5">
