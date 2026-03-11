@@ -100,6 +100,27 @@ export default function PCBOrder() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Handle Stripe return — auto-mark as paid on success
+  useEffect(() => {
+    const payment = searchParams.get("payment");
+    const orderId = searchParams.get("id");
+    const type = searchParams.get("type") as "quote" | "arrival" | null;
+    if (payment === "success" && orderId && type) {
+      const verify = async () => {
+        try {
+          const field = type === "arrival" ? "arrival_payment_status" : "payment_status";
+          const statusVal = type === "arrival" ? "paid" : "paid";
+          const extraUpdate = type !== "arrival" ? { status: "approved" } : {};
+          await (supabase as any).from("pcb_order_requests").update({ [field]: statusVal, ...extraUpdate }).eq("id", orderId);
+          toast({ title: "✅ Payment confirmed!", description: "Your PCB order has been updated." });
+          refetchOrders();
+        } catch { /* silent */ }
+      };
+      verify();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { data: myOrders, refetch: refetchOrders } = useQuery({
     queryKey: ["my-pcb-orders", session?.user?.id],
     queryFn: async () => {
