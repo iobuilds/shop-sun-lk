@@ -949,24 +949,6 @@ function GerberEntryCard({ entry, idx, onUpdate, onRemove }: GerberEntryCardProp
             placeholder="min. 5" className="h-8 text-sm" />
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground mb-1.5 block">Layer Count</Label>
-          <Select value={entry.layer_count} onValueChange={v => onUpdate({ layer_count: v })}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {LAYER_COUNTS.map(l => <SelectItem key={l} value={String(l)}>{l} Layer{l > 1 ? "s" : ""}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground mb-1.5 block">Surface Finish</Label>
-          <Select value={entry.surface_finish} onValueChange={v => onUpdate({ surface_finish: v })}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {SURFACE_FINISHES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
           <Label className="text-xs text-muted-foreground mb-1.5 block">Board Thickness</Label>
           <Select value={entry.board_thickness} onValueChange={v => onUpdate({ board_thickness: v })}>
             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
@@ -974,18 +956,6 @@ function GerberEntryCard({ entry, idx, onUpdate, onRemove }: GerberEntryCardProp
               {THICKNESSES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div className="col-span-2">
-          <Label className="text-xs text-muted-foreground mb-1.5 block">Solder Mask Color</Label>
-          <div className="flex gap-2 flex-wrap">
-            {PCB_COLORS.map(c => (
-              <button key={c} onClick={() => onUpdate({ pcb_color: c })}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border-2 transition-all ${entry.pcb_color === c ? "border-primary bg-primary/5 text-primary font-semibold" : "border-border text-muted-foreground hover:border-primary/40"}`}>
-                <span className="w-3 h-3 rounded-full border border-border/50 shrink-0" style={{ background: COLOR_SWATCHES[c] }} />
-                {c}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
