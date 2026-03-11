@@ -647,7 +647,8 @@ export default function PCBOrder() {
                       return (
                         <motion.div key={order.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
                           className="bg-card border border-border rounded-xl p-5">
-                          <div className="flex items-start justify-between gap-3 mb-3">
+                          {/* Header */}
+                          <div className="flex items-start justify-between gap-3 mb-4">
                             <div>
                               <p className="font-semibold text-foreground">PCB-{shortId}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
@@ -660,6 +661,51 @@ export default function PCBOrder() {
                               {expired && order.status === "quoted" ? "Quote Expired" : statusInfo.label}
                             </span>
                           </div>
+
+                          {/* ── 9-Step Workflow Progress Tracker ── */}
+                          {!isCancelled && (
+                            <div className="mb-4 bg-muted/30 rounded-xl p-3">
+                              <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Order Progress</p>
+                              <div className="relative">
+                                {/* Progress line */}
+                                <div className="absolute top-4 left-4 right-4 h-0.5 bg-border" />
+                                <div
+                                  className="absolute top-4 left-4 h-0.5 bg-primary transition-all duration-500"
+                                  style={{ width: `${Math.max(0, ((activeStep - 1) / 8) * 100)}%` }}
+                                />
+                                {/* Steps */}
+                                <div className="relative flex justify-between">
+                                  {[
+                                    { n: 1, label: "Submitted" },
+                                    { n: 2, label: "Quoted" },
+                                    { n: 3, label: "Pay Quote" },
+                                    { n: 4, label: "Production" },
+                                    { n: 5, label: "Revision" },
+                                    { n: 6, label: "Confirmed" },
+                                    { n: 7, label: "Arrived" },
+                                    { n: 8, label: "Pay Charges" },
+                                    { n: 9, label: "Shipped" },
+                                  ].map(({ n, label }) => {
+                                    const isDone = activeStep > n;
+                                    const isActive = activeStep === n;
+                                    return (
+                                      <div key={n} className="flex flex-col items-center gap-1.5 w-8">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all text-xs font-bold z-10 relative
+                                          ${isDone ? "bg-primary border-primary text-primary-foreground" :
+                                            isActive ? "bg-primary/15 border-primary text-primary" :
+                                            "bg-background border-border text-muted-foreground"}`}>
+                                          {isDone ? <CheckCircle className="w-4 h-4" /> : n}
+                                        </div>
+                                        <span className={`text-[9px] leading-tight text-center ${isActive ? "text-primary font-semibold" : isDone ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
+                                          {label}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          )}
 
                           {order.gerber_file_url && (
                             <a href={order.gerber_file_url} target="_blank" rel="noopener noreferrer"
@@ -675,18 +721,18 @@ export default function PCBOrder() {
                                 <AlertCircle className="w-4 h-4" /> Quote Updated — Your Approval Required
                               </p>
                               <p className="text-xs text-orange-700 mb-2">
-                                The quoted price has been revised. Please review the updated quote and approve to proceed with payment.
+                                The quoted price has been revised. Please review and approve to proceed with payment.
                               </p>
                               {order.grand_total > 0 && (
-                                <div className="bg-white border border-orange-200 rounded-lg p-2 mb-3 text-sm space-y-1">
+                                <div className="bg-background border border-orange-200 rounded-lg p-2 mb-3 text-sm space-y-1">
                                   {order.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Board Cost</span><span>Rs. {Number(order.unit_cost_total).toLocaleString()}</span></div>}
                                   {order.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(order.shipping_fee).toLocaleString()}</span></div>}
                                   {order.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>Rs. {Number(order.tax_amount).toLocaleString()}</span></div>}
-                                  {order.grand_total > 0 && <div className="flex justify-between font-bold text-orange-800 pt-1 border-t border-orange-100"><span>New Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>}
+                                  {order.grand_total > 0 && <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border"><span>New Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>}
                                 </div>
                               )}
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleApproveQuote(order.id)} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                                <Button size="sm" onClick={() => handleApproveQuote(order.id)} className="gap-1.5">
                                   <CheckCircle className="w-3.5 h-3.5" /> Approve & Proceed to Pay
                                 </Button>
                               </div>
@@ -761,7 +807,6 @@ export default function PCBOrder() {
                                 <RefreshCcw className="w-3.5 h-3.5" /> Re-request Quote
                               </Button>
                             )}
-                            {/* Download invoice if quoted or beyond */}
                             {order.grand_total > 0 && ["quoted", "under_review", "approved", "sourcing", "arrived", "shipped", "completed"].includes(order.status) && (
                               <Button size="sm" variant="outline" className="gap-1.5"
                                 disabled={downloadingInvoice === order.id}
