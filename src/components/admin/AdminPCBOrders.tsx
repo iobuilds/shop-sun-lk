@@ -32,6 +32,7 @@ interface AdminPCBOrdersProps {
 }
 
 export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: AdminPCBOrdersProps) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,6 +56,12 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const [arrivalForm, setArrivalForm] = useState({ shipping: "", tax: "" });
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
+
+  // Revision dialog state
+  const [revisionDialog, setRevisionDialog] = useState(false);
+  const [revisionTarget, setRevisionTarget] = useState<any>(null);
+  const [revisionForm, setRevisionForm] = useState({ extra_amount: "", notes: "" });
+  const [revisionSaving, setRevisionSaving] = useState(false);
 
   // Process notice editor state
   const [noticeEditing, setNoticeEditing] = useState(false);
