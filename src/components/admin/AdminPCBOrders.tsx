@@ -567,9 +567,22 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       <Button size="sm" variant="outline" onClick={() => openEdit(order)} className="gap-1.5">
                         <DollarSign className="w-3.5 h-3.5" /> Quote / Update
                       </Button>
-                      {order.status === "approved" && (
+      {order.status === "approved" && (
                         <Button size="sm" variant="outline" onClick={async () => {
                           await (supabase as any).from("pcb_order_requests").update({ status: "sourcing" }).eq("id", order.id);
+                          const profile = getProfile(order.user_id);
+                          const shortId = order.id.slice(0, 8).toUpperCase();
+                          await supabase.from("user_notifications").insert({
+                            user_id: order.user_id, title: "PCB Manufacturing Started",
+                            message: `Great news! Your PCB order PCB-${shortId} is now in production. We'll notify you when boards arrive.`,
+                            type: "order", link_url: "/pcb-order?tab=my",
+                          });
+                          if (profile?.phone) {
+                            await supabase.functions.invoke("send-sms", {
+                              body: { phone: profile.phone, message: `NanoCircuit.lk: ✅ Production started for PCB-${shortId}! Your boards are now being manufactured. We'll notify you on arrival.`, user_id: order.user_id },
+                            });
+                          }
+                          toast({ title: "Marked Manufacturing — user notified by SMS" });
                           onRefresh();
                         }} className="gap-1.5">
                           <Cpu className="w-3.5 h-3.5" /> Mark Manufacturing
@@ -578,6 +591,19 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       {(order.status === "sourcing" || order.status === "approved") && (
                         <Button size="sm" variant="outline" onClick={async () => {
                           await (supabase as any).from("pcb_order_requests").update({ status: "arrived" }).eq("id", order.id);
+                          const profile = getProfile(order.user_id);
+                          const shortId = order.id.slice(0, 8).toUpperCase();
+                          await supabase.from("user_notifications").insert({
+                            user_id: order.user_id, title: "PCB Boards Have Arrived",
+                            message: `Your PCB boards for PCB-${shortId} have arrived! Arrival charges will be added shortly.`,
+                            type: "order", link_url: "/pcb-order?tab=my",
+                          });
+                          if (profile?.phone) {
+                            await supabase.functions.invoke("send-sms", {
+                              body: { phone: profile.phone, message: `NanoCircuit.lk: 📦 Your PCB-${shortId} boards have arrived at our warehouse! Arrival charges (shipping & tax) will be added soon. Stay tuned.`, user_id: order.user_id },
+                            });
+                          }
+                          toast({ title: "Marked Arrived — user notified by SMS" });
                           onRefresh();
                         }} className="gap-1.5">
                           <Package className="w-3.5 h-3.5" /> Mark Arrived
