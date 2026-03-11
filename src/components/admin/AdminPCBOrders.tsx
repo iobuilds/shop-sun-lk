@@ -62,6 +62,9 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const [revisionTarget, setRevisionTarget] = useState<any>(null);
   const [revisionForm, setRevisionForm] = useState({ extra_amount: "", notes: "" });
   const [revisionSaving, setRevisionSaving] = useState(false);
+  const [revisionImages, setRevisionImages] = useState<string[]>([]);
+  const [revisionImgUploading, setRevisionImgUploading] = useState(false);
+  const revisionImgRef = useRef<HTMLInputElement>(null);
 
   // Process notice editor state
   const [noticeEditing, setNoticeEditing] = useState(false);
