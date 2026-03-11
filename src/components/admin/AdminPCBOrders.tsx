@@ -135,6 +135,30 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     return matchStatus && matchSearch;
   });
 
+  const bulkDeletePCBOrders = async () => {
+    if (selectedOrders.size === 0) return;
+    if (!confirm(`Delete ${selectedOrders.size} selected PCB order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await (supabase as any).from("pcb_order_requests").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} PCB order(s) deleted` });
+    setSelectedOrders(new Set());
+    onRefresh();
+  };
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrders(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  };
+
+  const toggleSelectAll = () => {
+    if (filtered.every(o => selectedOrders.has(o.id))) {
+      setSelectedOrders(prev => { const next = new Set(prev); filtered.forEach(o => next.delete(o.id)); return next; });
+    } else {
+      setSelectedOrders(prev => { const next = new Set(prev); filtered.forEach(o => next.add(o.id)); return next; });
+    }
+  };
+
   const openEdit = (order: any) => {
     setEditTarget(order);
     const prevGrand = parseFloat(order.grand_total) || 0;
