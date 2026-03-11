@@ -855,6 +855,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const [reviewSearch, setReviewSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [smsLogSearch, setSmsLogSearch] = useState("");
+  // Messages tab state
+  const [msgTab, setMsgTab] = useState<"normal" | "pcb" | "preorder" | "guest">("normal");
+  const [selectedConvos, setSelectedConvos] = useState<Set<string>>(new Set());
+  const [selectedGuestMsgs, setSelectedGuestMsgs] = useState<Set<string>>(new Set());
 
   const filteredProducts = products?.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
