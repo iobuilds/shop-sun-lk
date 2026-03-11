@@ -1081,9 +1081,22 @@ export default function PCBOrder() {
             <div>
               <Label className="text-sm font-medium mb-2 block">Upload Payment Slip</Label>
               {slipUrl ? (
-                <div className="border border-green-200 bg-green-50 rounded-lg p-3 flex items-center gap-2 text-sm text-green-700">
-                  <CheckCircle className="w-4 h-4" /> Slip uploaded successfully
-                  <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-primary text-xs hover:underline">View</a>
+                <div className="border border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-green-700">
+                    <CheckCircle className="w-4 h-4" /> 
+                    <span className="font-medium">Payment slip submitted — under review</span>
+                  </div>
+                  <a href={slipUrl} target="_blank" rel="noopener noreferrer">
+                    <img src={slipUrl} alt="Payment slip" className="max-h-40 rounded border border-green-200 object-contain bg-white w-full" onError={e => (e.currentTarget.style.display = "none")} />
+                  </a>
+                  <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block">View full slip ↗</a>
+                  {/* Allow re-submission */}
+                  <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground underline cursor-pointer hover:text-foreground border border-border rounded-lg px-3 py-1.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    {slipUploading ? "Uploading..." : "Submit a different slip"}
+                    <input type="file" accept="image/*,.pdf" className="hidden" disabled={slipUploading}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleSlipUpload(f); }} />
+                  </label>
                 </div>
               ) : (
                 <label className="block border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
@@ -1094,7 +1107,8 @@ export default function PCBOrder() {
                 </label>
               )}
             </div>
-            <Button onClick={() => setBankTransferDialog(null)} variant="outline" className="w-full">Close</Button>
+            {!slipUrl && <p className="text-xs text-muted-foreground text-center">Once uploaded, your payment will show as "under review" until we confirm it.</p>}
+            <Button onClick={() => setBankTransferDialog(null)} variant="outline" className="w-full">{slipUrl ? "Done" : "Cancel"}</Button>
           </div>
         </DialogContent>
       </Dialog>
