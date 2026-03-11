@@ -154,6 +154,13 @@ export const generatePCBInvoice = async (
   const xLabel = 120;
   const xValue = 185;
 
+  // Parse revision data from admin_notes
+  const noteLines = (order.admin_notes || "").split("\n");
+  const revExtraLine = noteLines.find(l => l.startsWith("[revision_extra]:"));
+  const revNoteLine = noteLines.find(l => l.startsWith("[revision_note]:"));
+  const revisionExtra = revExtraLine ? parseFloat(revExtraLine.replace("[revision_extra]:", "")) || 0 : 0;
+  const revisionNote = revNoteLine ? revNoteLine.replace("[revision_note]:", "").trim() : "";
+
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
@@ -164,14 +171,39 @@ export const generatePCBInvoice = async (
   doc.setFont("helvetica", "normal");
   doc.setTextColor(80, 80, 80);
 
-  const boardCost = Number(order.unit_cost_total || 0);
+  const boardCostTotal = Number(order.unit_cost_total || 0);
   const shippingFee = Number(order.shipping_fee || 0);
   const taxAmount = Number(order.tax_amount || 0);
   const grandTotal = Number(order.grand_total || 0);
 
-  doc.text("Board Manufacturing Cost:", xLabel, summaryY);
-  doc.text(`Rs. ${boardCost.toLocaleString()}`, xValue, summaryY, { align: "right" });
-  summaryY += 6;
+  // Show initial cost vs revision extra if applicable
+  if (revisionExtra > 0) {
+    const initialCost = boardCostTotal - revisionExtra;
+    doc.text("Initial Board Cost:", xLabel, summaryY);
+    doc.text(`Rs. ${initialCost.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    summaryY += 6;
+    doc.setTextColor(180, 100, 0);
+    doc.text("Revision Additional Charge:", xLabel, summaryY);
+    doc.text(`+ Rs. ${revisionExtra.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    summaryY += 6;
+    doc.setTextColor(80, 80, 80);
+    if (revisionNote) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "italic");
+      const rLines = doc.splitTextToSize(`Revision note: ${revisionNote}`, 165);
+      doc.text(rLines, 20, summaryY);
+      summaryY += rLines.length * 4 + 3;
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+    }
+    doc.text("Board Cost (with revision):", xLabel, summaryY);
+    doc.text(`Rs. ${boardCostTotal.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    summaryY += 6;
+  } else {
+    doc.text("Board Manufacturing Cost:", xLabel, summaryY);
+    doc.text(`Rs. ${boardCostTotal.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    summaryY += 6;
+  }
 
   doc.text("Shipping Fee:", xLabel, summaryY);
   doc.text(order.shipping_fee === -1 ? "TBA (After Arrival)" : `Rs. ${shippingFee.toLocaleString()}`, xValue, summaryY, { align: "right" });
@@ -225,10 +257,10 @@ export const generatePCBInvoice = async (
 
   // Admin/customer notes
   if (order.admin_notes) {
-    // Strip stripe_session lines from displayed notes
+    const SKIP_PREFIXES = ["stripe_session:", "[revision_images]:", "[revision_extra]:", "[revision_note]:", "[revision_slip]:"];
     const cleanNotes = order.admin_notes
       .split("\n")
-      .filter((l: string) => !l.startsWith("stripe_session:"))
+      .filter((l: string) => !SKIP_PREFIXES.some(p => l.startsWith(p)))
       .join("\n")
       .trim();
     if (cleanNotes) {
