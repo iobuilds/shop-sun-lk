@@ -85,6 +85,25 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
   return result;
 }
 
+/** Union multiple viewBox strings into one bounding box */
+function unionViewBox(boxes: string[]): string {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const vb of boxes) {
+    const parts = vb.trim().split(/[\s,]+/).map(Number);
+    if (parts.length < 4 || parts.some(isNaN)) continue;
+    const [x, y, w, h] = parts;
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + w);
+    maxY = Math.max(maxY, y + h);
+  }
+  if (!isFinite(minX)) return "";
+  // Add 2% padding so edges aren't clipped
+  const pw = (maxX - minX) * 0.02;
+  const ph = (maxY - minY) * 0.02;
+  return `${minX - pw} ${minY - ph} ${(maxX - minX) + pw * 2} ${(maxY - minY) + ph * 2}`;
+}
+
 async function parseSingleLayer(gerberStr: string): Promise<{ viewBox: string; inner: string } | null> {
   try {
     const { parse, plot, renderSVG } = await import("web-gerber");
