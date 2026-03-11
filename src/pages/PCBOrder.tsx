@@ -836,8 +836,27 @@ export default function PCBOrder() {
                           )}
 
                           {order.admin_notes && (() => {
-                            const cleanNotes = order.admin_notes.split("\n").filter((l: string) => !l.startsWith("stripe_session:")).join("\n").trim();
-                            return cleanNotes ? <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-3 italic">"{cleanNotes}"</p> : null;
+                            const lines = order.admin_notes.split("\n");
+                            const cleanNotes = lines.filter((l: string) => !l.startsWith("stripe_session:") && !l.startsWith("[revision_images]:")).join("\n").trim();
+                            const imgLine = lines.find((l: string) => l.startsWith("[revision_images]:"));
+                            const revImgs = imgLine ? imgLine.replace("[revision_images]:", "").split(",").filter(Boolean) : [];
+                            return (
+                              <>
+                                {cleanNotes ? <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-3 italic">"{cleanNotes}"</p> : null}
+                                {revImgs.length > 0 && (
+                                  <div className="mb-3">
+                                    <p className="text-xs text-muted-foreground mb-1.5 font-medium">Reference images from our team:</p>
+                                    <div className="grid grid-cols-3 gap-2">
+                                      {revImgs.map((url: string, i: number) => (
+                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-lg overflow-hidden border border-border aspect-square hover:opacity-90 transition-opacity">
+                                          <img src={url} alt={`ref-${i + 1}`} className="w-full h-full object-cover" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </>
+                            );
                           })()}
 
                           <div className="flex gap-2 flex-wrap">
