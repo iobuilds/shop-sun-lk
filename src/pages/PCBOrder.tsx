@@ -733,6 +733,7 @@ export default function PCBOrder() {
                         if (status === "pending") return 1;
                         if (status === "quoted") return 3;
                         if (status === "under_review") return 5;
+                        if (status === "revision_paying") return 5;
                         if (status === "approved") return 4;
                         if (status === "sourcing") return 4;
                         if (status === "arrived") return 7;
