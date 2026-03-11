@@ -425,11 +425,30 @@ export default function PCBOrder() {
 
   const handleApproveQuote = async (orderId: string) => {
     try {
-      await (supabase as any).from("pcb_order_requests").update({ status: "quoted" }).eq("id", orderId);
-      toast({ title: "Quote approved! You can now proceed to payment." });
+      // Move to revision_paying — user must now pay the additional amount
+      await (supabase as any).from("pcb_order_requests").update({ status: "revision_paying" }).eq("id", orderId);
+      toast({ title: "Revision approved! Please upload payment for the additional amount." });
       refetchOrders();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleRevisionSlipUpload = async (file: File, orderId: string, currentNotes: string) => {
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `pcb-revision-slips/${orderId}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(path);
+      // Append slip tag to admin_notes
+      const cleanNotes = (currentNotes || "").split("\n").filter((l: string) => !l.startsWith("[revision_slip]:")).join("\n").trim();
+      const newNotes = [cleanNotes, `[revision_slip]:${publicUrl}`].filter(Boolean).join("\n");
+      await (supabase as any).from("pcb_order_requests").update({ admin_notes: newNotes }).eq("id", orderId);
+      toast({ title: "Slip uploaded — waiting for admin to approve revision payment." });
+      refetchOrders();
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     }
   };
 
