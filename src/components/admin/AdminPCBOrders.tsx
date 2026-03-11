@@ -415,10 +415,12 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         payload.unit_cost_total = (parseFloat(revisionTarget.unit_cost_total) || 0) + extraAmt;
         payload.grand_total = newGrandTotal;
       }
-      // Build admin_notes with note text + image URLs
+      // Build admin_notes with note text + image URLs + extra amount tag for invoice
       const existingStripeLines = (revisionTarget.admin_notes || "").split("\n").filter((l: string) => l.startsWith("stripe_session:")).join("\n");
       const imageTag = revisionImages.length > 0 ? `[revision_images]:${revisionImages.join(",")}` : "";
-      payload.admin_notes = [revisionForm.notes.trim(), imageTag, existingStripeLines].filter(Boolean).join("\n") || null;
+      const extraTag = extraAmt > 0 ? `[revision_extra]:${extraAmt}` : "";
+      const noteTag = revisionForm.notes.trim() ? `[revision_note]:${revisionForm.notes.trim()}` : "";
+      payload.admin_notes = [noteTag, extraTag, imageTag, existingStripeLines].filter(Boolean).join("\n") || null;
 
       await (supabase as any).from("pcb_order_requests").update(payload).eq("id", revisionTarget.id);
 
