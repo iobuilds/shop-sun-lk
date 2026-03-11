@@ -142,7 +142,7 @@ async function buildSide(layers: LayerMap, side: "top" | "btm"): Promise<SideDat
     ["drill",       DRILL_COLOR,   1.0],           // white = visible holes
   ];
 
-  let sharedViewBox = "";
+  const allViewBoxes: string[] = [];
   const rendered: SideData["layers"] = [];
 
   for (const [role, color, opacity] of defs) {
@@ -150,13 +150,16 @@ async function buildSide(layers: LayerMap, side: "top" | "btm"): Promise<SideDat
     if (!gerberStr) continue;
     const parsed = await parseSingleLayer(gerberStr);
     if (!parsed) continue;
-    // Prefer outline or copper for the shared viewBox (most complete boundary)
-    if (!sharedViewBox && parsed.viewBox) sharedViewBox = parsed.viewBox;
-    if (role === "outline" && parsed.viewBox) sharedViewBox = parsed.viewBox;
+    if (parsed.viewBox) allViewBoxes.push(parsed.viewBox);
     rendered.push({ svg: parsed.inner, color, opacity });
   }
 
-  if (rendered.length === 0 || !sharedViewBox) return null;
+  if (rendered.length === 0) return null;
+
+  // Union all layer viewBoxes so the full board fits in view
+  const sharedViewBox = unionViewBox(allViewBoxes);
+  if (!sharedViewBox) return null;
+
   return { viewBox: sharedViewBox, layers: rendered };
 }
 
