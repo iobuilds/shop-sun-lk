@@ -602,8 +602,10 @@ export default function PCBOrder() {
               New PCB Order
             </button>
             <button onClick={() => setTab("my")}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${tab === "my" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              My Orders {myOrders && myOrders.length > 0 && <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{myOrders.length}</span>}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all inline-flex items-center justify-center gap-1.5 ${tab === "my" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              My Orders
+              {myOrders && myOrders.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{myOrders.length}</span>}
+              {session?.user?.id && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" title="Live updates enabled" />}
             </button>
           </div>
 
