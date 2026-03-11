@@ -644,7 +644,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                     )}
                     {isQuoted && grandTotal > 0 && (
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => generatePreOrderInvoice(req, profile)}>
-                        <FileDown className="w-3 h-3" /> PDF
+                        <FileDown className="w-3 h-3" /> Invoice PDF
                       </Button>
                     )}
                     <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openConversation(req)}>
