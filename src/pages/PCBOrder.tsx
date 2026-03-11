@@ -844,6 +844,11 @@ export default function PCBOrder() {
                                 <Download className="w-3.5 h-3.5" /> {downloadingInvoice === order.id ? "Generating…" : "Download Invoice"}
                               </Button>
                             )}
+                            {/* Chat with support button */}
+                            <Button size="sm" variant="outline" className="gap-1.5"
+                              onClick={() => handleOpenChat(order)}>
+                              <MessageSquare className="w-3.5 h-3.5" /> Chat with Support
+                            </Button>
                           </div>
                         </motion.div>
                       );
