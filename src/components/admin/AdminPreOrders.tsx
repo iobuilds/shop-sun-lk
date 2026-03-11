@@ -953,11 +953,25 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setEditDialog(false)}>Cancel</Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? "Saving…" : "Save Quote"}
+              <div className="flex justify-between gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setEditDialog(false);
+                    if (editTarget) openConversation(editTarget);
+                  }}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  {editTarget?.conversation_id ? "Open Chat" : "Message Customer"}
                 </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditDialog(false)}>Cancel</Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? "Saving…" : "Save Quote"}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
