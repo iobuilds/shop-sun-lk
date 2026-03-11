@@ -189,6 +189,11 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
       const profile = getProfile(editTarget.user_id);
       const shortId = editTarget.id.slice(0, 8).toUpperCase();
 
+      // SMS helpers for status changes
+      const sendStatusSMS = async (phone: string, userId: string, msg: string) => {
+        await supabase.functions.invoke("send-sms", { body: { phone, message: msg, user_id: userId } });
+      };
+
       if (priceIncreased) {
         // Notify user approval required
         await supabase.from("user_notifications").insert({
@@ -199,13 +204,8 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
           link_url: "/pcb-order?tab=my",
         });
         if (profile?.phone) {
-          await supabase.functions.invoke("send-sms", {
-            body: {
-              phone: profile.phone,
-              message: `NanoCircuit.lk: Your PCB order PCB-${shortId} quote has been updated to Rs. ${grandTotal.toLocaleString()}. Please log in to approve and proceed.`,
-              user_id: editTarget.user_id,
-            },
-          });
+          await sendStatusSMS(profile.phone, editTarget.user_id,
+            `NanoCircuit.lk: ⚠️ Price Revision for PCB-${shortId}. New quote: Rs. ${grandTotal.toLocaleString()}. Log in to approve before we can proceed: nanocircuit.lk/pcb-order`);
         }
         toast({ title: "Quote updated — user notified for approval" });
       } else if (wasQuoted) {
@@ -217,15 +217,23 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
           link_url: "/pcb-order?tab=my",
         });
         if (profile?.phone) {
-          await supabase.functions.invoke("send-sms", {
-            body: {
-              phone: profile.phone,
-              message: `NanoCircuit.lk: Your PCB order PCB-${shortId} has been quoted at Rs. ${grandTotal.toLocaleString()}. Quote valid for 48 hours. Log in to view and pay.`,
-              user_id: editTarget.user_id,
-            },
-          });
+          await sendStatusSMS(profile.phone, editTarget.user_id,
+            `NanoCircuit.lk: 💰 Quote Ready for PCB-${shortId}!\nTotal: Rs. ${grandTotal.toLocaleString()}\nValid for 48 hours. Log in to pay: nanocircuit.lk/pcb-order`);
         }
-        toast({ title: "PCB order updated & user notified" });
+        toast({ title: "PCB order quoted & user notified by SMS" });
+      } else if (editForm.status === "cancelled" && editTarget.status !== "cancelled") {
+        await supabase.from("user_notifications").insert({
+          user_id: editTarget.user_id,
+          title: "PCB Order Cancelled",
+          message: `Your PCB order PCB-${shortId} has been cancelled. Please contact us for details.`,
+          type: "order",
+          link_url: "/pcb-order?tab=my",
+        });
+        if (profile?.phone) {
+          await sendStatusSMS(profile.phone, editTarget.user_id,
+            `NanoCircuit.lk: ❌ PCB-${shortId} has been cancelled. Please contact us if you have questions.`);
+        }
+        toast({ title: "PCB order cancelled & user notified by SMS" });
       } else {
         toast({ title: "PCB order updated" });
       }
@@ -281,16 +289,16 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         if (action === "approve") {
           await (supabase as any).from("pcb_order_requests").update({ arrival_payment_status: "paid", status: "shipped" }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
-            user_id: order.user_id, title: "Arrival Payment Approved",
-            message: `Arrival payment for PCB-${shortId} approved. Your boards are being shipped!`,
+            user_id: order.user_id, title: "Arrival Payment Approved — Order Shipped!",
+            message: `Arrival payment for PCB-${shortId} approved. Your boards are on their way! 🚚`,
             type: "order", link_url: "/pcb-order?tab=my",
           });
           if (profile?.phone) {
             await supabase.functions.invoke("send-sms", {
-              body: { phone: profile.phone, message: `NanoCircuit.lk: Arrival payment approved for PCB-${shortId}. Your boards are being shipped!`, user_id: order.user_id },
+              body: { phone: profile.phone, message: `NanoCircuit.lk: 🚚 PCB-${shortId} is on its way! Arrival payment confirmed and your boards have been shipped. Thank you!`, user_id: order.user_id },
             });
           }
-          toast({ title: "Arrival payment approved" });
+          toast({ title: "Arrival payment approved — order shipped, user notified" });
         } else {
           await (supabase as any).from("pcb_order_requests").update({ arrival_payment_status: "unpaid", arrival_slip_url: null }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
@@ -357,12 +365,18 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const markCompleted = async (orderId: string, userId: string) => {
     await (supabase as any).from("pcb_order_requests").update({ status: "completed" }).eq("id", orderId);
     const shortId = orderId.slice(0, 8).toUpperCase();
+    const profile = getProfile(userId);
     await supabase.from("user_notifications").insert({
-      user_id: userId, title: "PCB Order Delivered",
-      message: `Your PCB order PCB-${shortId} has been marked as delivered!`,
+      user_id: userId, title: "PCB Order Delivered 🎉",
+      message: `Your PCB order PCB-${shortId} has been delivered! Thank you for choosing us.`,
       type: "order", link_url: "/pcb-order?tab=my",
     });
-    toast({ title: "Marked as delivered" });
+    if (profile?.phone) {
+      await supabase.functions.invoke("send-sms", {
+        body: { phone: profile.phone, message: `NanoCircuit.lk: 🎉 Your PCB order PCB-${shortId} has been delivered! Thank you for ordering with us. We hope to serve you again!`, user_id: userId },
+      });
+    }
+    toast({ title: "Marked as delivered — user notified by SMS" });
     onRefresh();
   };
 
@@ -567,9 +581,22 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       <Button size="sm" variant="outline" onClick={() => openEdit(order)} className="gap-1.5">
                         <DollarSign className="w-3.5 h-3.5" /> Quote / Update
                       </Button>
-                      {order.status === "approved" && (
+      {order.status === "approved" && (
                         <Button size="sm" variant="outline" onClick={async () => {
                           await (supabase as any).from("pcb_order_requests").update({ status: "sourcing" }).eq("id", order.id);
+                          const profile = getProfile(order.user_id);
+                          const shortId = order.id.slice(0, 8).toUpperCase();
+                          await supabase.from("user_notifications").insert({
+                            user_id: order.user_id, title: "PCB Manufacturing Started",
+                            message: `Great news! Your PCB order PCB-${shortId} is now in production. We'll notify you when boards arrive.`,
+                            type: "order", link_url: "/pcb-order?tab=my",
+                          });
+                          if (profile?.phone) {
+                            await supabase.functions.invoke("send-sms", {
+                              body: { phone: profile.phone, message: `NanoCircuit.lk: ✅ Production started for PCB-${shortId}! Your boards are now being manufactured. We'll notify you on arrival.`, user_id: order.user_id },
+                            });
+                          }
+                          toast({ title: "Marked Manufacturing — user notified by SMS" });
                           onRefresh();
                         }} className="gap-1.5">
                           <Cpu className="w-3.5 h-3.5" /> Mark Manufacturing
@@ -578,6 +605,19 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       {(order.status === "sourcing" || order.status === "approved") && (
                         <Button size="sm" variant="outline" onClick={async () => {
                           await (supabase as any).from("pcb_order_requests").update({ status: "arrived" }).eq("id", order.id);
+                          const profile = getProfile(order.user_id);
+                          const shortId = order.id.slice(0, 8).toUpperCase();
+                          await supabase.from("user_notifications").insert({
+                            user_id: order.user_id, title: "PCB Boards Have Arrived",
+                            message: `Your PCB boards for PCB-${shortId} have arrived! Arrival charges will be added shortly.`,
+                            type: "order", link_url: "/pcb-order?tab=my",
+                          });
+                          if (profile?.phone) {
+                            await supabase.functions.invoke("send-sms", {
+                              body: { phone: profile.phone, message: `NanoCircuit.lk: 📦 Your PCB-${shortId} boards have arrived at our warehouse! Arrival charges (shipping & tax) will be added soon. Stay tuned.`, user_id: order.user_id },
+                            });
+                          }
+                          toast({ title: "Marked Arrived — user notified by SMS" });
                           onRefresh();
                         }} className="gap-1.5">
                           <Package className="w-3.5 h-3.5" /> Mark Arrived
