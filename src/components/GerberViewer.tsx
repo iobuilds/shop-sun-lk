@@ -19,26 +19,25 @@ const LAYER_ROLE: Record<string, string> = {
   ".gbr": "top_copper",  ".ger": "top_copper",
 };
 
-// ─── Layer stack definition (for sidebar display) ─────────────────────────
+// ─── Layer stack for sidebar ──────────────────────────────────────────────
 const LAYER_STACK = [
-  { role: "top_silk",   label: "Top Silkscreen",  color: "#e0e0e0", dot: "#ffffff" },
-  { role: "top_mask",   label: "Top Solder Mask",  color: "#1a6b2e", dot: "#22c55e" },
-  { role: "top_copper", label: "Top Copper",        color: "#d4a84b", dot: "#f59e0b" },
-  { role: "outline",    label: "Board Outline",     color: "#888888", dot: "#94a3b8" },
-  { role: "drill",      label: "Drill",             color: "#555555", dot: "#64748b" },
-  { role: "btm_copper", label: "Bot Copper",        color: "#d4a84b", dot: "#f59e0b" },
-  { role: "btm_mask",   label: "Bot Solder Mask",  color: "#1a6b2e", dot: "#22c55e" },
-  { role: "btm_silk",   label: "Bot Silkscreen",   color: "#e0e0e0", dot: "#ffffff" },
+  { role: "top_silk",   label: "Top Silkscreen",  dot: "#ffffff" },
+  { role: "top_mask",   label: "Top Solder Mask", dot: "#22c55e" },
+  { role: "top_copper", label: "Top Copper",       dot: "#f59e0b" },
+  { role: "outline",    label: "Board Outline",    dot: "#94a3b8" },
+  { role: "drill",      label: "Drill",            dot: "#64748b" },
+  { role: "btm_copper", label: "Bot Copper",       dot: "#f59e0b" },
+  { role: "btm_mask",   label: "Bot Solder Mask",  dot: "#22c55e" },
+  { role: "btm_silk",   label: "Bot Silkscreen",   dot: "#ffffff" },
 ];
 
 const MASK_HEX: Record<string, string> = {
-  green:  "#1a6b2e", red: "#8b0000", blue: "#0a3d8f",
-  black:  "#1a1a1a", white: "#e8e8e8", yellow: "#b8860b",
+  green: "#1a6b2e", red: "#8b0000", blue: "#0a3d8f",
+  black: "#1a1a1a", white: "#e8e8e8", yellow: "#b8860b",
 };
-
 const MASK_NUM: Record<string, number> = {
-  green:  0x1a6b2e, red: 0x8b0000, blue: 0x0a3d8f,
-  black:  0x1a1a1a, white: 0xe8e8e8, yellow: 0xb8860b,
+  green: 0x1a6b2e, red: 0x8b0000, blue: 0x0a3d8f,
+  black: 0x1a1a1a, white: 0xe8e8e8, yellow: 0xb8860b,
 };
 
 type LayerMap = Record<string, string>;
@@ -48,8 +47,20 @@ interface GerberViewerProps {
   pcbColor?: string;
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────
+// ─── Yield to browser between tasks ───────────────────────────────────────
+function yieldFrame(): Promise<void> {
+  return new Promise(r => setTimeout(r, 0));
+}
 
+// ─── Per-operation timeout wrapper ────────────────────────────────────────
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+  ]);
+}
+
+// ─── Extract layers from ZIP (low memory: text only) ──────────────────────
 async function extractLayersFromZip(file: File): Promise<LayerMap> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(file);
@@ -61,118 +72,130 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
     const role = LAYER_ROLE[ext];
     if (!role || layers[role]) continue;
     try {
-      const content = await zipEntry.async("string");
+      const content = await withTimeout(zipEntry.async("string"), 5000);
       if (content.trim().length > 20) layers[role] = content;
-    } catch { /* skip binary */ }
+    } catch { /* skip */ }
+    await yieldFrame(); // yield between each file
   }
   return layers;
 }
 
-/** Render a single Gerber layer to a canvas with transparent background + colored traces */
+/** Render a single Gerber layer to canvas — with 8s timeout & yield */
 async function renderLayerToCanvas(
   gerberStr: string,
   w: number, h: number,
   traceColor: string,
 ): Promise<HTMLCanvasElement | null> {
+  // Truncate very large files to prevent freeze
+  const MAX_CHARS = 300_000;
+  const src = gerberStr.length > MAX_CHARS ? gerberStr.slice(0, MAX_CHARS) : gerberStr;
+
   try {
-    const { parse, plot, renderSVG } = await import("web-gerber");
-    const { toHtml } = await import("hast-util-to-html");
-    const parsed = parse(gerberStr);
-    const plotted = plot(parsed, false);
-    const svgTree = renderSVG(plotted);
-    let svgStr = toHtml(svgTree as any);
-    if (!svgStr || svgStr.length < 30) return null;
+    await yieldFrame();
+    const renderWork = async () => {
+      const { parse, plot, renderSVG } = await import("web-gerber");
+      const { toHtml } = await import("hast-util-to-html");
 
-    svgStr = svgStr
-      .replace(/<svg([^>]*)>/, (m, attrs) => {
-        let a = attrs
-          .replace(/width="[^"]*"/, `width="${w}"`)
-          .replace(/height="[^"]*"/, `height="${h}"`);
-        if (!/width="/.test(a)) a += ` width="${w}"`;
-        if (!/height="/.test(a)) a += ` height="${h}"`;
-        return `<svg${a}>`;
-      })
-      .replace(/fill="[^"]*"/g, `fill="${traceColor}"`)
-      .replace(/stroke="[^"]*"/g, `stroke="${traceColor}"`);
+      await yieldFrame();
+      const parsed = parse(src);
+      await yieldFrame();
+      const plotted = plot(parsed, false);
+      await yieldFrame();
+      const svgTree = renderSVG(plotted);
+      await yieldFrame();
+      let svgStr = toHtml(svgTree as any);
+      if (!svgStr || svgStr.length < 30) return null;
 
-    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    await new Promise<void>((res, rej) => {
-      img.onload = () => res();
-      img.onerror = () => rej(new Error("svg img load fail"));
-      img.src = url;
-    });
-    URL.revokeObjectURL(url);
+      svgStr = svgStr
+        .replace(/<svg([^>]*)>/, (_m, attrs) => {
+          let a = attrs
+            .replace(/width="[^"]*"/, `width="${w}"`)
+            .replace(/height="[^"]*"/, `height="${h}"`);
+          if (!/width="/.test(a)) a += ` width="${w}"`;
+          if (!/height="/.test(a)) a += ` height="${h}"`;
+          return `<svg${a}>`;
+        })
+        .replace(/fill="[^"]*"/g, `fill="${traceColor}"`)
+        .replace(/stroke="[^"]*"/g, `stroke="${traceColor}"`);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = w; canvas.height = h;
-    canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
-    return canvas;
-  } catch {
+      const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise<void>((res, rej) => {
+        img.onload = () => res();
+        img.onerror = () => rej(new Error("img load fail"));
+        setTimeout(() => rej(new Error("img timeout")), 6000);
+        img.src = url;
+      });
+      URL.revokeObjectURL(url);
+      await yieldFrame();
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      return canvas;
+    };
+
+    return await withTimeout(renderWork(), 12000);
+  } catch (e) {
+    console.warn("Layer render skipped:", (e as Error).message);
     return null;
   }
 }
 
-/** Build a composite face texture by stacking multiple Gerber layers */
+/** Build composite face texture — reduced to 512px to avoid OOM */
 async function buildFaceTexture(
   layers: LayerMap,
   side: "top" | "btm",
   maskHex: string,
-  size = 1024,
+  size = 512,
 ): Promise<HTMLCanvasElement> {
   const canvas = document.createElement("canvas");
   canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-
-  // 1. Solder mask base
   ctx.fillStyle = maskHex;
   ctx.fillRect(0, 0, size, size);
 
   const prefix = side === "top" ? "top" : "btm";
 
-  // 2. Copper traces (gold)
-  const copperLayer = layers[`${prefix}_copper`];
-  if (copperLayer) {
-    const c = await renderLayerToCanvas(copperLayer, size, size, "#d4a84b");
+  const copper = layers[`${prefix}_copper`];
+  if (copper) {
+    const c = await renderLayerToCanvas(copper, size, size, "#d4a84b");
     if (c) ctx.drawImage(c, 0, 0);
   }
+  await yieldFrame();
 
-  // 3. Mask highlights
-  const maskLayer = layers[`${prefix}_mask`];
-  if (maskLayer) {
-    const c = await renderLayerToCanvas(maskLayer, size, size, "#e8c060");
-    if (c) {
-      ctx.globalAlpha = 0.4;
-      ctx.drawImage(c, 0, 0);
-      ctx.globalAlpha = 1.0;
-    }
+  const mask = layers[`${prefix}_mask`];
+  if (mask) {
+    const c = await renderLayerToCanvas(mask, size, size, "#e8c060");
+    if (c) { ctx.globalAlpha = 0.35; ctx.drawImage(c, 0, 0); ctx.globalAlpha = 1; }
   }
+  await yieldFrame();
 
-  // 4. Silkscreen
-  const silkLayer = layers[`${prefix}_silk`];
-  if (silkLayer) {
-    const c = await renderLayerToCanvas(silkLayer, size, size, "#ffffff");
-    if (c) {
-      ctx.globalAlpha = 0.9;
-      ctx.drawImage(c, 0, 0);
-      ctx.globalAlpha = 1.0;
-    }
+  const silk = layers[`${prefix}_silk`];
+  if (silk) {
+    const c = await renderLayerToCanvas(silk, size, size, "#ffffff");
+    if (c) { ctx.globalAlpha = 0.85; ctx.drawImage(c, 0, 0); ctx.globalAlpha = 1; }
   }
 
   return canvas;
 }
 
-/** Build a 2D composite SVG string */
+/** Build 2D SVG — uses only top_copper/outline */
 async function buildComposite2dSvg(layers: LayerMap, maskHex: string): Promise<string | null> {
   const primary = layers.top_copper || layers.btm_copper || layers.outline;
   if (!primary) return null;
   try {
+    await yieldFrame();
     const { parse, plot, renderSVG } = await import("web-gerber");
     const { toHtml } = await import("hast-util-to-html");
-    const parsed = parse(primary);
+    await yieldFrame();
+    const parsed = parse(primary.length > 200_000 ? primary.slice(0, 200_000) : primary);
+    await yieldFrame();
     const plotted = plot(parsed, false);
+    await yieldFrame();
     const svgTree = renderSVG(plotted);
+    await yieldFrame();
     let svgStr = toHtml(svgTree as any);
     if (!svgStr) return null;
     return svgStr
@@ -182,17 +205,19 @@ async function buildComposite2dSvg(layers: LayerMap, maskHex: string): Promise<s
   } catch { return null; }
 }
 
-/** Get board dimensions from outline layer */
+/** Get board dimensions from outline */
 async function getBoardDimensions(outlineStr: string | undefined): Promise<{ w: number; d: number }> {
   const fallback = { w: 80, d: 60 };
   if (!outlineStr) return fallback;
   try {
     const { parse, plot, renderSVG } = await import("web-gerber");
     const { toHtml } = await import("hast-util-to-html");
+    await yieldFrame();
     const svg = toHtml(renderSVG(plot(parse(outlineStr), true)) as any);
     const m = svg.match(/viewBox="([^"]+)"/);
     if (!m) return fallback;
-    const [, , , vw, vh] = m[1].split(/\s+/).map(Number);
+    const parts = m[1].split(/\s+/).map(Number);
+    const vw = parts[2], vh = parts[3];
     if (!vw || !vh) return fallback;
     const scale = 90 / Math.max(vw, vh);
     return { w: vw * scale, d: vh * scale };
@@ -205,8 +230,10 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
   const container3dRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<any>(null);
   const animRef = useRef<number>(0);
+  const abortRef = useRef<boolean>(false);
 
   const [loading, setLoading] = useState(true);
+  const [loadingMsg, setLoadingMsg] = useState("Reading Gerber file…");
   const [error, setError] = useState<string | null>(null);
   const [layers, setLayers] = useState<LayerMap>({});
   const [view, setView] = useState<"2d" | "3d">("3d");
@@ -229,7 +256,9 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
   // ── Load + parse layers ──────────────────────────────────────────────────
   const loadLayers = useCallback(async () => {
+    abortRef.current = false;
     setLoading(true);
+    setLoadingMsg("Reading Gerber file…");
     setError(null);
     setSvgContent(null);
     destroy3d();
@@ -238,12 +267,14 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       let parsed: LayerMap = {};
       const ext = "." + file.name.split(".").pop()?.toLowerCase();
       if (ext === ".zip" || ext === ".rar") {
-        parsed = await extractLayersFromZip(file);
+        setLoadingMsg("Extracting layers from ZIP…");
+        parsed = await withTimeout(extractLayersFromZip(file), 30000);
       } else {
-        const content = await file.text();
+        const content = await withTimeout(file.text(), 5000);
         parsed[LAYER_ROLE[ext] ?? "top_copper"] = content;
       }
 
+      if (abortRef.current) return;
       const count = Object.keys(parsed).length;
       setLayers(parsed);
 
@@ -253,33 +284,40 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         return;
       }
 
-      const svg2d = await buildComposite2dSvg(parsed, maskHex);
-      setSvgContent(svg2d);
+      setLoadingMsg("Building 2D preview…");
+      await yieldFrame();
+      const svg2d = await withTimeout(buildComposite2dSvg(parsed, maskHex), 15000).catch(() => null);
+      if (!abortRef.current) setSvgContent(svg2d);
       setLoading(false);
     } catch (err: any) {
-      setError("Parse error: " + (err?.message || "unknown"));
-      setLoading(false);
+      if (!abortRef.current) {
+        setError("Parse error: " + (err?.message || "unknown"));
+        setLoading(false);
+      }
     }
   }, [file, maskHex, destroy3d]);
 
-  // ── Build 3D scene (solid combined view only) ───────────────────────────
+  // ── Build 3D scene ───────────────────────────────────────────────────────
   const init3d = useCallback(async (layerData: LayerMap) => {
     if (!container3dRef.current || Object.keys(layerData).length === 0) return;
+    abortRef.current = false;
     setLoading(true);
+    setLoadingMsg("Building 3D board…");
     destroy3d();
 
     try {
       const THREE = await import("three");
       const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js" as any);
 
+      if (abortRef.current) return;
       const W = container3dRef.current.clientWidth || 600;
       const H = 380;
 
       const renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(W, H);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
       renderer.setClearColor(0x0d1117, 1);
-      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.enabled = false; // disable shadows to reduce GPU load
       container3dRef.current.appendChild(renderer.domElement);
       rendererRef.current = renderer;
 
@@ -296,56 +334,47 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       controls.autoRotate = true;
       controls.autoRotateSpeed = 0.6;
 
-      // Lighting
-      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-      const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-      sun.position.set(60, 100, 60); sun.castShadow = true; scene.add(sun);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+      sun.position.set(60, 100, 60); scene.add(sun);
       const fill = new THREE.DirectionalLight(0x88aaff, 0.3);
       fill.position.set(-40, -30, -40); scene.add(fill);
-      const rim = new THREE.DirectionalLight(0xffeecc, 0.25);
-      rim.position.set(0, -60, 80); scene.add(rim);
 
-      // Board dimensions
+      setLoadingMsg("Rendering top copper layer…");
+      await yieldFrame();
+
       const { w: boardW, d: boardD } = await getBoardDimensions(layerData.outline);
       const boardH = 1.6;
 
-      // Build composite textures for both faces
-      const [topCanvas, btmCanvas] = await Promise.all([
-        buildFaceTexture(layerData, "top", maskHex, 1024),
-        buildFaceTexture(layerData, "btm", maskHex, 1024),
-      ]);
+      if (abortRef.current) return;
+
+      setLoadingMsg("Compositing top face…");
+      const topCanvas = await withTimeout(buildFaceTexture(layerData, "top", maskHex, 512), 25000)
+        .catch(() => { const c = document.createElement("canvas"); c.width=512;c.height=512; const ctx=c.getContext("2d")!; ctx.fillStyle=maskHex; ctx.fillRect(0,0,512,512); return c; });
+
+      if (abortRef.current) return;
+
+      setLoadingMsg("Compositing bottom face…");
+      const btmCanvas = await withTimeout(buildFaceTexture(layerData, "btm", maskHex, 512), 25000)
+        .catch(() => { const c = document.createElement("canvas"); c.width=512;c.height=512; const ctx=c.getContext("2d")!; ctx.fillStyle=maskHex; ctx.fillRect(0,0,512,512); return c; });
+
+      if (abortRef.current) return;
 
       const topTex = new THREE.CanvasTexture(topCanvas);
       const btmTex = new THREE.CanvasTexture(btmCanvas);
 
       const topMat = new THREE.MeshStandardMaterial({ map: topTex, roughness: 0.35, metalness: 0.1 });
-      const btmMat = new THREE.MeshStandardMaterial({ map: btmTex, roughness: 0.4, metalness: 0.1 });
+      const btmMat = new THREE.MeshStandardMaterial({ map: btmTex, roughness: 0.4,  metalness: 0.1 });
       const sideMat = new THREE.MeshStandardMaterial({ color: 0xd4c48a, roughness: 0.85 });
 
       const boardGeo = new THREE.BoxGeometry(boardW, boardH, boardD);
-      const board = new THREE.Mesh(boardGeo, [
-        sideMat, sideMat,
-        topMat,
-        btmMat,
-        sideMat, sideMat,
-      ]);
-      board.castShadow = true;
-      board.receiveShadow = true;
+      const board = new THREE.Mesh(boardGeo, [sideMat, sideMat, topMat, btmMat, sideMat, sideMat]);
       scene.add(board);
 
-      // Copper rim bevel
-      const rimGeo = new THREE.BoxGeometry(boardW + 0.4, boardH + 0.3, boardD + 0.4);
-      const rimMat = new THREE.MeshStandardMaterial({
-        color: 0xb8860b, roughness: 0.9, transparent: true, opacity: 0.1
-      });
-      scene.add(new THREE.Mesh(rimGeo, rimMat));
-
-      // Grid floor
       const grid = new THREE.GridHelper(500, 40, 0x1a2a3a, 0x0f1a22);
       grid.position.y = -15;
       scene.add(grid);
 
-      // Animate
       const animate = () => {
         animRef.current = requestAnimationFrame(animate);
         controls.update();
@@ -353,7 +382,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       };
       animate();
 
-      // Resize observer
       const ro = new ResizeObserver(() => {
         const w = container3dRef.current?.clientWidth || W;
         renderer.setSize(w, H);
@@ -365,15 +393,17 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       setLoading(false);
     } catch (err: any) {
       console.error("3D init error:", err);
-      setError("3D render failed. Switching to 2D.");
-      setView("2d");
-      setLoading(false);
+      if (!abortRef.current) {
+        setError("3D render failed — switching to 2D.");
+        setView("2d");
+        setLoading(false);
+      }
     }
   }, [maskHex, destroy3d]);
 
   useEffect(() => {
     loadLayers();
-    return destroy3d;
+    return () => { abortRef.current = true; destroy3d(); };
   }, [file]); // eslint-disable-line
 
   useEffect(() => {
@@ -407,7 +437,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         </div>
 
         <div className="flex items-center gap-1">
-          {/* 2D / 3D toggle */}
           <div className="flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setView("2d")}
               className={`px-2.5 py-1 text-xs font-medium transition-colors ${view === "2d" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
@@ -419,15 +448,12 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </button>
           </div>
 
-          {/* Layer stack toggle */}
           <button
             onClick={() => setShowStack(s => !s)}
-            title="Toggle layer stack"
             className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border transition-colors ml-1 ${showStack ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <Layers className="w-3 h-3" /> Stack
           </button>
 
-          {/* 2D zoom controls */}
           {view === "2d" && (
             <>
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.max(0.2, z - 0.25))}>
@@ -452,18 +478,15 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         </div>
       </div>
 
-      {/* ── Main content: viewer + layer stack ── */}
+      {/* ── Main content ── */}
       <div className="flex">
         {/* ── Viewport ── */}
         <div className="relative flex-1" style={{ height: 400, background: "#0d1117" }}>
 
-          {/* 3D canvas */}
           <div ref={container3dRef} className={`absolute inset-0 w-full h-full ${view !== "3d" ? "hidden" : ""}`} />
 
-          {/* 2D SVG view */}
           {view === "2d" && svgContent && !loading && (
-            <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4"
-              style={{ background: "#0a180f" }}>
+            <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4" style={{ background: "#0a180f" }}>
               <div
                 style={{ transform: `scale(${zoom2d})`, transformOrigin: "center", transition: "transform 0.15s" }}
                 dangerouslySetInnerHTML={{ __html: svgContent }}
@@ -471,16 +494,15 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </div>
           )}
 
-          {/* Loading overlay */}
           {loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-20"
               style={{ background: "rgba(13,17,23,0.96)" }}>
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
-              <p className="text-sm text-muted-foreground">Building PCB preview…</p>
+              <p className="text-sm text-muted-foreground">{loadingMsg}</p>
+              <p className="text-xs text-muted-foreground/60">Complex boards may take 20–40 seconds…</p>
             </div>
           )}
 
-          {/* Error state */}
           {error && !loading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 z-20"
               style={{ background: "rgba(13,17,23,0.96)" }}>
@@ -492,7 +514,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </div>
           )}
 
-          {/* 2D empty state */}
           {view === "2d" && !svgContent && !loading && !error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
               <AlertCircle className="w-6 h-6 text-muted-foreground" />
@@ -500,7 +521,6 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </div>
           )}
 
-          {/* PCB color chip */}
           {!loading && !error && (
             <div className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1 z-10">
               <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: maskHex }} />
@@ -523,16 +543,10 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
                 const present = !!layers[layer.role];
                 return (
                   <div key={layer.role} className={`flex items-center gap-2 px-3 py-1.5 ${present ? "" : "opacity-35"}`}>
-                    {/* Order number */}
                     <span className="text-[10px] text-muted-foreground w-3 shrink-0 font-mono">{i + 1}</span>
-                    {/* Color dot */}
-                    <div
-                      className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
-                      style={{ background: present ? layer.dot : "#374151" }}
-                    />
-                    {/* Label */}
+                    <div className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
+                      style={{ background: present ? layer.dot : "#374151" }} />
                     <span className="text-[11px] text-foreground leading-tight flex-1">{layer.label}</span>
-                    {/* Present indicator */}
                     {present
                       ? <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
                       : <XCircle className="w-3 h-3 text-muted-foreground/40 shrink-0" />
@@ -543,21 +557,21 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </div>
             <div className="px-3 py-2 border-t border-border">
               <p className="text-[10px] text-muted-foreground">
-                {layerCount} / {LAYER_STACK.length} layers detected
+                {loading ? "Detecting layers…" : `${layerCount} / ${LAYER_STACK.length} detected`}
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── Footer hint ── */}
+      {/* ── Footer ── */}
       {!loading && !error && (
         <div className="px-3 py-2 bg-muted/30 border-t border-border">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Layers className="w-3 h-3" />
             {view === "3d"
               ? "All layers composited · Drag to rotate · Scroll to zoom"
-              : "Top copper + silkscreen · 2D flat view"}
+              : "Top copper · 2D flat view"}
           </p>
         </div>
       )}
