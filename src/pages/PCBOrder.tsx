@@ -4,7 +4,7 @@ import {
   Upload, ChevronRight, Clock, CheckCircle, XCircle, Truck, Package,
   Info, AlertCircle, FileDown, Building, RefreshCcw,
   AlertTriangle, Layers, Cpu, FileText, Wrench, X, ImageIcon,
-  Plus, Eye, ExternalLink, FlaskConical, Download
+  Plus, Eye, ExternalLink, FlaskConical, Download, MessageSquare
 } from "lucide-react";
 import GerberViewer from "@/components/GerberViewer";
 import { Button } from "@/components/ui/button";
