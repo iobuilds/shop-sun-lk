@@ -878,7 +878,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
       {/* Revision Dialog */}
       <Dialog open={revisionDialog} onOpenChange={setRevisionDialog}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><RefreshCcw className="w-4 h-4 text-orange-600" /> Send Revision Request</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
             PCB-{revisionTarget?.id.slice(0, 8).toUpperCase()} — Currently in Manufacturing. This will notify the customer and require their approval before proceeding.
@@ -900,8 +900,34 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
               <Textarea value={revisionForm.notes} onChange={e => setRevisionForm(f => ({ ...f, notes: e.target.value }))}
                 rows={3} placeholder="Explain what needs to be revised or why the price changed..." />
             </div>
+
+            {/* Reference Images */}
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Reference Images <span className="text-muted-foreground/60">(optional — shown to customer)</span></Label>
+              {revisionImages.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {revisionImages.map((url, i) => (
+                    <div key={i} className="relative group rounded-lg overflow-hidden border border-border aspect-square">
+                      <img src={url} alt={`ref-${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => setRevisionImages(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="flex items-center gap-2 border-2 border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:border-primary/50 transition-colors text-sm text-muted-foreground">
+                <ImagePlus className="w-4 h-4 shrink-0" />
+                {revisionImgUploading ? "Uploading..." : "Upload reference image (JPG, PNG)"}
+                <input ref={revisionImgRef} type="file" accept="image/*" className="hidden" disabled={revisionImgUploading}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleRevisionImageUpload(f); }} />
+              </label>
+            </div>
+
             <div className="flex gap-2">
-              <Button onClick={handleRevisionSave} disabled={revisionSaving} className="flex-1 gap-1.5">
+              <Button onClick={handleRevisionSave} disabled={revisionSaving || revisionImgUploading} className="flex-1 gap-1.5">
                 <RefreshCcw className="w-3.5 h-3.5" />
                 {revisionSaving ? "Sending..." : "Send Revision & Notify"}
               </Button>
