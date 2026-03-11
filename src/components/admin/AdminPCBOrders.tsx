@@ -855,6 +855,41 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         </DialogContent>
       </Dialog>
 
+      {/* Revision Dialog */}
+      <Dialog open={revisionDialog} onOpenChange={setRevisionDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><RefreshCcw className="w-4 h-4 text-orange-600" /> Send Revision Request</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            PCB-{revisionTarget?.id.slice(0, 8).toUpperCase()} — Currently in Manufacturing. This will notify the customer and require their approval before proceeding.
+          </p>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Additional Charge (Rs.) <span className="text-muted-foreground/60">(leave 0 if no extra cost)</span></Label>
+              <Input type="number" min="0" value={revisionForm.extra_amount}
+                onChange={e => setRevisionForm(f => ({ ...f, extra_amount: e.target.value }))}
+                placeholder="e.g. 500" />
+              {revisionForm.extra_amount && parseFloat(revisionForm.extra_amount) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Current total: Rs. {Number(revisionTarget?.grand_total || 0).toLocaleString()} → New total: Rs. {(Number(revisionTarget?.grand_total || 0) + parseFloat(revisionForm.extra_amount)).toLocaleString()}
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Revision Note (visible to customer)</Label>
+              <Textarea value={revisionForm.notes} onChange={e => setRevisionForm(f => ({ ...f, notes: e.target.value }))}
+                rows={3} placeholder="Explain what needs to be revised or why the price changed..." />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleRevisionSave} disabled={revisionSaving} className="flex-1 gap-1.5">
+                <RefreshCcw className="w-3.5 h-3.5" />
+                {revisionSaving ? "Sending..." : "Send Revision & Notify"}
+              </Button>
+              <Button variant="outline" onClick={() => setRevisionDialog(false)}>Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Process Notice Editor Dialog */}
       <Dialog open={noticeEditing} onOpenChange={setNoticeEditing}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
