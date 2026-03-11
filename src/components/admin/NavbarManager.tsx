@@ -247,6 +247,31 @@ const NavbarManager = ({ categories }: Props) => {
                     />
                   </div>
                 </div>
+                <div className="flex items-center justify-between pt-1 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Open in:</span>
+                    <button
+                      onClick={() => updateCustomLink(link.id, "external", false)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                        !link.external
+                          ? "bg-secondary text-secondary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      Same Tab
+                    </button>
+                    <button
+                      onClick={() => updateCustomLink(link.id, "external", true)}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition-colors flex items-center gap-1 ${
+                        link.external
+                          ? "bg-secondary text-secondary-foreground"
+                          : "bg-muted text-muted-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      <ExternalLink className="w-3 h-3" /> New Tab
+                    </button>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </AnimatePresence>
