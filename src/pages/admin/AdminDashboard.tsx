@@ -1747,14 +1747,40 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   // ── Delete Order ──
   const deleteOrder = async (id: string) => {
     if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
-    // Delete order items first
-    const { error: itemsError } = await supabase.from("order_items").delete().eq("order_id", id);
-    if (itemsError) { toast({ title: "Error", description: itemsError.message, variant: "destructive" }); return; }
+    await supabase.from("order_items").delete().eq("order_id", id);
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Order deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
+
+  // ── Bulk Delete Orders ──
+  const bulkDeleteOrders = async () => {
+    if (selectedOrders.size === 0) return;
+    if (!confirm(`Delete ${selectedOrders.size} selected order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await supabase.from("order_items").delete().eq("order_id", id);
+      await supabase.from("orders").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} order(s) deleted` });
+    setSelectedOrders(new Set());
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
+  // ── Bulk Status Update ──
+  const bulkUpdateOrderStatus = async (status: string) => {
+    if (selectedOrders.size === 0) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await supabase.from("orders").update({ status }).eq("id", id);
+    }
+    toast({ title: `${ids.length} order(s) updated to "${status}"` });
+    setSelectedOrders(new Set());
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
+
 
   const reportData = useMemo(() => {
     if (!orders) return null;
