@@ -443,6 +443,26 @@ export default function PCBOrder() {
             </div>
           </div>
 
+          {/* PCB Process Notice Banner */}
+          {pcbNotice?.enabled !== false && pcbNotice?.steps?.length ? (
+            <div className="mb-6 bg-primary/5 border border-primary/20 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Info className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm font-semibold text-foreground">How PCB Manufacturing Works</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {pcbNotice.steps.map((step: string, i: number) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                    <span className="text-xs bg-background border border-border rounded-lg px-2.5 py-1 text-foreground font-medium">
+                      <span className="text-primary mr-1.5">{i + 1}.</span>{step}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8">
             {(["new", "my"] as const).map(t => (
