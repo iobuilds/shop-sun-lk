@@ -252,8 +252,36 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     return matchStatus && matchSearch;
   });
 
-  const getProfile = (userId: string) =>
-    allProfiles.find((p: any) => p.user_id === userId);
+  const bulkDeletePreOrders = async () => {
+    if (selectedRequests.size === 0) return;
+    if (!confirm(`Delete ${selectedRequests.size} selected pre-order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedRequests);
+    for (const id of ids) {
+      await supabase.from("preorder_items").delete().eq("preorder_id", id);
+      await supabase.from("preorder_requests").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} pre-order(s) deleted` });
+    setSelectedRequests(new Set());
+    onRefresh();
+  };
+
+  const toggleSelectRequest = (id: string) => {
+    setSelectedRequests(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (filtered.every((r: any) => selectedRequests.has(r.id))) {
+      setSelectedRequests(prev => { const next = new Set(prev); filtered.forEach((r: any) => next.delete(r.id)); return next; });
+    } else {
+      setSelectedRequests(prev => { const next = new Set(prev); filtered.forEach((r: any) => next.add(r.id)); return next; });
+    }
+  };
+
+  const getProfile
 
   // Check if quote is expired (48hrs)
   const isQuoteExpired = (req: any) => {
