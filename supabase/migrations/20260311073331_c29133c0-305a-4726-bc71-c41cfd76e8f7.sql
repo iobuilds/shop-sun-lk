@@ -1,0 +1,1 @@
+CREATE POLICY "Admins can insert conversations" ON public.conversations FOR INSERT TO public WITH CHECK (has_role(auth.uid(), 'admin'::app_role));
