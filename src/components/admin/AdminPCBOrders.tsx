@@ -708,6 +708,40 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Process Notice Editor Dialog */}
+      <Dialog open={noticeEditing} onOpenChange={setNoticeEditing}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit PCB Process Steps</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">These steps are shown to customers on the PCB Order page as a workflow guide.</p>
+          <div className="space-y-2 mt-2">
+            {noticeSteps.map((step, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}.</span>
+                <Input
+                  value={step}
+                  onChange={e => setNoticeSteps(prev => prev.map((s, idx) => idx === i ? e.target.value : s))}
+                  placeholder={`Step ${i + 1}`}
+                  className="h-8 text-sm"
+                />
+                <button onClick={() => setNoticeSteps(prev => prev.filter((_, idx) => idx !== i))}
+                  className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => setNoticeSteps(prev => [...prev, ""])}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1">
+              <Plus className="w-3.5 h-3.5" /> Add step
+            </button>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button onClick={saveNotice} disabled={noticeSaving} className="flex-1">{noticeSaving ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setNoticeEditing(false)}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
