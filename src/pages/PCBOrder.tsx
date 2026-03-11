@@ -24,15 +24,16 @@ import SEOHead from "@/components/SEOHead";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  pending:   { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
-  quoted:    { label: "Quoted",                        color: "text-blue-600 bg-blue-50 border-blue-200",            icon: Info },
-  under_review: { label: "Approval Pending",           color: "text-orange-600 bg-orange-50 border-orange-200",     icon: AlertCircle },
-  approved:  { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
-  sourcing:  { label: "Manufacturing",                 color: "text-purple-600 bg-purple-50 border-purple-200",     icon: Cpu },
-  arrived:   { label: "Boards Ready — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
-  shipped:   { label: "Shipped",                       color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
-  completed: { label: "Delivered",                     color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
-  cancelled: { label: "Cancelled",                     color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
+  pending:          { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
+  quoted:           { label: "Quoted",                        color: "text-blue-600 bg-blue-50 border-blue-200",            icon: Info },
+  under_review:     { label: "Revision Required",            color: "text-orange-600 bg-orange-50 border-orange-200",     icon: AlertCircle },
+  revision_paying:  { label: "Revision Payment — On Hold",   color: "text-amber-700 bg-amber-50 border-amber-300",        icon: Clock },
+  approved:         { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
+  sourcing:         { label: "Manufacturing",                 color: "text-purple-600 bg-purple-50 border-purple-200",     icon: Cpu },
+  arrived:          { label: "Boards Ready — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
+  shipped:          { label: "Shipped",                       color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
+  completed:        { label: "Delivered",                     color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
+  cancelled:        { label: "Cancelled",                     color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
 };
 
 const SURFACE_FINISHES = ["HASL", "HASL Lead-Free", "ENIG", "OSP", "ENEPIG"];

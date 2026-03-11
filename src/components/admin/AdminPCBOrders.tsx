@@ -14,15 +14,16 @@ import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const STATUS_OPTIONS = [
-  { value: "pending",      label: "Pending Review",      color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
-  { value: "quoted",       label: "Quoted",               color: "bg-blue-100 text-blue-800 border-blue-300" },
-  { value: "under_review", label: "Approval Pending",     color: "bg-orange-100 text-orange-800 border-orange-300" },
-  { value: "approved",     label: "Approved",             color: "bg-green-100 text-green-800 border-green-300" },
-  { value: "sourcing",     label: "Manufacturing",        color: "bg-purple-100 text-purple-800 border-purple-300" },
-  { value: "arrived",      label: "Boards Ready",         color: "bg-secondary/20 text-secondary border-secondary/40" },
-  { value: "shipped",      label: "Shipped",              color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
-  { value: "completed",    label: "Completed",            color: "bg-green-100 text-green-900 border-green-400" },
-  { value: "cancelled",    label: "Cancelled",            color: "bg-destructive/10 text-destructive border-destructive/30" },
+  { value: "pending",         label: "Pending Review",           color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
+  { value: "quoted",          label: "Quoted",                    color: "bg-blue-100 text-blue-800 border-blue-300" },
+  { value: "under_review",    label: "Revision Sent",            color: "bg-orange-100 text-orange-800 border-orange-300" },
+  { value: "revision_paying", label: "Revision Payment — Hold",  color: "bg-amber-100 text-amber-800 border-amber-300" },
+  { value: "approved",        label: "Approved",                  color: "bg-green-100 text-green-800 border-green-300" },
+  { value: "sourcing",        label: "Manufacturing",             color: "bg-purple-100 text-purple-800 border-purple-300" },
+  { value: "arrived",         label: "Boards Ready",              color: "bg-secondary/20 text-secondary border-secondary/40" },
+  { value: "shipped",         label: "Shipped",                   color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+  { value: "completed",       label: "Completed",                 color: "bg-green-100 text-green-900 border-green-400" },
+  { value: "cancelled",       label: "Cancelled",                 color: "bg-destructive/10 text-destructive border-destructive/30" },
 ];
 
 interface AdminPCBOrdersProps {
