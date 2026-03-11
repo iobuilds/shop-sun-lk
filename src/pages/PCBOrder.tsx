@@ -136,6 +136,25 @@ export default function PCBOrder() {
     enabled: !!session?.user?.id,
   });
 
+  // Realtime subscription — auto-refresh orders when any row for this user changes
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel("pcb-orders-realtime")
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "*",
+          schema: "public",
+          table: "pcb_order_requests",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => { refetchOrders(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user?.id, refetchOrders]);
+
   const { data: bankAccounts } = useQuery({
     queryKey: ["bank-accounts-pcb"],
     queryFn: async () => {
@@ -583,8 +602,10 @@ export default function PCBOrder() {
               New PCB Order
             </button>
             <button onClick={() => setTab("my")}
-              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all ${tab === "my" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-              My Orders {myOrders && myOrders.length > 0 && <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{myOrders.length}</span>}
+              className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all inline-flex items-center justify-center gap-1.5 ${tab === "my" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+              My Orders
+              {myOrders && myOrders.length > 0 && <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">{myOrders.length}</span>}
+              {session?.user?.id && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" title="Live updates enabled" />}
             </button>
           </div>
 
