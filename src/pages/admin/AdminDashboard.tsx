@@ -3340,7 +3340,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://example.com/og-image.jpg" /></div>
                     <div>
                       <Label>Favicon (Site Icon)</Label>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         {seoForm.favicon_url && (
                           <div className="relative group">
                             <img src={seoForm.favicon_url} alt="Favicon" className="w-10 h-10 rounded border border-border object-contain bg-muted" />
@@ -3359,8 +3359,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             e.target.value = "";
                           }} className="hidden" disabled={uploading} />
                         </label>
+                        {companyForm?.logo_url && (
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs h-9"
+                            onClick={() => {
+                              setSeoForm((prev: any) => ({ ...prev, favicon_url: companyForm.logo_url }));
+                              toast({ title: "Logo set as favicon", description: "Click Save Settings to apply." });
+                            }}>
+                            <Image className="w-3.5 h-3.5" /> Use Logo as Favicon
+                          </Button>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Upload an icon image (PNG/ICO recommended, 32×32 or 64×64px)</p>
+                      <p className="text-xs text-muted-foreground mt-1">Upload an icon image (PNG/ICO recommended, 32×32 or 64×64px) or use the site logo.</p>
                     </div>
                   </div>
 
