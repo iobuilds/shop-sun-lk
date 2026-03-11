@@ -289,16 +289,16 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         if (action === "approve") {
           await (supabase as any).from("pcb_order_requests").update({ arrival_payment_status: "paid", status: "shipped" }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
-            user_id: order.user_id, title: "Arrival Payment Approved",
-            message: `Arrival payment for PCB-${shortId} approved. Your boards are being shipped!`,
+            user_id: order.user_id, title: "Arrival Payment Approved — Order Shipped!",
+            message: `Arrival payment for PCB-${shortId} approved. Your boards are on their way! 🚚`,
             type: "order", link_url: "/pcb-order?tab=my",
           });
           if (profile?.phone) {
             await supabase.functions.invoke("send-sms", {
-              body: { phone: profile.phone, message: `NanoCircuit.lk: Arrival payment approved for PCB-${shortId}. Your boards are being shipped!`, user_id: order.user_id },
+              body: { phone: profile.phone, message: `NanoCircuit.lk: 🚚 PCB-${shortId} is on its way! Arrival payment confirmed and your boards have been shipped. Thank you!`, user_id: order.user_id },
             });
           }
-          toast({ title: "Arrival payment approved" });
+          toast({ title: "Arrival payment approved — order shipped, user notified" });
         } else {
           await (supabase as any).from("pcb_order_requests").update({ arrival_payment_status: "unpaid", arrival_slip_url: null }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
