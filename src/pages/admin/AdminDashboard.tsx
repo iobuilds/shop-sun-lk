@@ -3087,96 +3087,40 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
           {/* ═══ Contact Messages Tab ═══ */}
           {tab === "contacts" && (() => {
-            // Categorize conversations
             const pcbConvoIds = new Set((pcbOrders || []).map((o: any) => o.conversation_id).filter(Boolean));
             const preorderConvoIds = new Set((preorderRequests || []).map((r: any) => r.conversation_id).filter(Boolean));
             const normalConvos = (adminConversations || []).filter((c: any) => !pcbConvoIds.has(c.id) && !preorderConvoIds.has(c.id));
             const pcbConvos = (adminConversations || []).filter((c: any) => pcbConvoIds.has(c.id));
             const preorderConvos = (adminConversations || []).filter((c: any) => preorderConvoIds.has(c.id));
-            const [msgTab, setMsgTab] = useState<"normal" | "pcb" | "preorder" | "guest">("normal");
-            const [selectedConvos, setSelectedConvos] = useState<Set<string>>(new Set());
-            const [selectedGuestMsgs, setSelectedGuestMsgs] = useState<Set<string>>(new Set());
+            const activeConvos = msgTab === "normal" ? normalConvos : msgTab === "pcb" ? pcbConvos : preorderConvos;
 
             const toggleConvo = (id: string) => setSelectedConvos(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
             const toggleGuestMsg = (id: string) => setSelectedGuestMsgs(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
             const bulkDeleteConvos = async () => {
-              if (selectedConvos.size === 0) return;
-              if (!confirm(`Delete ${selectedConvos.size} conversation(s)?`)) return;
+              const count = selectedConvos.size;
+              if (count === 0) return;
+              if (!confirm(`Delete ${count} conversation(s)?`)) return;
               for (const id of selectedConvos) {
                 await supabase.from("conversation_messages" as any).delete().eq("conversation_id", id);
                 await supabase.from("conversations" as any).delete().eq("id", id);
               }
               setSelectedConvos(new Set());
               queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
-              toast({ title: `${selectedConvos.size} conversation(s) deleted` });
+              toast({ title: `${count} conversation(s) deleted` });
             };
 
             const bulkDeleteGuestMsgs = async () => {
-              if (selectedGuestMsgs.size === 0) return;
-              if (!confirm(`Delete ${selectedGuestMsgs.size} message(s)?`)) return;
+              const count = selectedGuestMsgs.size;
+              if (count === 0) return;
+              if (!confirm(`Delete ${count} message(s)?`)) return;
               for (const id of selectedGuestMsgs) {
                 await supabase.from("contact_messages").delete().eq("id", id);
               }
               setSelectedGuestMsgs(new Set());
               queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
-              toast({ title: `${selectedGuestMsgs.size} message(s) deleted` });
+              toast({ title: `${count} message(s) deleted` });
             };
-
-            const activeConvos = msgTab === "normal" ? normalConvos : msgTab === "pcb" ? pcbConvos : preorderConvos;
-
-            const ConvoList = ({ convos }: { convos: any[] }) => (
-              <div className="space-y-2">
-                {selectedConvos.size > 0 && (
-                  <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
-                    <Checkbox checked={convos.length > 0 && convos.every(c => selectedConvos.has(c.id))}
-                      onCheckedChange={(v) => {
-                        if (v) { const s = new Set(selectedConvos); convos.forEach(c => s.add(c.id)); setSelectedConvos(s); }
-                        else { const s = new Set(selectedConvos); convos.forEach(c => s.delete(c.id)); setSelectedConvos(s); }
-                      }} />
-                    <span className="text-sm font-medium text-primary">{selectedConvos.size} selected</span>
-                    <div className="flex-1" />
-                    <Button variant="destructive" size="sm" onClick={bulkDeleteConvos} className="gap-1.5 h-7 text-xs">
-                      <Trash2 className="w-3 h-3" /> Delete Selected
-                    </Button>
-                  </div>
-                )}
-                {convos.map((c: any) => (
-                  <div key={c.id} className={`flex items-center gap-3 bg-card rounded-xl border p-4 transition-colors ${selectedConvos.has(c.id) ? "border-primary/40 bg-primary/5" : "border-border hover:bg-muted/30"}`}>
-                    <Checkbox checked={selectedConvos.has(c.id)} onCheckedChange={() => toggleConvo(c.id)} onClick={e => e.stopPropagation()} />
-                    <button className="flex-1 text-left" onClick={() => { setSelectedConvos(new Set()); setAdminSelectedConvo(c.id); }}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{c.profiles?.full_name || "User"} • {new Date(c.updated_at).toLocaleDateString()}</p>
-                        </div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
-                      </div>
-                    </button>
-                    <button onClick={async (e) => { e.stopPropagation(); if (!confirm("Delete this conversation?")) return; await supabase.from("conversation_messages" as any).delete().eq("conversation_id", c.id); await supabase.from("conversations" as any).delete().eq("id", c.id); queryClient.invalidateQueries({ queryKey: ["admin-conversations"] }); toast({ title: "Deleted" }); }} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {convos.length > 0 && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <Checkbox checked={convos.every(c => selectedConvos.has(c.id))}
-                      onCheckedChange={(v) => {
-                        const s = new Set(selectedConvos);
-                        convos.forEach(c => v ? s.add(c.id) : s.delete(c.id));
-                        setSelectedConvos(s);
-                      }} />
-                    <span className="text-xs text-muted-foreground">Select all</span>
-                  </div>
-                )}
-                {convos.length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No conversations</p>
-                  </div>
-                )}
-              </div>
-            );
 
             return (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -3249,13 +3193,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   <div>
                     {/* Message Category Tabs */}
                     <div className="flex gap-1 bg-muted/50 p-1 rounded-xl mb-5">
-                      {[
+                      {([
                         { id: "normal", label: "General", icon: MessageSquare, count: normalConvos.length },
                         { id: "pcb", label: "PCB Orders", icon: Layers, count: pcbConvos.length },
                         { id: "preorder", label: "Pre-Orders", icon: ShoppingCart, count: preorderConvos.length },
                         { id: "guest", label: "Guest Msgs", icon: Mail, count: contactMessages?.length || 0 },
-                      ].map(({ id, label, icon: Icon, count }) => (
-                        <button key={id} onClick={() => { setMsgTab(id as any); setSelectedConvos(new Set()); setSelectedGuestMsgs(new Set()); }}
+                      ] as const).map(({ id, label, icon: Icon, count }) => (
+                        <button key={id} onClick={() => { setMsgTab(id); setSelectedConvos(new Set()); setSelectedGuestMsgs(new Set()); }}
                           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${msgTab === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                           <Icon className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">{label}</span>
@@ -3264,8 +3208,52 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       ))}
                     </div>
 
-                    {/* Normal/PCB/Pre-Order Conversations */}
-                    {msgTab !== "guest" && <ConvoList convos={activeConvos} />}
+                    {/* Conversations list (Normal / PCB / Pre-Order) */}
+                    {msgTab !== "guest" && (
+                      <div className="space-y-2">
+                        {selectedConvos.size > 0 && (
+                          <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
+                            <Checkbox checked={activeConvos.length > 0 && activeConvos.every(c => selectedConvos.has(c.id))}
+                              onCheckedChange={(v) => { const s = new Set(selectedConvos); activeConvos.forEach(c => v ? s.add(c.id) : s.delete(c.id)); setSelectedConvos(s); }} />
+                            <span className="text-sm font-medium text-primary">{selectedConvos.size} selected</span>
+                            <div className="flex-1" />
+                            <Button variant="destructive" size="sm" onClick={bulkDeleteConvos} className="gap-1.5 h-7 text-xs">
+                              <Trash2 className="w-3 h-3" /> Delete Selected
+                            </Button>
+                          </div>
+                        )}
+                        {activeConvos.map((c: any) => (
+                          <div key={c.id} className={`flex items-center gap-3 bg-card rounded-xl border p-4 transition-colors ${selectedConvos.has(c.id) ? "border-primary/40 bg-primary/5" : "border-border hover:bg-muted/30"}`}>
+                            <Checkbox checked={selectedConvos.has(c.id)} onCheckedChange={() => toggleConvo(c.id)} />
+                            <button className="flex-1 text-left" onClick={() => { setSelectedConvos(new Set()); setAdminSelectedConvo(c.id); }}>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{c.profiles?.full_name || "User"} • {new Date(c.updated_at).toLocaleDateString()}</p>
+                                </div>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
+                              </div>
+                            </button>
+                            <button onClick={async (e) => { e.stopPropagation(); if (!confirm("Delete this conversation?")) return; await supabase.from("conversation_messages" as any).delete().eq("conversation_id", c.id); await supabase.from("conversations" as any).delete().eq("id", c.id); queryClient.invalidateQueries({ queryKey: ["admin-conversations"] }); toast({ title: "Deleted" }); }} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {activeConvos.length > 0 && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Checkbox checked={activeConvos.every(c => selectedConvos.has(c.id))}
+                              onCheckedChange={(v) => { const s = new Set(selectedConvos); activeConvos.forEach(c => v ? s.add(c.id) : s.delete(c.id)); setSelectedConvos(s); }} />
+                            <span className="text-xs text-muted-foreground">Select all</span>
+                          </div>
+                        )}
+                        {activeConvos.length === 0 && (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <p className="text-sm">No conversations</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Guest Contact Messages */}
                     {msgTab === "guest" && (
@@ -3298,14 +3286,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             </div>
                           </div>
                         ))}
-                        {contactMessages?.length > 0 && (
+                        {(contactMessages?.length || 0) > 0 && (
                           <div className="flex items-center gap-2 pt-1">
                             <Checkbox checked={(contactMessages || []).every((m: any) => selectedGuestMsgs.has(m.id))}
-                              onCheckedChange={(v) => {
-                                const s = new Set(selectedGuestMsgs);
-                                (contactMessages || []).forEach((m: any) => v ? s.add(m.id) : s.delete(m.id));
-                                setSelectedGuestMsgs(s);
-                              }} />
+                              onCheckedChange={(v) => { const s = new Set(selectedGuestMsgs); (contactMessages || []).forEach((m: any) => v ? s.add(m.id) : s.delete(m.id)); setSelectedGuestMsgs(s); }} />
                             <span className="text-xs text-muted-foreground">Select all</span>
                           </div>
                         )}
