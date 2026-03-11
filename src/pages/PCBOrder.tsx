@@ -939,7 +939,8 @@ export default function PCBOrder() {
 
                           {order.admin_notes && (() => {
                             const lines = order.admin_notes.split("\n");
-                            const cleanNotes = lines.filter((l: string) => !l.startsWith("stripe_session:") && !l.startsWith("[revision_images]:")).join("\n").trim();
+                            const SKIP_PREFIXES = ["stripe_session:", "[revision_images]:", "[revision_extra]:", "[revision_note]:", "[revision_slip]:"];
+                            const cleanNotes = lines.filter((l: string) => !SKIP_PREFIXES.some(p => l.startsWith(p))).join("\n").trim();
                             const imgLine = lines.find((l: string) => l.startsWith("[revision_images]:"));
                             const revImgs = imgLine ? imgLine.replace("[revision_images]:", "").split(",").filter(Boolean) : [];
                             return (
