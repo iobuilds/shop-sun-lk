@@ -71,6 +71,22 @@ const Navbar = () => {
     staleTime: 60000,
   });
 
+  // Company settings (logo, store name)
+  const { data: company } = useQuery({
+    queryKey: ["site-company-settings"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_settings" as any)
+        .select("*")
+        .eq("key", "company")
+        .maybeSingle();
+      return (data as any)?.value as any || null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const storeName = company?.store_name || "NanoCircuit.lk";
+
   // Navbar config from site_settings
   const { data: navConfig } = useQuery({
     queryKey: ["navbar-config"],
@@ -287,10 +303,14 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-              <span className="text-secondary-foreground font-bold text-lg font-display">N</span>
-            </div>
-            <span className="text-xl font-bold font-display text-foreground">NanoCircuit.lk</span>
+            {company?.logo_url ? (
+              <img src={company.logo_url} alt={storeName} className="h-9 w-auto object-contain" />
+            ) : (
+              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
+              </div>
+            )}
+            <span className="text-xl font-bold font-display text-foreground">{storeName}</span>
           </Link>
 
           {/* Desktop search */}

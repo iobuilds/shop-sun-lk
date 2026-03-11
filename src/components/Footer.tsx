@@ -41,9 +41,13 @@ const Footer = () => {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                <span className="text-secondary-foreground font-bold text-lg font-display">{storeName.charAt(0)}</span>
-              </div>
+              {company?.logo_url ? (
+                <img src={company.logo_url} alt={storeName} className="h-9 w-auto object-contain" />
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                  <span className="text-secondary-foreground font-bold text-lg font-display">{storeName.charAt(0)}</span>
+                </div>
+              )}
               <span className="text-xl font-bold font-display">{storeName}</span>
             </div>
             <p className="text-primary-foreground/60 text-sm mb-4 leading-relaxed">{description}</p>
