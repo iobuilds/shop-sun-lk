@@ -3305,7 +3305,6 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                       )}
                     </div>
                   </div>
-                </div>
 
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Contact Details</h3>
