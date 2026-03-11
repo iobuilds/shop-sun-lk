@@ -31,6 +31,7 @@ interface AdminPCBOrdersProps {
 }
 
 export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: AdminPCBOrdersProps) {
+  const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     tax_amount: "",
     shipping_after_arrival: false,
     tax_after_arrival: false,
-    price_revised: false, // track if admin is increasing price
+    price_revised: false,
   });
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -54,6 +55,11 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
 
+  // Process notice editor state
+  const [noticeEditing, setNoticeEditing] = useState(false);
+  const [noticeSteps, setNoticeSteps] = useState<string[]>([]);
+  const [noticeSaving, setNoticeSaving] = useState(false);
+
   const { data: siteSettings } = useQuery({
     queryKey: ["site-settings-invoice-admin"],
     queryFn: async () => {
@@ -61,6 +67,51 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
       return (data as any)?.value as any || {};
     },
   });
+
+  const { data: pcbNotice } = useQuery({
+    queryKey: ["pcb-process-notice"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "pcb_process_notice").maybeSingle();
+      return (data as any)?.value as { steps?: string[]; enabled?: boolean } | null;
+    },
+  });
+
+  const openNoticeEditor = () => {
+    const defaultSteps = [
+      "Submit Order",
+      "We Review & Price",
+      "Initial Payment",
+      "Manufacturing",
+      "Price Update (if needed) → Approval",
+      "Payment Confirmed",
+      "Boards Arrive",
+      "Shipping & Tax Added",
+      "Final Payment",
+      "Shipped to You",
+    ];
+    setNoticeSteps(pcbNotice?.steps?.length ? [...pcbNotice.steps] : defaultSteps);
+    setNoticeEditing(true);
+  };
+
+  const saveNotice = async () => {
+    setNoticeSaving(true);
+    try {
+      const { data: existing } = await supabase.from("site_settings").select("id").eq("key", "pcb_process_notice").maybeSingle();
+      const val = { steps: noticeSteps.filter(s => s.trim()), enabled: true };
+      if (existing) {
+        await supabase.from("site_settings").update({ value: val as any }).eq("key", "pcb_process_notice");
+      } else {
+        await supabase.from("site_settings").insert({ key: "pcb_process_notice", value: val as any });
+      }
+      queryClient.invalidateQueries({ queryKey: ["pcb-process-notice"] });
+      toast({ title: "Process notice updated" });
+      setNoticeEditing(false);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setNoticeSaving(false);
+    }
+  };
 
   const getProfile = (userId: string) => allProfiles.find((p: any) => p.user_id === userId);
 
