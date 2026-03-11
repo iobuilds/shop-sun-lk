@@ -573,6 +573,41 @@ const AdminDashboard = () => {
   });
   const pendingPCBCount = pcbOrders?.filter((o: any) => o.status === "pending").length || 0;
 
+  // ── Realtime: auto-refresh all admin views on any DB change ──
+  useEffect(() => {
+    if (!isAdmin && !isModerator) return;
+
+    const WATCHED: { table: string; keys: string[] }[] = [
+      { table: "orders",                keys: ["admin-orders"] },
+      { table: "order_items",           keys: ["admin-orders"] },
+      { table: "pcb_order_requests",    keys: ["admin-pcb-orders"] },
+      { table: "preorder_requests",     keys: ["admin-preorders"] },
+      { table: "preorder_items",        keys: ["admin-preorders"] },
+      { table: "products",              keys: ["admin-products", "admin-deals", "admin-combos"] },
+      { table: "categories",            keys: ["admin-categories"] },
+      { table: "contact_messages",      keys: ["admin-contacts"] },
+      { table: "conversations",         keys: ["admin-conversations"] },
+      { table: "conversation_messages", keys: ["admin-conversations", "admin-convo-messages"] },
+      { table: "profiles",              keys: ["admin-users", "admin-user-roles"] },
+      { table: "user_roles",            keys: ["admin-user-roles"] },
+      { table: "coupons",               keys: ["admin-coupons"] },
+      { table: "reviews",               keys: ["admin-reviews"] },
+      { table: "sms_logs",              keys: ["admin-sms-logs"] },
+    ];
+
+    const channels = WATCHED.map(({ table, keys }) =>
+      supabase
+        .channel(`admin-rt-${table}`)
+        .on("postgres_changes" as any, { event: "*", schema: "public", table }, () => {
+          keys.forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
+        })
+        .subscribe()
+    );
+
+    return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, isModerator, queryClient]);
+
 
 
 const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
