@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText } from "lucide-react";
+import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText, Info, Edit2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const STATUS_OPTIONS = [
   { value: "pending",      label: "Pending Review",      color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
@@ -31,6 +31,7 @@ interface AdminPCBOrdersProps {
 }
 
 export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: AdminPCBOrdersProps) {
+  const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     tax_amount: "",
     shipping_after_arrival: false,
     tax_after_arrival: false,
-    price_revised: false, // track if admin is increasing price
+    price_revised: false,
   });
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -54,6 +55,11 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
 
+  // Process notice editor state
+  const [noticeEditing, setNoticeEditing] = useState(false);
+  const [noticeSteps, setNoticeSteps] = useState<string[]>([]);
+  const [noticeSaving, setNoticeSaving] = useState(false);
+
   const { data: siteSettings } = useQuery({
     queryKey: ["site-settings-invoice-admin"],
     queryFn: async () => {
@@ -61,6 +67,51 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
       return (data as any)?.value as any || {};
     },
   });
+
+  const { data: pcbNotice } = useQuery({
+    queryKey: ["pcb-process-notice"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "pcb_process_notice").maybeSingle();
+      return (data as any)?.value as { steps?: string[]; enabled?: boolean } | null;
+    },
+  });
+
+  const openNoticeEditor = () => {
+    const defaultSteps = [
+      "Submit Order",
+      "We Review & Price",
+      "Initial Payment",
+      "Manufacturing",
+      "Price Update (if needed) → Approval",
+      "Payment Confirmed",
+      "Boards Arrive",
+      "Shipping & Tax Added",
+      "Final Payment",
+      "Shipped to You",
+    ];
+    setNoticeSteps(pcbNotice?.steps?.length ? [...pcbNotice.steps] : defaultSteps);
+    setNoticeEditing(true);
+  };
+
+  const saveNotice = async () => {
+    setNoticeSaving(true);
+    try {
+      const { data: existing } = await supabase.from("site_settings").select("id").eq("key", "pcb_process_notice").maybeSingle();
+      const val = { steps: noticeSteps.filter(s => s.trim()), enabled: true };
+      if (existing) {
+        await supabase.from("site_settings").update({ value: val as any }).eq("key", "pcb_process_notice");
+      } else {
+        await supabase.from("site_settings").insert({ key: "pcb_process_notice", value: val as any });
+      }
+      queryClient.invalidateQueries({ queryKey: ["pcb-process-notice"] });
+      toast({ title: "Process notice updated" });
+      setNoticeEditing(false);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setNoticeSaving(false);
+    }
+  };
 
   const getProfile = (userId: string) => allProfiles.find((p: any) => p.user_id === userId);
 
@@ -333,6 +384,31 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
   return (
     <div className="space-y-4">
+      {/* Process Notice Editor */}
+      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">PCB Order Process Notice</span>
+            <span className="text-xs text-muted-foreground">(shown to customers on the PCB page)</span>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={openNoticeEditor}>
+            <Edit2 className="w-3 h-3" /> Edit Steps
+          </Button>
+        </div>
+        {pcbNotice?.steps?.length ? (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {pcbNotice.steps.map((s, i) => (
+              <span key={i} className="text-xs bg-background border border-border rounded-md px-2 py-0.5 text-muted-foreground">
+                {i + 1}. {s}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">No steps configured yet — click Edit Steps to add workflow steps.</p>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
@@ -629,6 +705,40 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
               <Button onClick={handleArrivalSave} disabled={arrivalSaving} className="flex-1">{arrivalSaving ? "Saving..." : "Save & Notify"}</Button>
               <Button variant="outline" onClick={() => setArrivalDialog(false)}>Cancel</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Process Notice Editor Dialog */}
+      <Dialog open={noticeEditing} onOpenChange={setNoticeEditing}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Edit PCB Process Steps</DialogTitle></DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">These steps are shown to customers on the PCB Order page as a workflow guide.</p>
+          <div className="space-y-2 mt-2">
+            {noticeSteps.map((step, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-5 text-right shrink-0">{i + 1}.</span>
+                <Input
+                  value={step}
+                  onChange={e => setNoticeSteps(prev => prev.map((s, idx) => idx === i ? e.target.value : s))}
+                  placeholder={`Step ${i + 1}`}
+                  className="h-8 text-sm"
+                />
+                <button onClick={() => setNoticeSteps(prev => prev.filter((_, idx) => idx !== i))}
+                  className="text-muted-foreground hover:text-destructive transition-colors shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() => setNoticeSteps(prev => [...prev, ""])}
+              className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1">
+              <Plus className="w-3.5 h-3.5" /> Add step
+            </button>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button onClick={saveNotice} disabled={noticeSaving} className="flex-1">{noticeSaving ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setNoticeEditing(false)}>Cancel</Button>
           </div>
         </DialogContent>
       </Dialog>
