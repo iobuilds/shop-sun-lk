@@ -467,7 +467,6 @@ const AdminDashboard = () => {
       return data as any[];
     },
     enabled: !!adminSelectedConvo,
-    refetchInterval: 5000,
   });
 
   const { data: companySettings } = useQuery({
