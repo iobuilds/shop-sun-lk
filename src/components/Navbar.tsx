@@ -71,6 +71,22 @@ const Navbar = () => {
     staleTime: 60000,
   });
 
+  // Company settings (logo, store name)
+  const { data: company } = useQuery({
+    queryKey: ["site-company-settings"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_settings" as any)
+        .select("*")
+        .eq("key", "company")
+        .maybeSingle();
+      return (data as any)?.value as any || null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const storeName = company?.store_name || "NanoCircuit.lk";
+
   // Navbar config from site_settings
   const { data: navConfig } = useQuery({
     queryKey: ["navbar-config"],
