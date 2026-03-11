@@ -1,15 +1,11 @@
 /**
- * GerberViewer — uses web-gerber's native Three.js rendering pipeline
- * (renderThree + assemblyPCBToThreeJS) so NO canvas-baking / no main-thread freeze.
+ * GerberViewer — simple reliable 2D view: Top + Bottom side by side
+ * Uses web-gerber SVG rendering only (no Three.js, no canvas baking)
  */
-import { useEffect, useRef, useState, useCallback } from "react";
-import {
-  Layers, Loader2, AlertCircle, RotateCcw, RefreshCw,
-  ZoomIn, ZoomOut, CheckCircle2, XCircle, Box,
-} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Layers, Loader2, AlertCircle, RefreshCw, ZoomIn, ZoomOut, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// ─── Layer extensions → role ───────────────────────────────────────────────
 const LAYER_ROLE: Record<string, string> = {
   ".gtl": "top_copper",  ".cmp": "top_copper",  ".g1": "top_copper",
   ".gts": "top_mask",    ".stc": "top_mask",
@@ -17,28 +13,26 @@ const LAYER_ROLE: Record<string, string> = {
   ".gbl": "btm_copper",  ".sol": "btm_copper",  ".g2": "btm_copper",
   ".gbs": "btm_mask",    ".sts": "btm_mask",
   ".gbo": "btm_silk",    ".pls": "btm_silk",
-  ".gko": "outline",     ".gm1": "outline",     ".gm2": "outline",
+  ".gko": "outline",     ".gm1": "outline",     ".gm2": "outline", ".gm3": "outline",
   ".drl": "drill",       ".xln": "drill",       ".exc": "drill",
-  ".ncd": "drill",       ".txt": "drill",
+  ".ncd": "drill",
   ".gbr": "top_copper",  ".ger": "top_copper",
 };
 
-// ─── Layer stack sidebar ───────────────────────────────────────────────────
 const LAYER_STACK = [
-  { role: "top_silk",   label: "Top Silkscreen",  dot: "#ffffff" },
-  { role: "top_mask",   label: "Top Solder Mask", dot: "#22c55e" },
-  { role: "top_copper", label: "Top Copper",       dot: "#f59e0b" },
-  { role: "outline",    label: "Board Outline",    dot: "#94a3b8" },
-  { role: "drill",      label: "Drill",            dot: "#64748b" },
-  { role: "btm_copper", label: "Bot Copper",       dot: "#f59e0b" },
-  { role: "btm_mask",   label: "Bot Solder Mask",  dot: "#22c55e" },
-  { role: "btm_silk",   label: "Bot Silkscreen",   dot: "#ffffff" },
+  { role: "top_silk",   label: "Top Silk",        dot: "#ffffff" },
+  { role: "top_mask",   label: "Top Solder Mask",  dot: "#22c55e" },
+  { role: "top_copper", label: "Top Copper",        dot: "#f59e0b" },
+  { role: "outline",    label: "Outline",           dot: "#94a3b8" },
+  { role: "drill",      label: "Drill",             dot: "#64748b" },
+  { role: "btm_copper", label: "Bot Copper",        dot: "#f59e0b" },
+  { role: "btm_mask",   label: "Bot Solder Mask",   dot: "#22c55e" },
+  { role: "btm_silk",   label: "Bot Silk",          dot: "#ffffff" },
 ];
 
-// Mask color hex lookup (for 2D bg tint only)
-const MASK_HEX: Record<string, string> = {
-  green: "#1a6b2e", red: "#8b0000", blue: "#0a3d8f",
-  black: "#1a1a1a", white: "#d8d8d8", yellow: "#b8860b",
+const MASK_BG: Record<string, string> = {
+  green: "#0d3318", red: "#2a0000", blue: "#050d2a",
+  black: "#111111", white: "#cccccc", yellow: "#2a1e00",
 };
 
 type LayerMap = Record<string, string>;
@@ -48,7 +42,6 @@ interface GerberViewerProps {
   pcbColor?: string;
 }
 
-// ─── ZIP extraction ────────────────────────────────────────────────────────
 async function extractLayersFromZip(file: File): Promise<LayerMap> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(file);
@@ -62,70 +55,82 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
     try {
       const content = await entry.async("string");
       if (content.trim().length > 20) layers[role] = content;
-    } catch { /* skip binary */ }
+    } catch { /* skip */ }
   }
   return layers;
 }
 
-// ─── Build a single Three.js mesh from gerber string ──────────────────────
-async function buildLayerMesh(
-  gerberStr: string,
-  color: number,
-  doubleSide = false,
-): Promise<any | null> {
+/** Render a single gerber string to an SVG string */
+async function gerberToSvg(gerberStr: string, fillColor: string): Promise<string | null> {
   try {
-    const { parse, plot, renderThree, defaultColor } = await import("web-gerber" as any);
-    const THREE = await import("three");
-    const plot_result = plot(parse(gerberStr));
-    const mesh = renderThree(
-      plot_result,
-      color ?? defaultColor.BaseBoard,
-      undefined,
-      doubleSide,
-    );
-    return mesh ?? null;
-  } catch (e) {
-    console.warn("Layer mesh failed:", e);
+    const { parse, plot, renderSVG } = await import("web-gerber");
+    const { toHtml } = await import("hast-util-to-html");
+    const svg = toHtml(renderSVG(plot(parse(gerberStr))) as any);
+    if (!svg || svg.length < 30) return null;
+    return svg
+      .replace(/fill="[^"]*"/g, `fill="${fillColor}"`)
+      .replace(/stroke="[^"]*"/g, `stroke="${fillColor}"`);
+  } catch {
     return null;
   }
 }
 
-// ─── Component ────────────────────────────────────────────────────────────
-export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerProps) {
-  const mountRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<any>(null);
-  const animRef = useRef<number>(0);
-  const cancelRef = useRef(false);
+/** Composite multiple SVG layers into one by overlaying them in a foreignObject-free way */
+async function buildSideSvg(
+  layers: LayerMap,
+  side: "top" | "btm",
+  maskBg: string,
+): Promise<string | null> {
+  const p = side;
 
+  // Render each sub-layer
+  const copperSvg = layers[`${p}_copper`] ? await gerberToSvg(layers[`${p}_copper`], "#d4a84b") : null;
+  const silkSvg   = layers[`${p}_silk`]   ? await gerberToSvg(layers[`${p}_silk`],   "#f0f0f0") : null;
+  const outlineSvg = layers.outline        ? await gerberToSvg(layers.outline,         "#888888") : null;
+
+  const primary = copperSvg || silkSvg || outlineSvg;
+  if (!primary) return null;
+
+  // Extract viewBox from primary layer
+  const vbMatch = primary.match(/viewBox="([^"]+)"/);
+  const vb = vbMatch ? vbMatch[1] : "0 0 100 100";
+  const [vx, vy, vw, vh] = vb.split(/\s+/).map(Number);
+
+  const extract = (svgStr: string | null): string => {
+    if (!svgStr) return "";
+    // Pull inner content between <svg...> and </svg>
+    const inner = svgStr.replace(/<svg[^>]*>/, "").replace(/<\/svg>/, "");
+    return inner;
+  };
+
+  // Stack layers: outline → copper → silk
+  const combined = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vx} ${vy} ${vw} ${vh}" style="background:${maskBg}; width:100%; height:100%;">
+    <g opacity="0.6">${extract(outlineSvg)}</g>
+    <g>${extract(copperSvg)}</g>
+    <g opacity="0.85">${extract(silkSvg)}</g>
+  </svg>`;
+
+  return combined;
+}
+
+export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerProps) {
   const [layers, setLayers] = useState<LayerMap>({});
+  const [topSvg, setTopSvg]   = useState<string | null>(null);
+  const [btmSvg, setBtmSvg]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState("Reading file…");
-  const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<"3d" | "2d">("3d");
-  const [svgHtml, setSvgHtml] = useState<string | null>(null);
-  const [zoom2d, setZoom2d] = useState(1);
+  const [msg, setMsg]         = useState("Reading file…");
+  const [error, setError]     = useState<string | null>(null);
+  const [zoom, setZoom]       = useState(1);
   const [showStack, setShowStack] = useState(true);
 
   const colorKey = (pcbColor || "green").toLowerCase();
-  const maskHex = MASK_HEX[colorKey] ?? MASK_HEX.green;
+  const maskBg   = MASK_BG[colorKey] ?? MASK_BG.green;
 
-  // ── Destroy Three scene ──────────────────────────────────────────────────
-  const destroy3d = useCallback(() => {
-    cancelAnimationFrame(animRef.current);
-    if (rendererRef.current) {
-      try { rendererRef.current.dispose?.(); } catch {}
-      rendererRef.current = null;
-    }
-    if (mountRef.current) mountRef.current.innerHTML = "";
-  }, []);
-
-  // ── Parse ZIP → LayerMap ─────────────────────────────────────────────────
-  const loadFile = useCallback(async () => {
-    cancelRef.current = false;
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    setSvgHtml(null);
-    destroy3d();
+    setTopSvg(null);
+    setBtmSvg(null);
     setMsg("Extracting Gerber layers…");
 
     try {
@@ -138,201 +143,31 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         parsed[LAYER_ROLE[ext] ?? "top_copper"] = txt;
       }
 
-      if (cancelRef.current) return;
-      const count = Object.keys(parsed).length;
       setLayers(parsed);
+      const count = Object.keys(parsed).length;
 
       if (count === 0) {
-        setError("No Gerber layers found. Make sure your ZIP contains .gtl/.gbl/.gko files.");
+        setError("No Gerber layers found. Ensure your ZIP contains .gtl / .gbl / .gko files.");
         setLoading(false);
         return;
       }
 
-      // Quick 2D SVG for 2D fallback mode
-      setMsg("Generating 2D preview…");
-      try {
-        const primary = parsed.top_copper || parsed.btm_copper || parsed.outline;
-        if (primary) {
-          const { parse, plot, renderSVG } = await import("web-gerber" as any);
-          const { toHtml } = await import("hast-util-to-html");
-          const svg = toHtml(renderSVG(plot(parse(primary))));
-          if (!cancelRef.current && svg) {
-            setSvgHtml(svg.replace(/<svg/, `<svg style="background:${maskHex};"`));
-          }
-        }
-      } catch { /* 2D ok to fail */ }
+      setMsg("Rendering top side…");
+      const top = await buildSideSvg(parsed, "top", maskBg);
+      setTopSvg(top);
+
+      setMsg("Rendering bottom side…");
+      const btm = await buildSideSvg(parsed, "btm", maskBg);
+      setBtmSvg(btm);
 
       setLoading(false);
     } catch (err: any) {
-      if (!cancelRef.current) {
-        setError("Could not read file: " + (err?.message ?? "unknown error"));
-        setLoading(false);
-      }
-    }
-  }, [file, maskHex, destroy3d]);
-
-  // ── Build Three.js scene using web-gerber's native API ───────────────────
-  const init3d = useCallback(async (layerData: LayerMap) => {
-    if (!mountRef.current || Object.keys(layerData).length === 0) return;
-    cancelRef.current = false;
-    destroy3d();
-    setLoading(true);
-    setMsg("Initialising 3D renderer…");
-
-    try {
-      const THREE = await import("three");
-      const { OrbitControls } = await import("three/examples/jsm/controls/OrbitControls.js" as any);
-      const { assemblyPCBToThreeJS, DefaultLaminar } = await import("web-gerber" as any);
-
-      if (cancelRef.current) return;
-
-      const W = mountRef.current.clientWidth || 640;
-      const H = 380;
-
-      // Renderer
-      const renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(W, H);
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      renderer.setClearColor(0x0d1117);
-      mountRef.current.appendChild(renderer.domElement);
-      rendererRef.current = renderer;
-
-      // Scene + camera
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, W / H, 0.01, 5000);
-      camera.position.set(0, 80, 150);
-      camera.lookAt(0, 0, 0);
-
-      // Controls
-      const controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.07;
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.8;
-
-      // Lighting
-      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-      const dir = new THREE.DirectionalLight(0xffffff, 1.2);
-      dir.position.set(80, 150, 80);
-      scene.add(dir);
-      scene.add(new THREE.DirectionalLight(0x8899ff, 0.3).position.set(-60, -40, -60) && dir);
-      const fill = new THREE.DirectionalLight(0x8899ff, 0.25);
-      fill.position.set(-60, -40, -60);
-      scene.add(fill);
-
-      // Grid
-      const grid = new THREE.GridHelper(600, 50, 0x1a2a3a, 0x0f1a22);
-      grid.position.y = -20;
-      scene.add(grid);
-
-      // Build each layer mesh using web-gerber's renderThree
-      // Colors match PCB conventions
-      const maskColor = parseInt(maskHex.replace("#", ""), 16);
-
-      setMsg("Rendering Copper layers…");
-      const [top_copper, btm_copper] = await Promise.all([
-        layerData.top_copper ? buildLayerMesh(layerData.top_copper, 0xd4a84b) : null,
-        layerData.btm_copper ? buildLayerMesh(layerData.btm_copper, 0xd4a84b) : null,
-      ]);
-      if (cancelRef.current) return;
-
-      setMsg("Rendering Solder Mask layers…");
-      const [top_mask, btm_mask] = await Promise.all([
-        layerData.top_mask ? buildLayerMesh(layerData.top_mask, maskColor) : null,
-        layerData.btm_mask ? buildLayerMesh(layerData.btm_mask, maskColor) : null,
-      ]);
-      if (cancelRef.current) return;
-
-      setMsg("Rendering Silkscreen layers…");
-      const [top_silk, btm_silk] = await Promise.all([
-        layerData.top_silk ? buildLayerMesh(layerData.top_silk, 0xffffff) : null,
-        layerData.btm_silk ? buildLayerMesh(layerData.btm_silk, 0xffffff) : null,
-      ]);
-      if (cancelRef.current) return;
-
-      setMsg("Assembling PCB…");
-      const outline = layerData.outline ? await buildLayerMesh(layerData.outline, 0xd4c48a) : null;
-      const drill   = layerData.drill   ? await buildLayerMesh(layerData.drill,   0x222222) : null;
-      if (cancelRef.current) return;
-
-      // Build pcb_struct — only include present layers
-      const pcb_struct: any = {};
-      if (top_copper || top_mask || top_silk) {
-        pcb_struct.Top = {};
-        if (top_copper) pcb_struct.Top.Copper      = top_copper;
-        if (top_mask)   pcb_struct.Top.SolidMask   = top_mask;
-        if (top_silk)   pcb_struct.Top.Silkscreen  = top_silk;
-      }
-      if (btm_copper || btm_mask || btm_silk) {
-        pcb_struct.Btm = {};
-        if (btm_copper) pcb_struct.Btm.Copper      = btm_copper;
-        if (btm_mask)   pcb_struct.Btm.SolidMask   = btm_mask;
-        if (btm_silk)   pcb_struct.Btm.Silkscreen  = btm_silk;
-      }
-      if (outline) pcb_struct.Outline = outline;
-      if (drill)   pcb_struct.Drill   = drill;
-
-      try {
-        assemblyPCBToThreeJS(scene, pcb_struct, DefaultLaminar);
-      } catch {
-        // Fallback: just add individual meshes directly
-        [top_copper, btm_copper, top_mask, btm_mask, top_silk, btm_silk, outline, drill]
-          .filter(Boolean).forEach(m => scene.add(m));
-      }
-
-      // Centre camera on board
-      const box = new THREE.Box3().setFromObject(scene);
-      const centre = new THREE.Vector3();
-      box.getCenter(centre);
-      const size = box.getSize(new THREE.Vector3()).length();
-      controls.target.copy(centre);
-      camera.position.set(centre.x, centre.y + size * 0.5, centre.z + size * 1.1);
-      camera.lookAt(centre);
-      controls.update();
-
-      // Animate
-      const tick = () => {
-        animRef.current = requestAnimationFrame(tick);
-        controls.update();
-        renderer.render(scene, camera);
-      };
-      tick();
-
-      // Resize
-      const ro = new ResizeObserver(() => {
-        if (!mountRef.current) return;
-        const w = mountRef.current.clientWidth;
-        renderer.setSize(w, H);
-        camera.aspect = w / H;
-        camera.updateProjectionMatrix();
-      });
-      ro.observe(mountRef.current);
-
+      setError("Parse error: " + (err?.message ?? "unknown"));
       setLoading(false);
-    } catch (err: any) {
-      console.error("3D error:", err);
-      if (!cancelRef.current) {
-        setError("3D render failed — falling back to 2D.");
-        setView("2d");
-        setLoading(false);
-      }
     }
-  }, [maskHex, destroy3d]);
+  }, [file, maskBg]);
 
-  // ── Effects ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    loadFile();
-    return () => { cancelRef.current = true; destroy3d(); };
-  }, [file]); // eslint-disable-line
-
-  useEffect(() => {
-    if (view === "3d" && Object.keys(layers).length > 0 && !loading) init3d(layers);
-    if (view === "2d") destroy3d();
-  }, [view, layers]); // eslint-disable-line
-
-  useEffect(() => {
-    if (!loading && view === "3d" && Object.keys(layers).length > 0) init3d(layers);
-  }, [loading]); // eslint-disable-line
+  useEffect(() => { load(); }, [file]); // eslint-disable-line
 
   const layerCount = Object.keys(layers).length;
 
@@ -341,7 +176,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       {/* Toolbar */}
       <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b border-border flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Box className="w-4 h-4 text-primary" />
+          <Layers className="w-4 h-4 text-primary" />
           <span className="text-sm font-medium text-foreground">PCB Preview</span>
           {layerCount > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
@@ -349,107 +184,93 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
             </span>
           )}
         </div>
-
         <div className="flex items-center gap-1">
-          {/* 2D / 3D */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {(["3d", "2d"] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className={`px-2.5 py-1 text-xs font-medium transition-colors uppercase ${view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                {v}
-              </button>
-            ))}
-          </div>
-
-          {/* Layer stack toggle */}
           <button onClick={() => setShowStack(s => !s)}
-            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border ml-1 transition-colors ${showStack ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-border transition-colors ${showStack ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <Layers className="w-3 h-3" /> Stack
           </button>
-
-          {/* 2D zoom */}
-          {view === "2d" && (<>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.max(0.2, z - 0.2))}><ZoomOut className="w-3.5 h-3.5" /></Button>
-            <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom2d * 100)}%</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom2d(z => Math.min(5, z + 0.2))}><ZoomIn className="w-3.5 h-3.5" /></Button>
-          </>)}
-
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="Reset"
-            onClick={() => view === "2d" ? setZoom2d(1) : (destroy3d(), init3d(layers))}>
-            <RotateCcw className="w-3.5 h-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" title="Reload" onClick={loadFile}>
-            <RefreshCw className="w-3.5 h-3.5" />
-          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.3, z - 0.2))}><ZoomOut className="w-3.5 h-3.5" /></Button>
+          <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(zoom * 100)}%</span>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(z => Math.min(4, z + 0.2))}><ZoomIn className="w-3.5 h-3.5" /></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setZoom(1)} title="Reset zoom"><span className="text-xs">1:1</span></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={load} title="Reload"><RefreshCw className="w-3.5 h-3.5" /></Button>
         </div>
       </div>
 
-      {/* Viewer + Stack panel */}
+      {/* Viewer */}
       <div className="flex">
-        {/* 3D / 2D viewport */}
-        <div className="relative flex-1" style={{ height: 400, background: "#0d1117" }}>
+        {/* Main 2D canvas */}
+        <div className="flex-1 relative" style={{ minHeight: 360, background: "#0a0f0a" }}>
 
-          {/* Three.js canvas mount */}
-          <div ref={mountRef} className={`absolute inset-0 w-full h-full ${view !== "3d" ? "hidden" : ""}`} />
-
-          {/* 2D SVG */}
-          {view === "2d" && svgHtml && !loading && (
-            <div className="absolute inset-0 overflow-auto flex items-center justify-center p-4"
-              style={{ background: "#0a180f" }}>
-              <div style={{ transform: `scale(${zoom2d})`, transformOrigin: "center", transition: "transform 0.15s" }}
-                dangerouslySetInnerHTML={{ __html: svgHtml }} />
-            </div>
-          )}
-
-          {/* Loading */}
           {loading && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3"
-              style={{ background: "rgba(13,17,23,0.95)" }}>
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
+              style={{ background: "rgba(10,15,10,0.96)" }}>
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
               <p className="text-sm text-muted-foreground">{msg}</p>
-              <p className="text-xs text-muted-foreground/50">Complex boards may take 15–30 s…</p>
             </div>
           )}
 
-          {/* Error */}
           {error && !loading && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 px-6"
-              style={{ background: "rgba(13,17,23,0.95)" }}>
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6"
+              style={{ background: "rgba(10,15,10,0.96)" }}>
               <AlertCircle className="w-7 h-7 text-destructive" />
               <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={loadFile}>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={load}>
                 <RefreshCw className="w-3 h-3 mr-1" /> Retry
               </Button>
             </div>
           )}
 
-          {/* 2D empty */}
-          {view === "2d" && !svgHtml && !loading && !error && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-              <AlertCircle className="w-6 h-6 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">No 2D preview available</p>
-            </div>
-          )}
-
-          {/* Color badge */}
           {!loading && !error && (
-            <div className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-full px-2.5 py-1 z-10"
-              style={{ background: "rgba(0,0,0,0.6)" }}>
-              <div className="w-3 h-3 rounded-full border border-white/30" style={{ background: maskHex }} />
-              <span className="text-xs text-white/70">{pcbColor}</span>
+            <div className="overflow-auto p-3" style={{ maxHeight: 400 }}>
+              <div style={{ transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s", display: "inline-flex", gap: 16 }}>
+                {/* Top side */}
+                <div className="flex flex-col gap-1">
+                  <div className="text-center">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full text-green-400 border border-green-800/50" style={{ background: "rgba(34,197,94,0.08)" }}>
+                      TOP
+                    </span>
+                  </div>
+                  <div style={{ width: 280, height: 280, background: maskBg, borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    {topSvg
+                      ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: topSvg }} />
+                      : <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-xs text-muted-foreground opacity-50">No top layers</span>
+                        </div>
+                    }
+                  </div>
+                </div>
+
+                {/* Bottom side */}
+                <div className="flex flex-col gap-1">
+                  <div className="text-center">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full text-blue-400 border border-blue-800/50" style={{ background: "rgba(96,165,250,0.08)" }}>
+                      BOTTOM
+                    </span>
+                  </div>
+                  <div style={{ width: 280, height: 280, background: maskBg, borderRadius: 4, overflow: "hidden", border: "1px solid rgba(255,255,255,0.08)", transform: "scaleX(-1)" }}>
+                    {btmSvg
+                      ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: btmSvg }} />
+                      : <div className="w-full h-full flex items-center justify-center" style={{ transform: "scaleX(-1)" }}>
+                          <span className="text-xs text-muted-foreground opacity-50">No bottom layers</span>
+                        </div>
+                    }
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* Layer stack sidebar */}
         {showStack && (
-          <div className="w-48 border-l border-border bg-muted/20 flex flex-col shrink-0" style={{ height: 400 }}>
+          <div className="w-44 border-l border-border bg-muted/20 flex flex-col shrink-0" style={{ maxHeight: 400 }}>
             <div className="px-3 py-2 border-b border-border">
               <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 <Layers className="w-3 h-3 text-primary" /> Gerber Stack
               </p>
             </div>
-            <div className="flex-1 overflow-y-auto py-2">
+            <div className="flex-1 overflow-y-auto py-1">
               {LAYER_STACK.map((l, i) => {
                 const present = !!layers[l.role];
                 return (
@@ -467,9 +288,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
               })}
             </div>
             <div className="px-3 py-2 border-t border-border">
-              <p className="text-[10px] text-muted-foreground">
-                {loading ? "Detecting…" : `${layerCount} / ${LAYER_STACK.length} detected`}
-              </p>
+              <p className="text-[10px] text-muted-foreground">{layerCount}/{LAYER_STACK.length} detected</p>
             </div>
           </div>
         )}
@@ -477,12 +296,10 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
       {/* Footer */}
       {!loading && !error && (
-        <div className="px-3 py-2 bg-muted/30 border-t border-border">
+        <div className="px-3 py-1.5 bg-muted/30 border-t border-border">
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Layers className="w-3 h-3" />
-            {view === "3d"
-              ? "Native 3D mesh · Drag to rotate · Scroll to zoom"
-              : "Top copper · 2D flat view"}
+            Combined 2D view · Top &amp; Bottom · Copper + Silkscreen
           </p>
         </div>
       )}
