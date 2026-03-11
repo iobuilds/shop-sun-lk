@@ -14,15 +14,16 @@ import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const STATUS_OPTIONS = [
-  { value: "pending",      label: "Pending Review",      color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
-  { value: "quoted",       label: "Quoted",               color: "bg-blue-100 text-blue-800 border-blue-300" },
-  { value: "under_review", label: "Approval Pending",     color: "bg-orange-100 text-orange-800 border-orange-300" },
-  { value: "approved",     label: "Approved",             color: "bg-green-100 text-green-800 border-green-300" },
-  { value: "sourcing",     label: "Manufacturing",        color: "bg-purple-100 text-purple-800 border-purple-300" },
-  { value: "arrived",      label: "Boards Ready",         color: "bg-secondary/20 text-secondary border-secondary/40" },
-  { value: "shipped",      label: "Shipped",              color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
-  { value: "completed",    label: "Completed",            color: "bg-green-100 text-green-900 border-green-400" },
-  { value: "cancelled",    label: "Cancelled",            color: "bg-destructive/10 text-destructive border-destructive/30" },
+  { value: "pending",         label: "Pending Review",           color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
+  { value: "quoted",          label: "Quoted",                    color: "bg-blue-100 text-blue-800 border-blue-300" },
+  { value: "under_review",    label: "Revision Sent",            color: "bg-orange-100 text-orange-800 border-orange-300" },
+  { value: "revision_paying", label: "Revision Payment — Hold",  color: "bg-amber-100 text-amber-800 border-amber-300" },
+  { value: "approved",        label: "Approved",                  color: "bg-green-100 text-green-800 border-green-300" },
+  { value: "sourcing",        label: "Manufacturing",             color: "bg-purple-100 text-purple-800 border-purple-300" },
+  { value: "arrived",         label: "Boards Ready",              color: "bg-secondary/20 text-secondary border-secondary/40" },
+  { value: "shipped",         label: "Shipped",                   color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+  { value: "completed",       label: "Completed",                 color: "bg-green-100 text-green-900 border-green-400" },
+  { value: "cancelled",       label: "Cancelled",                 color: "bg-destructive/10 text-destructive border-destructive/30" },
 ];
 
 interface AdminPCBOrdersProps {
@@ -258,13 +259,56 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     }
   };
 
-  const handlePaymentReview = async (order: any, type: "quote" | "arrival", action: "approve" | "reject", rejectReason = "") => {
+  const handlePaymentReview = async (order: any, type: "quote" | "arrival" | "revision", action: "approve" | "reject", rejectReason = "") => {
     setApprovingId(order.id + type);
     try {
       const shortId = order.id.slice(0, 8).toUpperCase();
       const profile = getProfile(order.user_id);
 
-      if (type === "quote") {
+      if (type === "revision") {
+        if (action === "approve") {
+          // Clear revision slip tag, keep other notes, set back to sourcing
+          const cleanNotes = (order.admin_notes || "")
+            .split("\n")
+            .filter((l: string) => !l.startsWith("[revision_slip]:"))
+            .join("\n").trim() || null;
+          await (supabase as any).from("pcb_order_requests").update({
+            status: "sourcing",
+            admin_notes: cleanNotes,
+          }).eq("id", order.id);
+          await supabase.from("user_notifications").insert({
+            user_id: order.user_id,
+            title: "Revision Payment Approved — Manufacturing Resumed",
+            message: `Your revision payment for PCB-${shortId} has been approved. Manufacturing is resuming!`,
+            type: "order", link_url: "/pcb-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: ✅ Revision payment for PCB-${shortId} approved. Manufacturing is back on track!`, user_id: order.user_id },
+            });
+          }
+          toast({ title: "Revision payment approved — manufacturing resumed" });
+        } else {
+          // Clear slip so user re-uploads, keep revision_paying status
+          const cleanNotes = (order.admin_notes || "")
+            .split("\n")
+            .filter((l: string) => !l.startsWith("[revision_slip]:"))
+            .join("\n").trim() || null;
+          await (supabase as any).from("pcb_order_requests").update({ admin_notes: cleanNotes }).eq("id", order.id);
+          await supabase.from("user_notifications").insert({
+            user_id: order.user_id,
+            title: "Revision Payment Slip Rejected",
+            message: `Your revision payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload.`,
+            type: "order", link_url: "/pcb-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: Your revision payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload.`, user_id: order.user_id },
+            });
+          }
+          toast({ title: "Revision payment rejected — user notified" });
+        }
+      } else if (type === "quote") {
         if (action === "approve") {
           await (supabase as any).from("pcb_order_requests").update({ payment_status: "paid", status: "approved" }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
@@ -414,10 +458,12 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         payload.unit_cost_total = (parseFloat(revisionTarget.unit_cost_total) || 0) + extraAmt;
         payload.grand_total = newGrandTotal;
       }
-      // Build admin_notes with note text + image URLs
+      // Build admin_notes with note text + image URLs + extra amount tag for invoice
       const existingStripeLines = (revisionTarget.admin_notes || "").split("\n").filter((l: string) => l.startsWith("stripe_session:")).join("\n");
       const imageTag = revisionImages.length > 0 ? `[revision_images]:${revisionImages.join(",")}` : "";
-      payload.admin_notes = [revisionForm.notes.trim(), imageTag, existingStripeLines].filter(Boolean).join("\n") || null;
+      const extraTag = extraAmt > 0 ? `[revision_extra]:${extraAmt}` : "";
+      const noteTag = revisionForm.notes.trim() ? `[revision_note]:${revisionForm.notes.trim()}` : "";
+      payload.admin_notes = [noteTag, extraTag, imageTag, existingStripeLines].filter(Boolean).join("\n") || null;
 
       await (supabase as any).from("pcb_order_requests").update(payload).eq("id", revisionTarget.id);
 
@@ -687,6 +733,37 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                         </div>
                       </div>
                     )}
+
+                    {/* Revision payment slip review */}
+                    {order.status === "revision_paying" && (() => {
+                      const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+                      const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                      const revExtra = (() => {
+                        const el = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_extra]:"));
+                        return el ? parseFloat(el.replace("[revision_extra]:", "")) || 0 : 0;
+                      })();
+                      return slipUrl ? (
+                        <div className="border border-amber-200 bg-amber-50 rounded-lg p-3">
+                          <p className="text-sm font-medium text-amber-800 mb-1">Revision Payment Slip — Review Required</p>
+                          {revExtra > 0 && <p className="text-xs text-amber-700 mb-2">Extra amount: Rs. {revExtra.toLocaleString()}</p>}
+                          <a href={slipUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={slipUrl} alt="Revision slip" className="max-h-40 rounded border border-amber-200 mb-3 object-contain bg-white" onError={e => (e.currentTarget.style.display = "none")} />
+                          </a>
+                          <div className="flex gap-2">
+                            <Button size="sm" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "approve")} className="gap-1.5 bg-green-600 hover:bg-green-700">
+                              <ThumbsUp className="w-3.5 h-3.5" /> Approve — Resume Manufacturing
+                            </Button>
+                            <Button size="sm" variant="destructive" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "reject")} className="gap-1.5">
+                              <ThumbsDown className="w-3.5 h-3.5" /> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          ⏳ Waiting for customer to upload revision payment slip
+                        </div>
+                      );
+                    })()}
 
                     {/* Customer note */}
                     {order.customer_note && (

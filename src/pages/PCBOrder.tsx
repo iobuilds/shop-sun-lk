@@ -24,15 +24,16 @@ import SEOHead from "@/components/SEOHead";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  pending:   { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
-  quoted:    { label: "Quoted",                        color: "text-blue-600 bg-blue-50 border-blue-200",            icon: Info },
-  under_review: { label: "Approval Pending",           color: "text-orange-600 bg-orange-50 border-orange-200",     icon: AlertCircle },
-  approved:  { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
-  sourcing:  { label: "Manufacturing",                 color: "text-purple-600 bg-purple-50 border-purple-200",     icon: Cpu },
-  arrived:   { label: "Boards Ready — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
-  shipped:   { label: "Shipped",                       color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
-  completed: { label: "Delivered",                     color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
-  cancelled: { label: "Cancelled",                     color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
+  pending:          { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
+  quoted:           { label: "Quoted",                        color: "text-blue-600 bg-blue-50 border-blue-200",            icon: Info },
+  under_review:     { label: "Revision Required",            color: "text-orange-600 bg-orange-50 border-orange-200",     icon: AlertCircle },
+  revision_paying:  { label: "Revision Payment — On Hold",   color: "text-amber-700 bg-amber-50 border-amber-300",        icon: Clock },
+  approved:         { label: "Approved — Payment Confirmed",  color: "text-green-600 bg-green-50 border-green-200",        icon: CheckCircle },
+  sourcing:         { label: "Manufacturing",                 color: "text-purple-600 bg-purple-50 border-purple-200",     icon: Cpu },
+  arrived:          { label: "Boards Ready — Pay Charges",   color: "text-secondary bg-secondary/10 border-secondary/30", icon: Package },
+  shipped:          { label: "Shipped",                       color: "text-indigo-600 bg-indigo-50 border-indigo-200",     icon: Truck },
+  completed:        { label: "Delivered",                     color: "text-green-700 bg-green-50 border-green-300",        icon: CheckCircle },
+  cancelled:        { label: "Cancelled",                     color: "text-destructive bg-destructive/10 border-destructive/30", icon: XCircle },
 };
 
 const SURFACE_FINISHES = ["HASL", "HASL Lead-Free", "ENIG", "OSP", "ENEPIG"];
@@ -424,11 +425,30 @@ export default function PCBOrder() {
 
   const handleApproveQuote = async (orderId: string) => {
     try {
-      await (supabase as any).from("pcb_order_requests").update({ status: "quoted" }).eq("id", orderId);
-      toast({ title: "Quote approved! You can now proceed to payment." });
+      // Move to revision_paying — user must now pay the additional amount
+      await (supabase as any).from("pcb_order_requests").update({ status: "revision_paying" }).eq("id", orderId);
+      toast({ title: "Revision approved! Please upload payment for the additional amount." });
       refetchOrders();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleRevisionSlipUpload = async (file: File, orderId: string, currentNotes: string) => {
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `pcb-revision-slips/${orderId}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(path);
+      // Append slip tag to admin_notes
+      const cleanNotes = (currentNotes || "").split("\n").filter((l: string) => !l.startsWith("[revision_slip]:")).join("\n").trim();
+      const newNotes = [cleanNotes, `[revision_slip]:${publicUrl}`].filter(Boolean).join("\n");
+      await (supabase as any).from("pcb_order_requests").update({ admin_notes: newNotes }).eq("id", orderId);
+      toast({ title: "Slip uploaded — waiting for admin to approve revision payment." });
+      refetchOrders();
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     }
   };
 
@@ -446,8 +466,28 @@ export default function PCBOrder() {
 
   const canPay = (o: any) => o.status === "quoted" && !isQuoteExpired(o) && o.payment_status !== "paid" && o.payment_status !== "under_review" && o.grand_total > 0;
   const canPayArrival = (o: any) => o.status === "arrived" && o.arrival_payment_status !== "paid" && o.arrival_payment_status !== "under_review" && ((o.arrival_shipping_fee || 0) + (o.arrival_tax_amount || 0)) > 0;
-  // Order needs user approval when admin updated quote (status = under_review for approval)
+  // Needs approval when admin sent revision (under_review)
   const needsApproval = (o: any) => o.status === "under_review";
+  // Needs revision payment when user approved revision but hasn't paid yet
+  const needsRevisionPayment = (o: any) => {
+    if (o.status !== "revision_paying") return false;
+    const slipLine = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+    return !slipLine; // no slip yet → needs payment
+  };
+  // Revision slip submitted, awaiting admin review
+  const revisionSlipUnderReview = (o: any) => {
+    if (o.status !== "revision_paying") return false;
+    const slipLine = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+    return !!slipLine;
+  };
+  const getRevisionExtra = (o: any): number => {
+    const line = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_extra]:"));
+    return line ? parseFloat(line.replace("[revision_extra]:", "")) || 0 : 0;
+  };
+  const getRevisionNote = (o: any): string => {
+    const line = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_note]:"));
+    return line ? line.replace("[revision_note]:", "").trim() : "";
+  };
 
   return (
     <>
@@ -774,29 +814,91 @@ export default function PCBOrder() {
                           )}
 
                           {/* Approval alert when admin revised quote */}
-                          {needsApproval(order) && (
-                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
-                              <p className="text-sm font-semibold text-orange-800 mb-1 flex items-center gap-1.5">
-                                <AlertCircle className="w-4 h-4" /> Quote Updated — Your Approval Required
-                              </p>
-                              <p className="text-xs text-orange-700 mb-2">
-                                The quoted price has been revised. Please review and approve to proceed with payment.
-                              </p>
-                              {order.grand_total > 0 && (
-                                <div className="bg-background border border-orange-200 rounded-lg p-2 mb-3 text-sm space-y-1">
-                                  {order.unit_cost_total > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Board Cost</span><span>Rs. {Number(order.unit_cost_total).toLocaleString()}</span></div>}
-                                  {order.shipping_fee > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(order.shipping_fee).toLocaleString()}</span></div>}
-                                  {order.tax_amount > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>Rs. {Number(order.tax_amount).toLocaleString()}</span></div>}
-                                  {order.grand_total > 0 && <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border"><span>New Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>}
+                          {needsApproval(order) && (() => {
+                            const revExtra = getRevisionExtra(order);
+                            const revNote = getRevisionNote(order);
+                            const initialCost = Number(order.grand_total || 0) - revExtra;
+                            const lines = (order.admin_notes || "").split("\n");
+                            const imgLine = lines.find((l: string) => l.startsWith("[revision_images]:"));
+                            const revImgs = imgLine ? imgLine.replace("[revision_images]:", "").split(",").filter(Boolean) : [];
+                            return (
+                              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-3">
+                                <p className="text-sm font-semibold text-orange-800 mb-1 flex items-center gap-1.5">
+                                  <AlertCircle className="w-4 h-4" /> Revision Required — Your Approval Needed
+                                </p>
+                                {revNote && <p className="text-xs text-orange-700 mb-2 italic">"{revNote}"</p>}
+                                {revImgs.length > 0 && (
+                                  <div className="mb-2">
+                                    <p className="text-xs text-orange-700 font-medium mb-1">Reference images:</p>
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                      {revImgs.map((url: string, i: number) => (
+                                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block rounded overflow-hidden border border-orange-200 aspect-square">
+                                          <img src={url} alt={`ref-${i + 1}`} className="w-full h-full object-cover" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {order.grand_total > 0 && (
+                                  <div className="bg-background border border-orange-200 rounded-lg p-2 mb-3 text-sm space-y-1">
+                                    {initialCost > 0 && revExtra > 0 && <div className="flex justify-between text-muted-foreground"><span>Initial Quote</span><span>Rs. {initialCost.toLocaleString()}</span></div>}
+                                    {revExtra > 0 && <div className="flex justify-between text-orange-700 font-medium"><span>Revision Charge</span><span>+ Rs. {revExtra.toLocaleString()}</span></div>}
+                                    <div className="flex justify-between font-bold text-foreground pt-1 border-t border-border"><span>New Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>
+                                  </div>
+                                )}
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={() => handleApproveQuote(order.id)} className="gap-1.5">
+                                    <CheckCircle className="w-3.5 h-3.5" /> Approve &amp; Pay Revision
+                                  </Button>
                                 </div>
-                              )}
-                              <div className="flex gap-2">
-                                <Button size="sm" onClick={() => handleApproveQuote(order.id)} className="gap-1.5">
-                                  <CheckCircle className="w-3.5 h-3.5" /> Approve & Proceed to Pay
-                                </Button>
                               </div>
-                            </div>
-                          )}
+                            );
+                          })()}
+
+                          {/* Revision payment — user approved, needs to pay extra amount */}
+                          {needsRevisionPayment(order) && (() => {
+                            const revExtra = getRevisionExtra(order);
+                            const revNote = getRevisionNote(order);
+                            return (
+                              <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 mb-3">
+                                <p className="text-sm font-semibold text-amber-800 mb-1 flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" /> Revision Payment Required
+                                </p>
+                                {revNote && <p className="text-xs text-amber-700 mb-2 italic">"{revNote}"</p>}
+                                {revExtra > 0 && (
+                                  <div className="bg-background border border-amber-200 rounded-lg p-2 mb-3 text-sm">
+                                    <div className="flex justify-between font-bold"><span>Additional Amount Due</span><span className="text-amber-800">Rs. {revExtra.toLocaleString()}</span></div>
+                                  </div>
+                                )}
+                                <p className="text-xs text-amber-700 mb-2">Please upload your bank transfer slip for the revision amount. Manufacturing will resume once approved.</p>
+                                <label className="flex items-center gap-2 border border-amber-300 bg-background rounded-lg px-3 py-2 cursor-pointer hover:border-amber-500 transition-colors text-sm text-muted-foreground">
+                                  <Upload className="w-4 h-4 text-amber-600 shrink-0" />
+                                  Click to upload revision payment slip
+                                  <input type="file" accept="image/*,.pdf" className="hidden"
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) handleRevisionSlipUpload(f, order.id, order.admin_notes || ""); }} />
+                                </label>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Revision payment slip submitted — waiting admin review */}
+                          {revisionSlipUnderReview(order) && (() => {
+                            const revExtra = getRevisionExtra(order);
+                            const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+                            const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                            return (
+                              <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 mb-3">
+                                <p className="text-sm font-semibold text-amber-800 mb-1 flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" /> Revision Payment Under Review
+                                </p>
+                                <p className="text-xs text-amber-700 mb-2">Your revision payment slip has been submitted. Manufacturing will resume once our team approves it.</p>
+                                {revExtra > 0 && <p className="text-xs text-amber-700 mb-1">Amount: Rs. {revExtra.toLocaleString()}</p>}
+                                {slipUrl && <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View submitted slip</a>}
+                              </div>
+                            );
+                          })()}
+
+
 
                           {(order.status === "quoted" || (order.grand_total > 0 && order.status !== "under_review")) && !expired && order.status !== "under_review" && (
                             <div className="bg-muted/50 rounded-lg p-3 mb-3 text-sm space-y-1">
@@ -837,7 +939,8 @@ export default function PCBOrder() {
 
                           {order.admin_notes && (() => {
                             const lines = order.admin_notes.split("\n");
-                            const cleanNotes = lines.filter((l: string) => !l.startsWith("stripe_session:") && !l.startsWith("[revision_images]:")).join("\n").trim();
+                            const SKIP_PREFIXES = ["stripe_session:", "[revision_images]:", "[revision_extra]:", "[revision_note]:", "[revision_slip]:"];
+                            const cleanNotes = lines.filter((l: string) => !SKIP_PREFIXES.some(p => l.startsWith(p))).join("\n").trim();
                             const imgLine = lines.find((l: string) => l.startsWith("[revision_images]:"));
                             const revImgs = imgLine ? imgLine.replace("[revision_images]:", "").split(",").filter(Boolean) : [];
                             return (
