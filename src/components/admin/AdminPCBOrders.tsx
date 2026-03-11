@@ -384,6 +384,31 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
   return (
     <div className="space-y-4">
+      {/* Process Notice Editor */}
+      <div className="bg-primary/5 border border-primary/20 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-foreground">PCB Order Process Notice</span>
+            <span className="text-xs text-muted-foreground">(shown to customers on the PCB page)</span>
+          </div>
+          <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs" onClick={openNoticeEditor}>
+            <Edit2 className="w-3 h-3" /> Edit Steps
+          </Button>
+        </div>
+        {pcbNotice?.steps?.length ? (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {pcbNotice.steps.map((s, i) => (
+              <span key={i} className="text-xs bg-background border border-border rounded-md px-2 py-0.5 text-muted-foreground">
+                {i + 1}. {s}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">No steps configured yet — click Edit Steps to add workflow steps.</p>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
