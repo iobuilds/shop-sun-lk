@@ -259,13 +259,56 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     }
   };
 
-  const handlePaymentReview = async (order: any, type: "quote" | "arrival", action: "approve" | "reject", rejectReason = "") => {
+  const handlePaymentReview = async (order: any, type: "quote" | "arrival" | "revision", action: "approve" | "reject", rejectReason = "") => {
     setApprovingId(order.id + type);
     try {
       const shortId = order.id.slice(0, 8).toUpperCase();
       const profile = getProfile(order.user_id);
 
-      if (type === "quote") {
+      if (type === "revision") {
+        if (action === "approve") {
+          // Clear revision slip tag, keep other notes, set back to sourcing
+          const cleanNotes = (order.admin_notes || "")
+            .split("\n")
+            .filter((l: string) => !l.startsWith("[revision_slip]:"))
+            .join("\n").trim() || null;
+          await (supabase as any).from("pcb_order_requests").update({
+            status: "sourcing",
+            admin_notes: cleanNotes,
+          }).eq("id", order.id);
+          await supabase.from("user_notifications").insert({
+            user_id: order.user_id,
+            title: "Revision Payment Approved — Manufacturing Resumed",
+            message: `Your revision payment for PCB-${shortId} has been approved. Manufacturing is resuming!`,
+            type: "order", link_url: "/pcb-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: ✅ Revision payment for PCB-${shortId} approved. Manufacturing is back on track!`, user_id: order.user_id },
+            });
+          }
+          toast({ title: "Revision payment approved — manufacturing resumed" });
+        } else {
+          // Clear slip so user re-uploads, keep revision_paying status
+          const cleanNotes = (order.admin_notes || "")
+            .split("\n")
+            .filter((l: string) => !l.startsWith("[revision_slip]:"))
+            .join("\n").trim() || null;
+          await (supabase as any).from("pcb_order_requests").update({ admin_notes: cleanNotes }).eq("id", order.id);
+          await supabase.from("user_notifications").insert({
+            user_id: order.user_id,
+            title: "Revision Payment Slip Rejected",
+            message: `Your revision payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload.`,
+            type: "order", link_url: "/pcb-order?tab=my",
+          });
+          if (profile?.phone) {
+            await supabase.functions.invoke("send-sms", {
+              body: { phone: profile.phone, message: `NanoCircuit.lk: Your revision payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload.`, user_id: order.user_id },
+            });
+          }
+          toast({ title: "Revision payment rejected — user notified" });
+        }
+      } else if (type === "quote") {
         if (action === "approve") {
           await (supabase as any).from("pcb_order_requests").update({ payment_status: "paid", status: "approved" }).eq("id", order.id);
           await supabase.from("user_notifications").insert({
