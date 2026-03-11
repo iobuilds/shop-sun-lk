@@ -702,13 +702,15 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                     {/* Payment slips review */}
                     {order.payment_status === "under_review" && order.slip_url && (
                       <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-3">
-                        <p className="text-sm font-medium text-yellow-800 mb-2">Initial Payment Slip — Review Required</p>
+                        <p className="text-sm font-medium text-yellow-800 mb-1">Initial Payment Slip — Review Required</p>
+                        <p className="text-xs text-yellow-700 mb-2">Customer submitted a bank transfer slip. Verify then approve or reject.</p>
                         <a href={order.slip_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.slip_url} alt="Payment slip" className="max-h-40 rounded border border-yellow-200 mb-3 object-contain bg-white" onError={e => (e.currentTarget.style.display = "none")} />
+                          <img src={order.slip_url} alt="Payment slip" className="max-h-40 rounded border border-yellow-200 mb-1 object-contain bg-white w-full" onError={e => (e.currentTarget.style.display = "none")} />
                         </a>
+                        <a href={order.slip_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block mb-3">View full slip ↗</a>
                         <div className="flex gap-2">
                           <Button size="sm" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "quote", "approve")} className="gap-1.5 bg-green-600 hover:bg-green-700">
-                            <ThumbsUp className="w-3.5 h-3.5" /> Approve
+                            <ThumbsUp className="w-3.5 h-3.5" /> Approve → Move to Approved
                           </Button>
                           <Button size="sm" variant="destructive" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "quote", "reject")} className="gap-1.5">
                             <ThumbsDown className="w-3.5 h-3.5" /> Reject
@@ -719,13 +721,15 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
                     {order.arrival_payment_status === "under_review" && order.arrival_slip_url && (
                       <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-3">
-                        <p className="text-sm font-medium text-yellow-800 mb-2">Arrival Payment Slip — Review Required</p>
+                        <p className="text-sm font-medium text-yellow-800 mb-1">Arrival Payment Slip — Review Required</p>
+                        <p className="text-xs text-yellow-700 mb-2">Customer submitted arrival charges payment slip.</p>
                         <a href={order.arrival_slip_url} target="_blank" rel="noopener noreferrer">
-                          <img src={order.arrival_slip_url} alt="Arrival slip" className="max-h-40 rounded border border-yellow-200 mb-3 object-contain bg-white" onError={e => (e.currentTarget.style.display = "none")} />
+                          <img src={order.arrival_slip_url} alt="Arrival slip" className="max-h-40 rounded border border-yellow-200 mb-1 object-contain bg-white w-full" onError={e => (e.currentTarget.style.display = "none")} />
                         </a>
+                        <a href={order.arrival_slip_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block mb-3">View full slip ↗</a>
                         <div className="flex gap-2">
                           <Button size="sm" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "arrival", "approve")} className="gap-1.5 bg-green-600 hover:bg-green-700">
-                            <ThumbsUp className="w-3.5 h-3.5" /> Approve
+                            <ThumbsUp className="w-3.5 h-3.5" /> Approve → Mark Shipped
                           </Button>
                           <Button size="sm" variant="destructive" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "arrival", "reject")} className="gap-1.5">
                             <ThumbsDown className="w-3.5 h-3.5" /> Reject
@@ -737,21 +741,22 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                     {/* Revision payment slip review */}
                     {order.status === "revision_paying" && (() => {
                       const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
-                      const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                      const revSlipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
                       const revExtra = (() => {
                         const el = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_extra]:"));
                         return el ? parseFloat(el.replace("[revision_extra]:", "")) || 0 : 0;
                       })();
-                      return slipUrl ? (
+                      return revSlipUrl ? (
                         <div className="border border-amber-200 bg-amber-50 rounded-lg p-3">
                           <p className="text-sm font-medium text-amber-800 mb-1">Revision Payment Slip — Review Required</p>
                           {revExtra > 0 && <p className="text-xs text-amber-700 mb-2">Extra amount: Rs. {revExtra.toLocaleString()}</p>}
-                          <a href={slipUrl} target="_blank" rel="noopener noreferrer">
-                            <img src={slipUrl} alt="Revision slip" className="max-h-40 rounded border border-amber-200 mb-3 object-contain bg-white" onError={e => (e.currentTarget.style.display = "none")} />
+                          <a href={revSlipUrl} target="_blank" rel="noopener noreferrer">
+                            <img src={revSlipUrl} alt="Revision slip" className="max-h-40 rounded border border-amber-200 mb-1 object-contain bg-white w-full" onError={e => (e.currentTarget.style.display = "none")} />
                           </a>
+                          <a href={revSlipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline block mb-3">View full slip ↗</a>
                           <div className="flex gap-2">
                             <Button size="sm" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "approve")} className="gap-1.5 bg-green-600 hover:bg-green-700">
-                              <ThumbsUp className="w-3.5 h-3.5" /> Approve — Resume Manufacturing
+                              <ThumbsUp className="w-3.5 h-3.5" /> Approve → Resume Manufacturing
                             </Button>
                             <Button size="sm" variant="destructive" disabled={!!approvingId} onClick={() => handlePaymentReview(order, "revision", "reject")} className="gap-1.5">
                               <ThumbsDown className="w-3.5 h-3.5" /> Reject
