@@ -1,6 +1,6 @@
 /**
  * GerberViewer — 2D combined view: TOP + BOTTOM side by side
- * Each layer rendered as absolute-positioned overlay for correct alignment
+ * Industry-standard layer colors matching Altium/KiCad conventions
  */
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -22,32 +22,42 @@ const LAYER_ROLE: Record<string, string> = {
   ".gbr": "top_copper",  ".ger": "top_copper",
 };
 
+// Altium-standard layer colors
+const TOP_COPPER_COLOR  = "#cc0000";   // Red  (Altium Top Layer)
+const BTM_COPPER_COLOR  = "#0000cc";   // Blue (Altium Bottom Layer)
+const TOP_SILK_COLOR    = "#ffff00";   // Yellow (Top Overlay)
+const BTM_SILK_COLOR    = "#ffff00";   // Yellow (Bottom Overlay)
+const TOP_MASK_COLOR    = "#ff00ff";   // Magenta (Top Solder)
+const BTM_MASK_COLOR    = "#7f007f";   // Purple  (Bottom Solder)
+const OUTLINE_COLOR     = "#ffff00";   // Yellow  (Mechanical/Keepout)
+const DRILL_COLOR       = "#ffffff";   // White — punched holes visible on any board
+
 const LAYER_STACK = [
-  { role: "top_silk",   label: "Top Silk",        dot: "#ffffff" },
-  { role: "top_mask",   label: "Top Solder Mask",  dot: "#22c55e" },
-  { role: "top_copper", label: "Top Copper",        dot: "#fbbf24" },
-  { role: "outline",    label: "Outline",           dot: "#94a3b8" },
-  { role: "drill",      label: "Drill",             dot: "#64748b" },
-  { role: "btm_copper", label: "Bot Copper",        dot: "#fbbf24" },
-  { role: "btm_mask",   label: "Bot Solder Mask",   dot: "#22c55e" },
-  { role: "btm_silk",   label: "Bot Silk",          dot: "#ffffff" },
+  { role: "top_silk",   label: "Top Silk",        dot: TOP_SILK_COLOR },
+  { role: "top_mask",   label: "Top Solder Mask",  dot: TOP_MASK_COLOR },
+  { role: "top_copper", label: "Top Copper",        dot: TOP_COPPER_COLOR },
+  { role: "outline",    label: "Outline",           dot: OUTLINE_COLOR },
+  { role: "drill",      label: "Drill",             dot: DRILL_COLOR },
+  { role: "btm_copper", label: "Bot Copper",        dot: BTM_COPPER_COLOR },
+  { role: "btm_mask",   label: "Bot Solder Mask",   dot: BTM_MASK_COLOR },
+  { role: "btm_silk",   label: "Bot Silk",          dot: BTM_SILK_COLOR },
 ];
 
-// Mask board background colors
+// PCB board background (solder mask color)
 const MASK_BG: Record<string, string> = {
-  green:  "#0e3d1a",
-  red:    "#3d0a0a",
-  blue:   "#0a1040",
-  black:  "#111111",
-  white:  "#c8c8c8",
-  yellow: "#3d2d00",
+  green:  "#0d3318",
+  red:    "#3a0808",
+  blue:   "#081038",
+  black:  "#0a0a0a",
+  white:  "#c0c8c0",
+  yellow: "#3a2c00",
 };
 
 type LayerMap = Record<string, string>;
 
 interface SideData {
   viewBox: string;
-  layers: { svg: string; color: string; opacity: number }[];
+  layers: { svg: string; color: string; opacity: number; blendMode?: string }[];
 }
 
 interface GerberViewerProps {
@@ -75,7 +85,6 @@ async function extractLayersFromZip(file: File): Promise<LayerMap> {
   return result;
 }
 
-/** Parse a gerber string → extract its viewBox and raw inner SVG content */
 async function parseSingleLayer(gerberStr: string): Promise<{ viewBox: string; inner: string } | null> {
   try {
     const { parse, plot, renderSVG } = await import("web-gerber");
@@ -83,11 +92,9 @@ async function parseSingleLayer(gerberStr: string): Promise<{ viewBox: string; i
     const rawSvg = toHtml(renderSVG(plot(parse(gerberStr), false)) as any);
     if (!rawSvg || rawSvg.length < 30) return null;
 
-    // Extract viewBox
     const vbMatch = rawSvg.match(/viewBox="([^"]+)"/);
     const viewBox = vbMatch ? vbMatch[1] : "";
 
-    // Extract inner content (strip outer <svg> tag)
     const inner = rawSvg
       .replace(/<\?xml[^>]*\?>/, "")
       .replace(/<!DOCTYPE[^>]*>/, "")
@@ -101,29 +108,32 @@ async function parseSingleLayer(gerberStr: string): Promise<{ viewBox: string; i
   }
 }
 
-/** Build a composite SideData for one PCB face */
 async function buildSide(layers: LayerMap, side: "top" | "btm"): Promise<SideData | null> {
   const p = side;
+  const copperColor = p === "top" ? TOP_COPPER_COLOR : BTM_COPPER_COLOR;
+  const silkColor   = p === "top" ? TOP_SILK_COLOR   : BTM_SILK_COLOR;
+  const maskColor   = p === "top" ? TOP_MASK_COLOR   : BTM_MASK_COLOR;
 
-  // layer definitions: [role, fill color, opacity]
-  const defs: [string, string, number][] = [
-    [`${p}_copper`, "#ffc94d", 1.0],   // bright gold copper
-    [`${p}_mask`,   "#1a6b2e", 0.35],  // translucent mask over copper
-    [`${p}_silk`,   "#ffffff", 1.0],   // pure white silk
-    ["outline",     "#ccddcc", 0.7],   // light outline
-    ["drill",       "#000000", 1.0],   // black drills
+  // Render order: copper first, then mask (translucent), then silk on top, then outline, then drill holes
+  const defs: [string, string, number, string?][] = [
+    [`${p}_copper`, copperColor, 1.0],
+    [`${p}_mask`,   maskColor,   0.25],          // very translucent — just tints exposed copper
+    [`${p}_silk`,   silkColor,   1.0],            // bright silk on top
+    ["outline",     OUTLINE_COLOR, 0.9],
+    ["drill",       DRILL_COLOR,   1.0],           // white = visible holes
   ];
 
-  // Find the best viewBox (prefer copper or outline)
   let sharedViewBox = "";
-  const rendered: { svg: string; color: string; opacity: number }[] = [];
+  const rendered: SideData["layers"] = [];
 
   for (const [role, color, opacity] of defs) {
     const gerberStr = layers[role];
     if (!gerberStr) continue;
     const parsed = await parseSingleLayer(gerberStr);
     if (!parsed) continue;
+    // Prefer outline or copper for the shared viewBox (most complete boundary)
     if (!sharedViewBox && parsed.viewBox) sharedViewBox = parsed.viewBox;
+    if (role === "outline" && parsed.viewBox) sharedViewBox = parsed.viewBox;
     rendered.push({ svg: parsed.inner, color, opacity });
   }
 
@@ -131,10 +141,9 @@ async function buildSide(layers: LayerMap, side: "top" | "btm"): Promise<SideDat
   return { viewBox: sharedViewBox, layers: rendered };
 }
 
-/** Compose all rendered layers into one <svg> string */
 function composeSvg(data: SideData, maskBg: string): string {
   const layerMarkup = data.layers
-    .map(l => `<g fill="${l.color}" stroke="${l.color}" opacity="${l.opacity}">${l.svg}</g>`)
+    .map(l => `<g fill="${l.color}" stroke="${l.color}" stroke-width="0" opacity="${l.opacity}">${l.svg}</g>`)
     .join("\n");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${data.viewBox}" 
@@ -236,11 +245,11 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
       {/* Viewer area */}
       <div className="flex">
         {/* PCB canvas */}
-        <div className="flex-1 relative overflow-auto" style={{ minHeight: 380, background: "#080e08" }}>
+        <div className="flex-1 relative overflow-auto" style={{ minHeight: 400, background: "#050b05" }}>
 
           {loading && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
-              style={{ background: "rgba(8,14,8,0.97)" }}>
+              style={{ background: "rgba(5,11,5,0.97)" }}>
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
               <p className="text-sm text-muted-foreground">{msg}</p>
             </div>
@@ -248,7 +257,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
           {error && !loading && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6"
-              style={{ background: "rgba(8,14,8,0.97)" }}>
+              style={{ background: "rgba(5,11,5,0.97)" }}>
               <AlertCircle className="w-7 h-7 text-destructive" />
               <p className="text-xs text-destructive text-center max-w-xs">{error}</p>
               <Button size="sm" variant="outline" className="text-xs h-7" onClick={load}>
@@ -258,16 +267,16 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
           )}
 
           {!loading && !error && (
-            <div className="p-4 overflow-auto" style={{ maxHeight: 400 }}>
-              <div style={{ display: "inline-flex", gap: 20, transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s" }}>
+            <div className="p-4 overflow-auto" style={{ minHeight: 400 }}>
+              <div style={{ display: "inline-flex", gap: 24, transform: `scale(${zoom})`, transformOrigin: "top left", transition: "transform 0.15s" }}>
 
                 {/* TOP */}
                 <div className="flex flex-col items-center gap-2">
                   <span className="text-xs font-semibold px-3 py-0.5 rounded-full border"
-                    style={{ color: "#4ade80", borderColor: "rgba(74,222,128,0.3)", background: "rgba(74,222,128,0.08)" }}>
+                    style={{ color: "#ff6060", borderColor: "rgba(255,96,96,0.35)", background: "rgba(255,96,96,0.1)" }}>
                     TOP
                   </span>
-                  <div style={{ width: 300, height: 300, background: maskBg, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 0 16px rgba(0,0,0,0.6)" }}>
+                  <div style={{ width: 320, height: 320, background: maskBg, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", boxShadow: "0 0 20px rgba(0,0,0,0.7)" }}>
                     {topSvg
                       ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: topSvg }} />
                       : <div className="w-full h-full flex items-center justify-center">
@@ -280,10 +289,10 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
                 {/* BOTTOM (mirrored horizontally) */}
                 <div className="flex flex-col items-center gap-2">
                   <span className="text-xs font-semibold px-3 py-0.5 rounded-full border"
-                    style={{ color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)", background: "rgba(96,165,250,0.08)" }}>
+                    style={{ color: "#6090ff", borderColor: "rgba(96,144,255,0.35)", background: "rgba(96,144,255,0.1)" }}>
                     BOTTOM
                   </span>
-                  <div style={{ width: 300, height: 300, background: maskBg, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.12)", boxShadow: "0 0 16px rgba(0,0,0,0.6)", transform: "scaleX(-1)" }}>
+                  <div style={{ width: 320, height: 320, background: maskBg, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", boxShadow: "0 0 20px rgba(0,0,0,0.7)", transform: "scaleX(-1)" }}>
                     {btmSvg
                       ? <div className="w-full h-full" dangerouslySetInnerHTML={{ __html: btmSvg }} />
                       : <div className="w-full h-full flex items-center justify-center" style={{ transform: "scaleX(-1)" }}>
@@ -300,7 +309,7 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
 
         {/* Layer stack sidebar */}
         {showStack && (
-          <div className="w-44 border-l border-border bg-muted/20 flex flex-col shrink-0" style={{ maxHeight: 400 }}>
+          <div className="w-44 border-l border-border bg-muted/20 flex flex-col shrink-0" style={{ maxHeight: 420 }}>
             <div className="px-3 py-2 border-b border-border">
               <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 <Layers className="w-3 h-3 text-primary" /> Gerber Stack
@@ -330,12 +339,15 @@ export default function GerberViewer({ file, pcbColor = "Green" }: GerberViewerP
         )}
       </div>
 
-      {/* Footer */}
+      {/* Footer — color legend */}
       {!loading && !error && (
         <div className="px-3 py-1.5 bg-muted/30 border-t border-border">
-          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-            <Layers className="w-3 h-3" />
-            2D combined view · Copper <span style={{ color: "#ffc94d" }}>■</span> &nbsp; Silk <span style={{ color: "#ffffff" }}>■</span> &nbsp; Outline <span style={{ color: "#aaa" }}>■</span>
+          <p className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+            <span className="flex items-center gap-1"><span style={{ color: TOP_COPPER_COLOR }}>■</span> Top Cu</span>
+            <span className="flex items-center gap-1"><span style={{ color: BTM_COPPER_COLOR }}>■</span> Bot Cu</span>
+            <span className="flex items-center gap-1"><span style={{ color: TOP_SILK_COLOR }}>■</span> Silk</span>
+            <span className="flex items-center gap-1"><span style={{ color: TOP_MASK_COLOR }}>■</span> Mask</span>
+            <span className="flex items-center gap-1"><span style={{ color: DRILL_COLOR }}>■</span> Drill</span>
           </p>
         </div>
       )}
