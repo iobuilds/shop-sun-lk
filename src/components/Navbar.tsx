@@ -388,8 +388,13 @@ const Navbar = () => {
             )}
             {/* Messages icon — only for logged-in users */}
             {session && (
-              <Link to="/profile?tab=messages" className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/profile?tab=messages" className="hidden sm:flex relative p-2 text-muted-foreground hover:text-foreground transition-colors">
                 <MessageSquare className="w-5 h-5" />
+                {unreadMsgCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-secondary text-secondary-foreground text-[10px] font-bold flex items-center justify-center">
+                    {unreadMsgCount > 9 ? "9+" : unreadMsgCount}
+                  </span>
+                )}
               </Link>
             )}
 
