@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone } from "lucide-react";
+import { Layers, Download, ChevronDown, ChevronUp, CheckCircle, XCircle, Clock, Truck, Package, Cpu, ThumbsUp, ThumbsDown, DollarSign, FileDown, Search, User, Phone, AlertCircle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,16 +9,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
+import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
+import { useQuery } from "@tanstack/react-query";
 
 const STATUS_OPTIONS = [
-  { value: "pending",   label: "Pending Review",  color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
-  { value: "quoted",    label: "Quoted",           color: "bg-blue-100 text-blue-800 border-blue-300" },
-  { value: "approved",  label: "Approved",         color: "bg-green-100 text-green-800 border-green-300" },
-  { value: "sourcing",  label: "Manufacturing",    color: "bg-purple-100 text-purple-800 border-purple-300" },
-  { value: "arrived",   label: "Boards Ready",     color: "bg-secondary/20 text-secondary border-secondary/40" },
-  { value: "shipped",   label: "Shipped",          color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
-  { value: "completed", label: "Completed",        color: "bg-green-100 text-green-900 border-green-400" },
-  { value: "cancelled", label: "Cancelled",        color: "bg-destructive/10 text-destructive border-destructive/30" },
+  { value: "pending",      label: "Pending Review",      color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
+  { value: "quoted",       label: "Quoted",               color: "bg-blue-100 text-blue-800 border-blue-300" },
+  { value: "under_review", label: "Approval Pending",     color: "bg-orange-100 text-orange-800 border-orange-300" },
+  { value: "approved",     label: "Approved",             color: "bg-green-100 text-green-800 border-green-300" },
+  { value: "sourcing",     label: "Manufacturing",        color: "bg-purple-100 text-purple-800 border-purple-300" },
+  { value: "arrived",      label: "Boards Ready",         color: "bg-secondary/20 text-secondary border-secondary/40" },
+  { value: "shipped",      label: "Shipped",              color: "bg-indigo-100 text-indigo-800 border-indigo-300" },
+  { value: "completed",    label: "Completed",            color: "bg-green-100 text-green-900 border-green-400" },
+  { value: "cancelled",    label: "Cancelled",            color: "bg-destructive/10 text-destructive border-destructive/30" },
 ];
 
 interface AdminPCBOrdersProps {
@@ -41,6 +44,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     tax_amount: "",
     shipping_after_arrival: false,
     tax_after_arrival: false,
+    price_revised: false, // track if admin is increasing price
   });
   const [saving, setSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -48,6 +52,15 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const [arrivalTarget, setArrivalTarget] = useState<any>(null);
   const [arrivalForm, setArrivalForm] = useState({ shipping: "", tax: "" });
   const [arrivalSaving, setArrivalSaving] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState<string | null>(null);
+
+  const { data: siteSettings } = useQuery({
+    queryKey: ["site-settings-invoice-admin"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings").select("*").eq("key", "company_info").maybeSingle();
+      return (data as any)?.value as any || {};
+    },
+  });
 
   const getProfile = (userId: string) => allProfiles.find((p: any) => p.user_id === userId);
 
@@ -59,31 +72,56 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
   const openEdit = (order: any) => {
     setEditTarget(order);
+    const prevGrand = parseFloat(order.grand_total) || 0;
     setEditForm({
       status: order.status,
-      admin_notes: order.admin_notes || "",
+      admin_notes: order.admin_notes
+        ? order.admin_notes.split("\n").filter((l: string) => !l.startsWith("stripe_session:")).join("\n").trim()
+        : "",
       unit_cost_total: order.unit_cost_total ? String(order.unit_cost_total) : "",
       shipping_fee: order.shipping_fee != null && order.shipping_fee !== -1 ? String(order.shipping_fee) : "",
       tax_amount: order.tax_amount != null && order.tax_amount !== -1 ? String(order.tax_amount) : "",
       shipping_after_arrival: order.shipping_fee === -1,
       tax_after_arrival: order.tax_amount === -1,
+      price_revised: false,
     });
     setEditDialog(true);
+  };
+
+  // Compute new grand total live for comparison
+  const computeNewGrand = () => {
+    const unitCost = parseFloat(editForm.unit_cost_total) || 0;
+    const shippingVal = editForm.shipping_after_arrival ? 0 : (parseFloat(editForm.shipping_fee) || 0);
+    const taxVal = editForm.tax_after_arrival ? 0 : (parseFloat(editForm.tax_amount) || 0);
+    return unitCost + shippingVal + taxVal;
   };
 
   const handleSave = async () => {
     if (!editTarget) return;
     setSaving(true);
     const wasQuoted = editTarget.status !== "quoted" && editForm.status === "quoted";
+    const prevGrand = parseFloat(editTarget.grand_total) || 0;
     try {
       const unitCost = parseFloat(editForm.unit_cost_total) || 0;
       const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
       const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
       const grandTotal = unitCost + (shippingVal > 0 ? shippingVal : 0) + (taxVal > 0 ? taxVal : 0);
 
+      // If existing order was already quoted and price increased → require user approval
+      const priceIncreased = prevGrand > 0 && grandTotal > prevGrand && editTarget.status === "quoted";
+      const newStatus = priceIncreased && editForm.status === "quoted" ? "under_review" : editForm.status;
+
+      // Strip stripe_session lines from existing admin_notes before saving
+      const existingNotesClean = (editTarget.admin_notes || "")
+        .split("\n")
+        .filter((l: string) => l.startsWith("stripe_session:"))
+        .join("\n");
+
+      const newAdminNotes = [editForm.admin_notes.trim(), existingNotesClean].filter(Boolean).join("\n") || null;
+
       const payload: any = {
-        status: editForm.status,
-        admin_notes: editForm.admin_notes || null,
+        status: newStatus,
+        admin_notes: newAdminNotes,
         unit_cost_total: unitCost,
         shipping_fee: shippingVal,
         tax_amount: taxVal,
@@ -97,9 +135,29 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
       const { error } = await (supabase as any).from("pcb_order_requests").update(payload).eq("id", editTarget.id);
       if (error) throw error;
 
-      if (wasQuoted) {
-        const profile = getProfile(editTarget.user_id);
-        const shortId = editTarget.id.slice(0, 8).toUpperCase();
+      const profile = getProfile(editTarget.user_id);
+      const shortId = editTarget.id.slice(0, 8).toUpperCase();
+
+      if (priceIncreased) {
+        // Notify user approval required
+        await supabase.from("user_notifications").insert({
+          user_id: editTarget.user_id,
+          title: "PCB Quote Updated — Approval Required",
+          message: `The quote for PCB-${shortId} has been revised to Rs. ${grandTotal.toLocaleString()}. Please log in to review and approve.`,
+          type: "order",
+          link_url: "/pcb-order?tab=my",
+        });
+        if (profile?.phone) {
+          await supabase.functions.invoke("send-sms", {
+            body: {
+              phone: profile.phone,
+              message: `NanoCircuit.lk: Your PCB order PCB-${shortId} quote has been updated to Rs. ${grandTotal.toLocaleString()}. Please log in to approve and proceed.`,
+              user_id: editTarget.user_id,
+            },
+          });
+        }
+        toast({ title: "Quote updated — user notified for approval" });
+      } else if (wasQuoted) {
         await supabase.from("user_notifications").insert({
           user_id: editTarget.user_id,
           title: "PCB Order Quoted",
@@ -116,9 +174,11 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
             },
           });
         }
+        toast({ title: "PCB order updated & user notified" });
+      } else {
+        toast({ title: "PCB order updated" });
       }
 
-      toast({ title: "PCB order updated" });
       setEditDialog(false);
       onRefresh();
     } catch (err: any) {
@@ -159,7 +219,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
             await supabase.functions.invoke("send-sms", {
               body: {
                 phone: profile.phone,
-                message: `NanoCircuit.lk: Your payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload a valid slip at nanocircuit.lk/pcb-order`,
+                message: `NanoCircuit.lk: Your payment slip for PCB-${shortId} was rejected.${rejectReason ? " Reason: " + rejectReason : ""} Please re-upload at nanocircuit.lk/pcb-order`,
                 user_id: order.user_id,
               },
             });
@@ -255,6 +315,22 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     onRefresh();
   };
 
+  const handleDownloadInvoice = async (order: any) => {
+    setDownloadingInvoice(order.id);
+    try {
+      const profile = getProfile(order.user_id);
+      await generatePCBInvoice(order, siteSettings || {}, profile ? { full_name: profile.full_name, phone: profile.phone } : undefined);
+    } catch (err: any) {
+      toast({ title: "Failed to generate invoice", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingInvoice(null);
+    }
+  };
+
+  const newGrand = computeNewGrand();
+  const prevGrand = parseFloat(editTarget?.grand_total) || 0;
+  const priceWillIncrease = prevGrand > 0 && newGrand > prevGrand && editTarget?.status === "quoted";
+
   return (
     <div className="space-y-4">
       {/* Filters */}
@@ -280,6 +356,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         const statusInfo = STATUS_OPTIONS.find(s => s.value === order.status);
         const isExpanded = expandedId === order.id;
         const arrivalTotal = (order.arrival_shipping_fee || 0) + (order.arrival_tax_amount || 0);
+        const hasInvoice = order.grand_total > 0;
 
         return (
           <motion.div key={order.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-card border border-border rounded-xl overflow-hidden">
@@ -291,6 +368,9 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                   <span className={`px-2 py-0.5 rounded-md text-xs font-medium border ${statusInfo?.color || ""}`}>{statusInfo?.label}</span>
                   {(order.payment_status === "under_review" || order.arrival_payment_status === "under_review") && (
                     <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-yellow-100 text-yellow-800 border-yellow-300">Payment Review</span>
+                  )}
+                  {order.status === "under_review" && (
+                    <span className="px-2 py-0.5 rounded-md text-xs font-medium border bg-orange-100 text-orange-800 border-orange-300">User Approval Needed</span>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -304,6 +384,14 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {hasInvoice && (
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs"
+                    disabled={downloadingInvoice === order.id}
+                    onClick={(e) => { e.stopPropagation(); handleDownloadInvoice(order); }}>
+                    <Download className="w-3 h-3" />
+                    {downloadingInvoice === order.id ? "…" : "Invoice"}
+                  </Button>
+                )}
                 <span className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString()}</span>
                 {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
               </div>
@@ -326,6 +414,17 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                       </div>
                     )}
 
+                    {/* Under review — user approval alert */}
+                    {order.status === "under_review" && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+                        <div className="text-sm">
+                          <p className="font-medium text-orange-800">Waiting for customer approval</p>
+                          <p className="text-orange-700 text-xs mt-0.5">The quote was revised and a notification was sent. Order will proceed once the customer approves.</p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Quote details */}
                     {order.grand_total > 0 && (
                       <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
@@ -334,6 +433,16 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                         <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>{order.shipping_fee === -1 ? "TBA" : `Rs. ${Number(order.shipping_fee || 0).toLocaleString()}`}</span></div>
                         <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>{order.tax_amount === -1 ? "TBA" : `Rs. ${Number(order.tax_amount || 0).toLocaleString()}`}</span></div>
                         <div className="flex justify-between font-semibold pt-1 border-t border-border"><span>Grand Total</span><span>Rs. {Number(order.grand_total).toLocaleString()}</span></div>
+                      </div>
+                    )}
+
+                    {/* Arrival charges */}
+                    {arrivalTotal > 0 && (
+                      <div className="bg-muted/40 rounded-lg p-3 text-sm space-y-1">
+                        <p className="font-medium text-foreground mb-2">Arrival Charges</p>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>Rs. {Number(order.arrival_shipping_fee || 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-muted-foreground">Tax</span><span>Rs. {Number(order.arrival_tax_amount || 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between font-semibold pt-1 border-t border-border"><span>Total</span><span>Rs. {arrivalTotal.toLocaleString()}</span></div>
                       </div>
                     )}
 
@@ -408,6 +517,15 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                           <CheckCircle className="w-3.5 h-3.5" /> Mark Delivered
                         </Button>
                       )}
+                      {/* Invoice download in expanded view too */}
+                      {hasInvoice && (
+                        <Button size="sm" variant="outline" className="gap-1.5"
+                          disabled={downloadingInvoice === order.id}
+                          onClick={() => handleDownloadInvoice(order)}>
+                          <FileText className="w-3.5 h-3.5" />
+                          {downloadingInvoice === order.id ? "Generating…" : "Download Invoice PDF"}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -422,6 +540,23 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Quote / Update PCB-{editTarget?.id.slice(0, 8).toUpperCase()}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+
+            {/* Price increase warning */}
+            {priceWillIncrease && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-semibold text-orange-800">Price Increase Detected</p>
+                  <p className="text-orange-700 text-xs mt-0.5">
+                    Previous: Rs. {prevGrand.toLocaleString()} → New: Rs. {newGrand.toLocaleString()}
+                  </p>
+                  <p className="text-orange-700 text-xs mt-1">
+                    Saving will set status to <strong>"Approval Pending"</strong> and notify the customer for approval before they can pay.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div>
               <Label className="text-xs text-muted-foreground mb-1.5 block">Status</Label>
               <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
@@ -453,12 +588,24 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
                 </label>
               </div>
             </div>
+
+            {/* Live grand total preview */}
+            {newGrand > 0 && (
+              <div className="bg-muted/40 rounded-lg px-3 py-2 text-sm flex justify-between items-center">
+                <span className="text-muted-foreground">Calculated Grand Total</span>
+                <span className={`font-bold ${priceWillIncrease ? "text-orange-600" : "text-foreground"}`}>
+                  Rs. {newGrand.toLocaleString()}
+                  {priceWillIncrease && " ↑"}
+                </span>
+              </div>
+            )}
+
             <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Admin Notes</Label>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">Admin Notes (visible to customer)</Label>
               <Textarea value={editForm.admin_notes} onChange={e => setEditForm(f => ({ ...f, admin_notes: e.target.value }))} rows={3} placeholder="Notes for customer..." />
             </div>
             <div className="flex gap-2">
-              <Button onClick={handleSave} disabled={saving} className="flex-1">{saving ? "Saving..." : "Save"}</Button>
+              <Button onClick={handleSave} disabled={saving} className="flex-1">{saving ? "Saving..." : priceWillIncrease ? "Save & Request Approval" : "Save"}</Button>
               <Button variant="outline" onClick={() => setEditDialog(false)}>Cancel</Button>
             </div>
           </div>
