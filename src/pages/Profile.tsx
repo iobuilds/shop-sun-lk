@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck, Paperclip, FileText, X, Image as ImageIcon } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
@@ -245,7 +245,10 @@ const Profile = () => {
   const [selectedConvo, setSelectedConvo] = useState<string | null>(searchParams.get("convo") || null);
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [attachingFile, setAttachingFile] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -444,16 +447,33 @@ const Profile = () => {
   }
 
   const sendReply = async () => {
-    if (!newMessage.trim() || !selectedConvo || !session?.user) return;
+    if (!newMessage.trim() && !pendingFile || !selectedConvo || !session?.user) return;
     setSendingMessage(true);
     try {
+      let messageText = newMessage.trim();
+
+      // Upload file if attached
+      if (pendingFile) {
+        setAttachingFile(true);
+        const ext = pendingFile.name.split(".").pop();
+        const filePath = `chat-attachments/${selectedConvo}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("images").upload(filePath, pendingFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("images").getPublicUrl(filePath);
+        // Encode as special prefix so we can render it
+        const fileMsg = `[attachment:${urlData.publicUrl}:${pendingFile.name}]`;
+        messageText = messageText ? `${messageText}\n${fileMsg}` : fileMsg;
+        setAttachingFile(false);
+        setPendingFile(null);
+      }
+
       const { error } = await supabase
         .from("conversation_messages" as any)
         .insert({
           conversation_id: selectedConvo,
           sender_id: session.user.id,
           sender_type: "user",
-          message: newMessage.trim(),
+          message: messageText,
         });
       if (error) throw error;
       setNewMessage("");
@@ -463,6 +483,7 @@ const Profile = () => {
       toast.error(err.message);
     } finally {
       setSendingMessage(false);
+      setAttachingFile(false);
     }
   };
 
@@ -626,20 +647,43 @@ const Profile = () => {
 
                       {/* Messages */}
                       <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
-                        {convoMessages?.map((m: any) => (
-                          <div key={m.id} className={`flex ${m.sender_type === "user" ? "justify-end" : "justify-start"}`}>
-                            <div className={`max-w-[75%] rounded-xl px-4 py-2.5 text-sm ${
-                              m.sender_type === "user"
-                                ? "bg-secondary text-secondary-foreground"
-                                : "bg-muted text-foreground"
-                            }`}>
-                              <p className="whitespace-pre-wrap">{m.message}</p>
-                              <p className={`text-[10px] mt-1 ${m.sender_type === "user" ? "text-secondary-foreground/60" : "text-muted-foreground"}`}>
-                                {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
-                              </p>
+                        {convoMessages?.map((m: any) => {
+                          const parts = m.message?.split(/(\[attachment:[^\]]+\])/g) || [];
+                          return (
+                            <div key={m.id} className={`flex ${m.sender_type === "user" ? "justify-end" : "justify-start"}`}>
+                              <div className={`max-w-[75%] rounded-xl px-4 py-2.5 text-sm ${
+                                m.sender_type === "user"
+                                  ? "bg-secondary text-secondary-foreground"
+                                  : "bg-muted text-foreground"
+                              }`}>
+                                {parts.map((part: string, i: number) => {
+                                  const match = part.match(/^\[attachment:(.+):([^:]+)\]$/);
+                                  if (match) {
+                                    const [, url, filename] = match;
+                                    const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filename);
+                                    return isImage ? (
+                                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block mt-1">
+                                        <img src={url} alt={filename} className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer hover:opacity-90" />
+                                        <p className="text-[10px] mt-0.5 opacity-60 truncate">{filename}</p>
+                                      </a>
+                                    ) : (
+                                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                        className="flex items-center gap-2 mt-1 p-2 rounded-lg bg-background/20 hover:bg-background/30 transition-colors">
+                                        <FileText className="w-4 h-4 shrink-0" />
+                                        <span className="text-xs truncate max-w-[180px]">{filename}</span>
+                                        <Download className="w-3 h-3 shrink-0 opacity-60" />
+                                      </a>
+                                    );
+                                  }
+                                  return part ? <p key={i} className="whitespace-pre-wrap">{part}</p> : null;
+                                })}
+                                <p className={`text-[10px] mt-1 ${m.sender_type === "user" ? "text-secondary-foreground/60" : "text-muted-foreground"}`}>
+                                  {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                         {(!convoMessages || convoMessages.length === 0) && (
                           <p className="text-center text-muted-foreground text-sm py-8">No messages yet</p>
                         )}
@@ -648,17 +692,34 @@ const Profile = () => {
 
                       {/* Reply box */}
                       {conversations?.find((c: any) => c.id === selectedConvo)?.status !== "closed" && (
-                        <div className="p-3 border-t border-border flex gap-2">
-                          <Input
-                            placeholder="Type your reply..."
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
-                            className="flex-1"
-                          />
-                          <Button onClick={sendReply} disabled={sendingMessage || !newMessage.trim()} size="icon">
-                            <Send className="w-4 h-4" />
-                          </Button>
+                        <div className="p-3 border-t border-border space-y-2">
+                          {pendingFile && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs">
+                              <Paperclip className="w-3.5 h-3.5 text-secondary shrink-0" />
+                              <span className="truncate flex-1">{pendingFile.name}</span>
+                              <button onClick={() => setPendingFile(null)} className="text-muted-foreground hover:text-foreground">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                          <div className="flex gap-2">
+                            <input ref={fileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" className="hidden"
+                              onChange={(e) => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); e.target.value = ""; } }} />
+                            <button onClick={() => fileInputRef.current?.click()}
+                              className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                              <Paperclip className="w-4 h-4" />
+                            </button>
+                            <Input
+                              placeholder="Type your reply..."
+                              value={newMessage}
+                              onChange={(e) => setNewMessage(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReply(); } }}
+                              className="flex-1"
+                            />
+                            <Button onClick={sendReply} disabled={sendingMessage || attachingFile || (!newMessage.trim() && !pendingFile)} size="icon">
+                              {(sendingMessage || attachingFile) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>

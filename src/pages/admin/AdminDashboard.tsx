@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -450,6 +450,10 @@ const AdminDashboard = () => {
   const [adminSelectedConvo, setAdminSelectedConvo] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState("");
   const [adminSendingReply, setAdminSendingReply] = useState(false);
+  const [adminPendingFile, setAdminPendingFile] = useState<File | null>(null);
+  const [adminAttachingFile, setAdminAttachingFile] = useState(false);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
+  const adminMessagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: adminConvoMessages } = useQuery({
     queryKey: ["admin-convo-messages", adminSelectedConvo],
@@ -1414,16 +1418,31 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   // ── Admin conversation reply ──
   const sendAdminReply = async () => {
-    if (!adminReplyText.trim() || !adminSelectedConvo) return;
+    if (!adminReplyText.trim() && !adminPendingFile || !adminSelectedConvo) return;
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     setAdminSendingReply(true);
     try {
+      let messageText = adminReplyText.trim();
+
+      if (adminPendingFile) {
+        setAdminAttachingFile(true);
+        const ext = adminPendingFile.name.split(".").pop();
+        const filePath = `chat-attachments/${adminSelectedConvo}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("images").upload(filePath, adminPendingFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("images").getPublicUrl(filePath);
+        const fileMsg = `[attachment:${urlData.publicUrl}:${adminPendingFile.name}]`;
+        messageText = messageText ? `${messageText}\n${fileMsg}` : fileMsg;
+        setAdminAttachingFile(false);
+        setAdminPendingFile(null);
+      }
+
       const { error } = await supabase.from("conversation_messages" as any).insert({
         conversation_id: adminSelectedConvo,
         sender_id: session.user.id,
         sender_type: "admin",
-        message: adminReplyText.trim(),
+        message: messageText,
       });
       if (error) throw error;
       setAdminReplyText("");
@@ -1434,6 +1453,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setAdminSendingReply(false);
+      setAdminAttachingFile(false);
     }
   };
 
@@ -2967,30 +2987,70 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
               {adminSelectedConvo ? (
                 <div className="bg-card rounded-xl border border-border overflow-hidden">
-                  <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                    {adminConvoMessages?.map((m: any) => (
-                      <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[70%] rounded-xl px-4 py-2.5 text-sm ${
-                          m.sender_type === "admin" ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground"
-                        }`}>
-                          <p className="text-[10px] font-medium mb-1 opacity-70">{m.sender_type === "admin" ? "You" : "Customer"}</p>
-                          <p className="whitespace-pre-wrap">{m.message}</p>
-                          <p className={`text-[10px] mt-1 opacity-60`}>
-                            {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
-                          </p>
+                  <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto" ref={adminMessagesEndRef}>
+                    {adminConvoMessages?.map((m: any) => {
+                      const parts = m.message?.split(/(\[attachment:[^\]]+\])/g) || [];
+                      return (
+                        <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[70%] rounded-xl px-4 py-2.5 text-sm ${
+                            m.sender_type === "admin" ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground"
+                          }`}>
+                            <p className="text-[10px] font-medium mb-1 opacity-70">{m.sender_type === "admin" ? "You" : "Customer"}</p>
+                            {parts.map((part: string, i: number) => {
+                              const match = part.match(/^\[attachment:(.+):([^:]+)\]$/);
+                              if (match) {
+                                const [, url, filename] = match;
+                                const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filename);
+                                return isImage ? (
+                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block mt-1">
+                                    <img src={url} alt={filename} className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer hover:opacity-90" />
+                                    <p className="text-[10px] mt-0.5 opacity-60 truncate">{filename}</p>
+                                  </a>
+                                ) : (
+                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 mt-1 p-2 rounded-lg bg-background/20 hover:bg-background/30 transition-colors">
+                                    <FileText className="w-4 h-4 shrink-0" />
+                                    <span className="text-xs truncate max-w-[180px]">{filename}</span>
+                                    <Download className="w-3 h-3 shrink-0 opacity-60" />
+                                  </a>
+                                );
+                              }
+                              return part ? <p key={i} className="whitespace-pre-wrap">{part}</p> : null;
+                            })}
+                            <p className={`text-[10px] mt-1 opacity-60`}>
+                              {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {(!adminConvoMessages || adminConvoMessages.length === 0) && (
                       <p className="text-center text-muted-foreground text-sm py-8">No messages in this conversation</p>
                     )}
                   </div>
-                  <div className="p-3 border-t border-border flex gap-2">
-                    <Input placeholder="Type your reply..." value={adminReplyText} onChange={(e) => setAdminReplyText(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} className="flex-1" />
-                    <Button onClick={sendAdminReply} disabled={adminSendingReply || !adminReplyText.trim()} size="sm" className="gap-1.5">
-                      <Send className="w-3.5 h-3.5" /> Reply
-                    </Button>
+                  <div className="p-3 border-t border-border space-y-2">
+                    {adminPendingFile && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs">
+                        <Paperclip className="w-3.5 h-3.5 text-secondary shrink-0" />
+                        <span className="truncate flex-1">{adminPendingFile.name}</span>
+                        <button onClick={() => setAdminPendingFile(null)} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input ref={adminFileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" className="hidden"
+                        onChange={(e) => { if (e.target.files?.[0]) { setAdminPendingFile(e.target.files[0]); e.target.value = ""; } }} />
+                      <button onClick={() => adminFileInputRef.current?.click()}
+                        className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                        <Paperclip className="w-4 h-4" />
+                      </button>
+                      <Input placeholder="Type your reply..." value={adminReplyText} onChange={(e) => setAdminReplyText(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} className="flex-1" />
+                      <Button onClick={sendAdminReply} disabled={adminSendingReply || adminAttachingFile || (!adminReplyText.trim() && !adminPendingFile)} size="sm" className="gap-1.5">
+                        {(adminSendingReply || adminAttachingFile) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Reply
+                      </Button>
+                    </div>
                   </div>
                 </div>
               ) : (
