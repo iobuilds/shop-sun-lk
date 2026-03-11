@@ -450,7 +450,7 @@ export default function PCBOrder() {
                 <Info className="w-4 h-4 text-primary shrink-0" />
                 <span className="text-sm font-semibold text-foreground">How PCB Manufacturing Works</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {(pcbNotice?.steps?.length
                   ? pcbNotice.steps
                   : [
@@ -472,6 +472,35 @@ export default function PCBOrder() {
                     </span>
                   </div>
                 ))}
+              </div>
+
+              {/* JLCPCB Partner Capabilities */}
+              <div className="border-t border-primary/15 pt-3">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Cpu className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <span className="text-xs text-muted-foreground font-medium">Manufacturing Partner: <span className="text-foreground font-semibold">JLCPCB</span></span>
+                  <a href="https://jlcpcb.com/capabilities/pcb-capabilities" target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline ml-auto flex items-center gap-1">
+                    Full specs <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { label: "Layers", value: "1–16 layers" },
+                    { label: "Min Trace/Space", value: "5 mil / 5 mil" },
+                    { label: "Board Size", value: "up to 500×500mm" },
+                    { label: "Min Hole Size", value: "0.2 mm" },
+                    { label: "Surface Finish", value: "HASL, ENIG, OSP…" },
+                    { label: "Solder Mask", value: "6 colors available" },
+                    { label: "Thickness", value: "0.4 – 2.4 mm" },
+                    { label: "Lead Time", value: "2–7 business days" },
+                  ].map(cap => (
+                    <div key={cap.label} className="bg-background/70 border border-border rounded-lg px-2.5 py-1.5">
+                      <p className="text-[10px] text-muted-foreground leading-none mb-0.5">{cap.label}</p>
+                      <p className="text-xs font-semibold text-foreground leading-tight">{cap.value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
