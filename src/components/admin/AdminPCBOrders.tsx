@@ -357,12 +357,18 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const markCompleted = async (orderId: string, userId: string) => {
     await (supabase as any).from("pcb_order_requests").update({ status: "completed" }).eq("id", orderId);
     const shortId = orderId.slice(0, 8).toUpperCase();
+    const profile = getProfile(userId);
     await supabase.from("user_notifications").insert({
-      user_id: userId, title: "PCB Order Delivered",
-      message: `Your PCB order PCB-${shortId} has been marked as delivered!`,
+      user_id: userId, title: "PCB Order Delivered 🎉",
+      message: `Your PCB order PCB-${shortId} has been delivered! Thank you for choosing us.`,
       type: "order", link_url: "/pcb-order?tab=my",
     });
-    toast({ title: "Marked as delivered" });
+    if (profile?.phone) {
+      await supabase.functions.invoke("send-sms", {
+        body: { phone: profile.phone, message: `NanoCircuit.lk: 🎉 Your PCB order PCB-${shortId} has been delivered! Thank you for ordering with us. We hope to serve you again!`, user_id: userId },
+      });
+    }
+    toast({ title: "Marked as delivered — user notified by SMS" });
     onRefresh();
   };
 
