@@ -65,7 +65,7 @@ async function gerberToSvg(gerberStr: string, fillColor: string): Promise<string
   try {
     const { parse, plot, renderSVG } = await import("web-gerber");
     const { toHtml } = await import("hast-util-to-html");
-    const svg = toHtml(renderSVG(plot(parse(gerberStr))) as any);
+    const svg = toHtml(renderSVG(plot(parse(gerberStr), false)) as any);
     if (!svg || svg.length < 30) return null;
     return svg
       .replace(/fill="[^"]*"/g, `fill="${fillColor}"`)
