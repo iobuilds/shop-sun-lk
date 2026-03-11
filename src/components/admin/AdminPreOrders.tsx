@@ -12,6 +12,35 @@ import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+function hexToRgbPO(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  return { r, g, b };
+}
+
+async function loadPreorderTemplate() {
+  try {
+    const { data } = await (supabase as any).from("site_settings").select("value").eq("key", "preorder_invoice_template").maybeSingle();
+    return (data as any)?.value || {};
+  } catch { return {}; }
+}
+
+function loadLogoImage(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width; canvas.height = img.height;
+      canvas.getContext("2d")?.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 const STATUS_OPTIONS = [
   { value: "pending",   label: "Pending Review",  color: "bg-yellow-100 text-yellow-800 border-yellow-300" },
   { value: "quoted",    label: "Quoted",           color: "bg-blue-100 text-blue-800 border-blue-300" },
