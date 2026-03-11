@@ -349,21 +349,23 @@ export default function PCBOrder() {
     setBankTransferDialog({ open: true, orderId, type, amount });
   };
 
-  const handleSlipUpload = async (file: File) => {
-    if (!bankTransferDialog) return;
+  const handleSlipUpload = async (file: File, existingSlipUrl?: string) => {
+    const orderId = bankTransferDialog?.orderId;
+    const type = bankTransferDialog?.type;
+    if (!orderId || !type) return;
     if (file.size > 10 * 1024 * 1024) { toast({ title: "File too large", description: "Max 10MB.", variant: "destructive" }); return; }
     setSlipUploading(true);
     try {
       const ext = file.name.split(".").pop();
-      const path = `pcb-slips/${bankTransferDialog.orderId}-${bankTransferDialog.type}-${Date.now()}.${ext}`;
+      const path = `pcb-slips/${orderId}-${type}-${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage.from("images").upload(path, file, { upsert: true });
       if (upErr) throw upErr;
       const publicUrl = supabase.storage.from("images").getPublicUrl(path).data.publicUrl;
       setSlipUrl(publicUrl);
-      const field = bankTransferDialog.type === "arrival" ? "arrival_slip_url" : "slip_url";
-      const statusField = bankTransferDialog.type === "arrival" ? "arrival_payment_status" : "payment_status";
-      await (supabase as any).from("pcb_order_requests").update({ [field]: publicUrl, [statusField]: "under_review" }).eq("id", bankTransferDialog.orderId);
-      toast({ title: "Slip uploaded!", description: "Payment under review. We'll notify you once approved." });
+      const field = type === "arrival" ? "arrival_slip_url" : "slip_url";
+      const statusField = type === "arrival" ? "arrival_payment_status" : "payment_status";
+      await (supabase as any).from("pcb_order_requests").update({ [field]: publicUrl, [statusField]: "under_review" }).eq("id", orderId);
+      toast({ title: "Slip uploaded!", description: "Your payment is now under review. We'll notify you once approved." });
       refetchOrders();
     } catch (err: any) {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
