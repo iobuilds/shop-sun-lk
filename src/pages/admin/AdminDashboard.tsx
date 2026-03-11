@@ -848,6 +848,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [orderSearch, setOrderSearch] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [productStockFilter, setProductStockFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
@@ -1746,14 +1747,40 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   // ── Delete Order ──
   const deleteOrder = async (id: string) => {
     if (!confirm("Are you sure you want to delete this order? This cannot be undone.")) return;
-    // Delete order items first
-    const { error: itemsError } = await supabase.from("order_items").delete().eq("order_id", id);
-    if (itemsError) { toast({ title: "Error", description: itemsError.message, variant: "destructive" }); return; }
+    await supabase.from("order_items").delete().eq("order_id", id);
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Order deleted" });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
+
+  // ── Bulk Delete Orders ──
+  const bulkDeleteOrders = async () => {
+    if (selectedOrders.size === 0) return;
+    if (!confirm(`Delete ${selectedOrders.size} selected order(s)? This cannot be undone.`)) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await supabase.from("order_items").delete().eq("order_id", id);
+      await supabase.from("orders").delete().eq("id", id);
+    }
+    toast({ title: `${ids.length} order(s) deleted` });
+    setSelectedOrders(new Set());
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
+  // ── Bulk Status Update ──
+  const bulkUpdateOrderStatus = async (status: string) => {
+    if (selectedOrders.size === 0) return;
+    const ids = Array.from(selectedOrders);
+    for (const id of ids) {
+      await supabase.from("orders").update({ status }).eq("id", id);
+    }
+    toast({ title: `${ids.length} order(s) updated to "${status}"` });
+    setSelectedOrders(new Set());
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  };
+
+
 
   const reportData = useMemo(() => {
     if (!orders) return null;
@@ -2236,7 +2263,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {/* ═══ Orders Tab ═══ */}
           {tab === "orders" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold font-display text-foreground">Orders</h2>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="relative">
@@ -2264,12 +2291,46 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                   </Select>
                 </div>
               </div>
+
+              {/* Bulk action bar */}
+              {selectedOrders.size > 0 && (
+                <div className="flex items-center gap-3 px-4 py-2.5 mb-3 bg-primary/5 border border-primary/20 rounded-xl">
+                  <span className="text-sm font-medium text-primary">{selectedOrders.size} selected</span>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <Select onValueChange={bulkUpdateOrderStatus}>
+                      <SelectTrigger className="h-7 text-xs w-36 border-primary/30"><SelectValue placeholder="Set status…" /></SelectTrigger>
+                      <SelectContent>
+                        {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
+                          <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace(/_/g, " ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeleteOrders}>
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </Button>
+                    <button onClick={() => setSelectedOrders(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
+                  </div>
+                </div>
+              )}
+
               {orders && orders.length > 0 ? (
                 <div className="bg-card rounded-xl border border-border overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/50">
+                          <th className="px-4 py-3 w-10">
+                            <Checkbox
+                              checked={paginatedOrders?.length > 0 && paginatedOrders.every((o: any) => selectedOrders.has(o.id))}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedOrders(prev => { const next = new Set(prev); paginatedOrders?.forEach((o: any) => next.add(o.id)); return next; });
+                                } else {
+                                  setSelectedOrders(prev => { const next = new Set(prev); paginatedOrders?.forEach((o: any) => next.delete(o.id)); return next; });
+                                }
+                              }}
+                            />
+                          </th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Order ID</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Total</th>
@@ -2281,8 +2342,20 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                         </tr>
                       </thead>
                       <tbody>
-                        {paginatedOrders?.map((o) => (
-                          <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                        {paginatedOrders?.map((o: any) => (
+                          <tr key={o.id} className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${selectedOrders.has(o.id) ? "bg-primary/5" : ""}`}>
+                            <td className="px-4 py-3">
+                              <Checkbox
+                                checked={selectedOrders.has(o.id)}
+                                onCheckedChange={(checked) => {
+                                  setSelectedOrders(prev => {
+                                    const next = new Set(prev);
+                                    checked ? next.add(o.id) : next.delete(o.id);
+                                    return next;
+                                  });
+                                }}
+                              />
+                            </td>
                             <td className="px-4 py-3 font-mono text-xs text-foreground">{o.id.slice(0, 8)}</td>
                             <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(o.created_at!).toLocaleDateString()}</td>
                             <td className="px-4 py-3 font-medium text-foreground">Rs. {o.total.toLocaleString()}</td>
@@ -2331,6 +2404,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
               ) : (
                 <div className="text-center py-16 text-muted-foreground">
                   <ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+
                   <p>No orders yet</p>
                 </div>
               )}
