@@ -450,6 +450,10 @@ const AdminDashboard = () => {
   const [adminSelectedConvo, setAdminSelectedConvo] = useState<string | null>(null);
   const [adminReplyText, setAdminReplyText] = useState("");
   const [adminSendingReply, setAdminSendingReply] = useState(false);
+  const [adminPendingFile, setAdminPendingFile] = useState<File | null>(null);
+  const [adminAttachingFile, setAdminAttachingFile] = useState(false);
+  const adminFileInputRef = useRef<HTMLInputElement>(null);
+  const adminMessagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: adminConvoMessages } = useQuery({
     queryKey: ["admin-convo-messages", adminSelectedConvo],
