@@ -38,6 +38,7 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
   const queryClient = useQueryClient();
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);

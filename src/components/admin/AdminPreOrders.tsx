@@ -224,6 +224,7 @@ const generatePreOrderInvoice = async (req: any, profile: any, companySettings?:
 export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpenConversation }: AdminPreOrdersProps) {
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRequests, setSelectedRequests] = useState<Set<string>>(new Set());
   const [editDialog, setEditDialog] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [editItems, setEditItems] = useState<any[]>([]);
