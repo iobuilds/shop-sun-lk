@@ -447,16 +447,33 @@ const Profile = () => {
   }
 
   const sendReply = async () => {
-    if (!newMessage.trim() || !selectedConvo || !session?.user) return;
+    if (!newMessage.trim() && !pendingFile || !selectedConvo || !session?.user) return;
     setSendingMessage(true);
     try {
+      let messageText = newMessage.trim();
+
+      // Upload file if attached
+      if (pendingFile) {
+        setAttachingFile(true);
+        const ext = pendingFile.name.split(".").pop();
+        const filePath = `chat-attachments/${selectedConvo}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("images").upload(filePath, pendingFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("images").getPublicUrl(filePath);
+        // Encode as special prefix so we can render it
+        const fileMsg = `[attachment:${urlData.publicUrl}:${pendingFile.name}]`;
+        messageText = messageText ? `${messageText}\n${fileMsg}` : fileMsg;
+        setAttachingFile(false);
+        setPendingFile(null);
+      }
+
       const { error } = await supabase
         .from("conversation_messages" as any)
         .insert({
           conversation_id: selectedConvo,
           sender_id: session.user.id,
           sender_type: "user",
-          message: newMessage.trim(),
+          message: messageText,
         });
       if (error) throw error;
       setNewMessage("");
@@ -466,6 +483,7 @@ const Profile = () => {
       toast.error(err.message);
     } finally {
       setSendingMessage(false);
+      setAttachingFile(false);
     }
   };
 
