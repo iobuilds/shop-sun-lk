@@ -4,7 +4,7 @@ import {
   Upload, ChevronRight, Clock, CheckCircle, XCircle, Truck, Package,
   Info, AlertCircle, FileDown, Building, RefreshCcw,
   AlertTriangle, Layers, Cpu, FileText, Wrench, X, ImageIcon,
-  Plus, Eye, ExternalLink, FlaskConical, Download
+  Plus, Eye, ExternalLink, FlaskConical, Download, MessageSquare
 } from "lucide-react";
 import GerberViewer from "@/components/GerberViewer";
 import { Button } from "@/components/ui/button";
@@ -390,6 +390,35 @@ export default function PCBOrder() {
       refetchOrders();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleOpenChat = async (order: any) => {
+    if (!session) { navigate("/auth"); return; }
+    try {
+      const shortId = order.id.slice(0, 8).toUpperCase();
+      // Find existing conversation for this PCB order or create one
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("user_id", session.user.id)
+        .ilike("subject", `%PCB-${shortId}%`)
+        .limit(1);
+
+      let convoId: string;
+      if (existing && existing.length > 0) {
+        convoId = existing[0].id;
+      } else {
+        const { data: newConvo, error } = await supabase
+          .from("conversations")
+          .insert({ user_id: session.user.id, subject: `PCB Order PCB-${shortId}`, status: "open" })
+          .select("id").single();
+        if (error) throw error;
+        convoId = newConvo.id;
+      }
+      navigate(`/profile?tab=messages&convo=${convoId}`);
+    } catch (err: any) {
+      toast({ title: "Could not open chat", description: err.message, variant: "destructive" });
     }
   };
 
@@ -844,6 +873,11 @@ export default function PCBOrder() {
                                 <Download className="w-3.5 h-3.5" /> {downloadingInvoice === order.id ? "Generating…" : "Download Invoice"}
                               </Button>
                             )}
+                            {/* Chat with support button */}
+                            <Button size="sm" variant="outline" className="gap-1.5"
+                              onClick={() => handleOpenChat(order)}>
+                              <MessageSquare className="w-3.5 h-3.5" /> Chat with Support
+                            </Button>
                           </div>
                         </motion.div>
                       );
