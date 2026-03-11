@@ -236,11 +236,12 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       const unitCostTotal = editItems.reduce((sum, it) => sum + ((parseFloat(it.unit_price) || 0) * (it.quantity || 1)), 0);
       const shippingVal = editForm.shipping_after_arrival ? -1 : (parseFloat(editForm.shipping_fee) || 0);
       const taxVal = editForm.tax_after_arrival ? -1 : (parseFloat(editForm.tax_amount) || 0);
-      // grand_total = items + non-TBA shipping + non-TBA tax
+      // For SMS/notification display — exclude TBA (-1) values
       const grandTotal = unitCostTotal
         + (shippingVal > 0 ? shippingVal : 0)
         + (taxVal > 0 ? taxVal : 0);
 
+      // grand_total is a GENERATED column (auto-computed by DB) — never include it in update payload
       const updatePayload: any = {
         status: editForm.status,
         admin_notes: editForm.admin_notes || null,
@@ -248,13 +249,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         tax_amount: taxVal,
         unit_cost_total: unitCostTotal,
       };
-      // Only set grand_total if it's a definite number (not TBA scenario causes issues)
-      if (!editForm.shipping_after_arrival && !editForm.tax_after_arrival) {
-        updatePayload.grand_total = grandTotal;
-      } else if (unitCostTotal > 0) {
-        // Partial grand total (items only, TBA parts excluded)
-        updatePayload.grand_total = unitCostTotal;
-      }
 
       const { error } = await supabase.from("preorder_requests").update(updatePayload).eq("id", editTarget.id);
       if (error) throw error;
