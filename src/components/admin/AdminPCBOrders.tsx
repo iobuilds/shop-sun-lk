@@ -370,6 +370,94 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     }
   };
 
+  // Open revision dialog for admin during manufacturing
+  const openRevision = (order: any) => {
+    setRevisionTarget(order);
+    setRevisionForm({ extra_amount: "", notes: "" });
+    setRevisionDialog(true);
+  };
+
+  const handleRevisionSave = async () => {
+    if (!revisionTarget) return;
+    setRevisionSaving(true);
+    try {
+      const extraAmt = parseFloat(revisionForm.extra_amount) || 0;
+      const prevGrandTotal = parseFloat(revisionTarget.grand_total) || 0;
+      const newGrandTotal = prevGrandTotal + extraAmt;
+      const shortId = revisionTarget.id.slice(0, 8).toUpperCase();
+      const profile = getProfile(revisionTarget.user_id);
+
+      // Update order: set status to under_review, update grand_total and unit_cost_total if extra amount
+      const payload: any = { status: "under_review" };
+      if (extraAmt > 0) {
+        payload.unit_cost_total = (parseFloat(revisionTarget.unit_cost_total) || 0) + extraAmt;
+        payload.grand_total = newGrandTotal;
+      }
+      if (revisionForm.notes.trim()) {
+        const existingNotes = (revisionTarget.admin_notes || "").split("\n").filter((l: string) => l.startsWith("stripe_session:")).join("\n");
+        payload.admin_notes = [revisionForm.notes.trim(), existingNotes].filter(Boolean).join("\n") || null;
+      }
+
+      await (supabase as any).from("pcb_order_requests").update(payload).eq("id", revisionTarget.id);
+
+      // Notify user
+      await supabase.from("user_notifications").insert({
+        user_id: revisionTarget.user_id,
+        title: "PCB Order — Revision Required",
+        message: `PCB-${shortId} requires your review.${extraAmt > 0 ? ` Additional charge: Rs. ${extraAmt.toLocaleString()}. New total: Rs. ${newGrandTotal.toLocaleString()}.` : ""} ${revisionForm.notes ? revisionForm.notes : "Please check your order."}`,
+        type: "order",
+        link_url: "/pcb-order?tab=my",
+      });
+      if (profile?.phone) {
+        await supabase.functions.invoke("send-sms", {
+          body: {
+            phone: profile.phone,
+            message: `NanoCircuit.lk: ⚠️ Revision needed for PCB-${shortId}.${extraAmt > 0 ? ` Additional: Rs. ${extraAmt.toLocaleString()} — New total: Rs. ${newGrandTotal.toLocaleString()}.` : ""} Log in to approve: nanocircuit.lk/pcb-order`,
+            user_id: revisionTarget.user_id,
+          },
+        });
+      }
+
+      toast({ title: "Revision request sent to customer" });
+      setRevisionDialog(false);
+      onRefresh();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setRevisionSaving(false);
+    }
+  };
+
+  // Open chat for a PCB order (create conversation if needed, then navigate)
+  const openChat = async (order: any) => {
+    try {
+      const shortId = order.id.slice(0, 8).toUpperCase();
+      // Check if there's already a conversation for this order
+      const { data: existing } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("user_id", order.user_id)
+        .ilike("subject", `%PCB-${shortId}%`)
+        .limit(1);
+
+      let convoId: string;
+      if (existing && existing.length > 0) {
+        convoId = existing[0].id;
+      } else {
+        const { data: newConvo, error } = await supabase.from("conversations").insert({
+          user_id: order.user_id,
+          subject: `PCB Order PCB-${shortId}`,
+          status: "open",
+        }).select("id").single();
+        if (error) throw error;
+        convoId = newConvo.id;
+      }
+      navigate(`/admin?tab=messages&convo=${convoId}`);
+    } catch (err: any) {
+      toast({ title: "Could not open chat", description: err.message, variant: "destructive" });
+    }
+  };
+
   const markCompleted = async (orderId: string, userId: string) => {
     await (supabase as any).from("pcb_order_requests").update({ status: "completed" }).eq("id", orderId);
     const shortId = orderId.slice(0, 8).toUpperCase();
