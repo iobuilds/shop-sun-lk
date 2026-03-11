@@ -855,6 +855,10 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
   const [reviewSearch, setReviewSearch] = useState("");
   const [contactSearch, setContactSearch] = useState("");
   const [smsLogSearch, setSmsLogSearch] = useState("");
+  // Messages tab state
+  const [msgTab, setMsgTab] = useState<"normal" | "pcb" | "preorder" | "guest">("normal");
+  const [selectedConvos, setSelectedConvos] = useState<Set<string>>(new Set());
+  const [selectedGuestMsgs, setSelectedGuestMsgs] = useState<Set<string>>(new Set());
 
   const filteredProducts = products?.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -3082,148 +3086,226 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           )}
 
           {/* ═══ Contact Messages Tab ═══ */}
-          {tab === "contacts" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold font-display text-foreground">
-                  {adminSelectedConvo ? "Conversation" : "Messages"}
-                </h2>
-                {adminSelectedConvo && (
-                  <Button variant="outline" size="sm" onClick={() => setAdminSelectedConvo(null)}>← Back to list</Button>
-                )}
-              </div>
+          {tab === "contacts" && (() => {
+            const pcbConvoIds = new Set((pcbOrders || []).map((o: any) => o.conversation_id).filter(Boolean));
+            const preorderConvoIds = new Set((preorderRequests || []).map((r: any) => r.conversation_id).filter(Boolean));
+            const normalConvos = (adminConversations || []).filter((c: any) => !pcbConvoIds.has(c.id) && !preorderConvoIds.has(c.id));
+            const pcbConvos = (adminConversations || []).filter((c: any) => pcbConvoIds.has(c.id));
+            const preorderConvos = (adminConversations || []).filter((c: any) => preorderConvoIds.has(c.id));
+            const activeConvos = msgTab === "normal" ? normalConvos : msgTab === "pcb" ? pcbConvos : preorderConvos;
 
-              {adminSelectedConvo ? (
-                <div className="bg-card rounded-xl border border-border overflow-hidden">
-                  <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto" ref={adminMessagesEndRef}>
-                    {adminConvoMessages?.map((m: any) => {
-                      const parts = m.message?.split(/(\[attachment:[^\]]+\])/g) || [];
-                      return (
-                        <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
-                          <div className={`max-w-[70%] rounded-xl px-4 py-2.5 text-sm ${
-                            m.sender_type === "admin" ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground"
-                          }`}>
-                            <p className="text-[10px] font-medium mb-1 opacity-70">{m.sender_type === "admin" ? "You" : "Customer"}</p>
-                            {parts.map((part: string, i: number) => {
-                              const match = part.match(/^\[attachment:(.+):([^:]+)\]$/);
-                              if (match) {
-                                const [, url, filename] = match;
-                                const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filename);
-                                return isImage ? (
-                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block mt-1">
-                                    <img src={url} alt={filename} className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer hover:opacity-90" />
-                                    <p className="text-[10px] mt-0.5 opacity-60 truncate">{filename}</p>
-                                  </a>
-                                ) : (
-                                  <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-2 mt-1 p-2 rounded-lg bg-background/20 hover:bg-background/30 transition-colors">
-                                    <FileText className="w-4 h-4 shrink-0" />
-                                    <span className="text-xs truncate max-w-[180px]">{filename}</span>
-                                    <Download className="w-3 h-3 shrink-0 opacity-60" />
-                                  </a>
-                                );
-                              }
-                              return part ? <p key={i} className="whitespace-pre-wrap">{part}</p> : null;
-                            })}
-                            <p className={`text-[10px] mt-1 opacity-60`}>
-                              {new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}
-                            </p>
+            const toggleConvo = (id: string) => setSelectedConvos(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+            const toggleGuestMsg = (id: string) => setSelectedGuestMsgs(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+            const bulkDeleteConvos = async () => {
+              const count = selectedConvos.size;
+              if (count === 0) return;
+              if (!confirm(`Delete ${count} conversation(s)?`)) return;
+              for (const id of selectedConvos) {
+                await supabase.from("conversation_messages" as any).delete().eq("conversation_id", id);
+                await supabase.from("conversations" as any).delete().eq("id", id);
+              }
+              setSelectedConvos(new Set());
+              queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
+              toast({ title: `${count} conversation(s) deleted` });
+            };
+
+            const bulkDeleteGuestMsgs = async () => {
+              const count = selectedGuestMsgs.size;
+              if (count === 0) return;
+              if (!confirm(`Delete ${count} message(s)?`)) return;
+              for (const id of selectedGuestMsgs) {
+                await supabase.from("contact_messages").delete().eq("id", id);
+              }
+              setSelectedGuestMsgs(new Set());
+              queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
+              toast({ title: `${count} message(s) deleted` });
+            };
+
+            return (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold font-display text-foreground">
+                    {adminSelectedConvo ? "Conversation" : "Messages"}
+                  </h2>
+                  {adminSelectedConvo && (
+                    <Button variant="outline" size="sm" onClick={() => setAdminSelectedConvo(null)}>← Back to list</Button>
+                  )}
+                </div>
+
+                {adminSelectedConvo ? (
+                  <div className="bg-card rounded-xl border border-border overflow-hidden">
+                    <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto" ref={adminMessagesEndRef}>
+                      {adminConvoMessages?.map((m: any) => {
+                        const parts = m.message?.split(/(\[attachment:[^\]]+\])/g) || [];
+                        return (
+                          <div key={m.id} className={`flex ${m.sender_type === "admin" ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-[70%] rounded-xl px-4 py-2.5 text-sm ${m.sender_type === "admin" ? "bg-secondary text-secondary-foreground" : "bg-muted text-foreground"}`}>
+                              <p className="text-[10px] font-medium mb-1 opacity-70">{m.sender_type === "admin" ? "You" : "Customer"}</p>
+                              {parts.map((part: string, i: number) => {
+                                const match = part.match(/^\[attachment:(.+):([^:]+)\]$/);
+                                if (match) {
+                                  const [, url, filename] = match;
+                                  const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filename);
+                                  return isImage ? (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block mt-1">
+                                      <img src={url} alt={filename} className="max-w-full rounded-lg max-h-48 object-cover cursor-pointer hover:opacity-90" />
+                                      <p className="text-[10px] mt-0.5 opacity-60 truncate">{filename}</p>
+                                    </a>
+                                  ) : (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 mt-1 p-2 rounded-lg bg-background/20 hover:bg-background/30 transition-colors">
+                                      <FileText className="w-4 h-4 shrink-0" />
+                                      <span className="text-xs truncate max-w-[180px]">{filename}</span>
+                                      <Download className="w-3 h-3 shrink-0 opacity-60" />
+                                    </a>
+                                  );
+                                }
+                                return part ? <p key={i} className="whitespace-pre-wrap">{part}</p> : null;
+                              })}
+                              <p className="text-[10px] mt-1 opacity-60">{new Date(m.created_at).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}</p>
+                            </div>
                           </div>
+                        );
+                      })}
+                      {(!adminConvoMessages || adminConvoMessages.length === 0) && (
+                        <p className="text-center text-muted-foreground text-sm py-8">No messages in this conversation</p>
+                      )}
+                    </div>
+                    <div className="p-3 border-t border-border space-y-2">
+                      {adminPendingFile && (
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs">
+                          <Paperclip className="w-3.5 h-3.5 text-secondary shrink-0" />
+                          <span className="truncate flex-1">{adminPendingFile.name}</span>
+                          <button onClick={() => setAdminPendingFile(null)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
                         </div>
-                      );
-                    })}
-                    {(!adminConvoMessages || adminConvoMessages.length === 0) && (
-                      <p className="text-center text-muted-foreground text-sm py-8">No messages in this conversation</p>
-                    )}
-                  </div>
-                  <div className="p-3 border-t border-border space-y-2">
-                    {adminPendingFile && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-xs">
-                        <Paperclip className="w-3.5 h-3.5 text-secondary shrink-0" />
-                        <span className="truncate flex-1">{adminPendingFile.name}</span>
-                        <button onClick={() => setAdminPendingFile(null)} className="text-muted-foreground hover:text-foreground">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                      )}
+                      <div className="flex gap-2">
+                        <input ref={adminFileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" className="hidden" onChange={(e) => { if (e.target.files?.[0]) { setAdminPendingFile(e.target.files[0]); e.target.value = ""; } }} />
+                        <button onClick={() => adminFileInputRef.current?.click()} className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"><Paperclip className="w-4 h-4" /></button>
+                        <Input placeholder="Type your reply..." value={adminReplyText} onChange={(e) => setAdminReplyText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} className="flex-1" />
+                        <Button onClick={sendAdminReply} disabled={adminSendingReply || adminAttachingFile || (!adminReplyText.trim() && !adminPendingFile)} size="sm" className="gap-1.5">
+                          {(adminSendingReply || adminAttachingFile) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Reply
+                        </Button>
                       </div>
-                    )}
-                    <div className="flex gap-2">
-                      <input ref={adminFileInputRef} type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt" className="hidden"
-                        onChange={(e) => { if (e.target.files?.[0]) { setAdminPendingFile(e.target.files[0]); e.target.value = ""; } }} />
-                      <button onClick={() => adminFileInputRef.current?.click()}
-                        className="p-2 rounded-md border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                        <Paperclip className="w-4 h-4" />
-                      </button>
-                      <Input placeholder="Type your reply..." value={adminReplyText} onChange={(e) => setAdminReplyText(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendAdminReply(); } }} className="flex-1" />
-                      <Button onClick={sendAdminReply} disabled={adminSendingReply || adminAttachingFile || (!adminReplyText.trim() && !adminPendingFile)} size="sm" className="gap-1.5">
-                        {(adminSendingReply || adminAttachingFile) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Reply
-                      </Button>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Conversations */}
-                  {adminConversations && adminConversations.length > 0 && (
-                    <div className="space-y-3 mb-6">
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Conversations</h3>
-                      {adminConversations.map((c: any) => (
-                        <button key={c.id} onClick={() => setAdminSelectedConvo(c.id)}
-                          className="w-full text-left bg-card rounded-xl border border-border p-4 hover:bg-muted/30 transition-colors">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {c.profiles?.full_name || "User"} • {new Date(c.updated_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
-                          </div>
+                ) : (
+                  <div>
+                    {/* Message Category Tabs */}
+                    <div className="flex gap-1 bg-muted/50 p-1 rounded-xl mb-5">
+                      {([
+                        { id: "normal", label: "General", icon: MessageSquare, count: normalConvos.length },
+                        { id: "pcb", label: "PCB Orders", icon: Layers, count: pcbConvos.length },
+                        { id: "preorder", label: "Pre-Orders", icon: ShoppingCart, count: preorderConvos.length },
+                        { id: "guest", label: "Guest Msgs", icon: Mail, count: contactMessages?.length || 0 },
+                      ] as const).map(({ id, label, icon: Icon, count }) => (
+                        <button key={id} onClick={() => { setMsgTab(id); setSelectedConvos(new Set()); setSelectedGuestMsgs(new Set()); }}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${msgTab === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                          <Icon className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">{label}</span>
+                          {count > 0 && <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${msgTab === id ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{count}</span>}
                         </button>
                       ))}
                     </div>
-                  )}
 
-                  {/* Legacy contact messages */}
-                  {paginatedContacts && paginatedContacts.length > 0 && (
-                    <>
-                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Guest Messages</h3>
-                      {paginatedContacts.map((m: any) => (
-                        <div key={m.id} className={`bg-card rounded-xl border p-5 ${m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
-                          <div className="flex items-start justify-between gap-4">
+                    {/* Conversations list (Normal / PCB / Pre-Order) */}
+                    {msgTab !== "guest" && (
+                      <div className="space-y-2">
+                        {selectedConvos.size > 0 && (
+                          <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
+                            <Checkbox checked={activeConvos.length > 0 && activeConvos.every(c => selectedConvos.has(c.id))}
+                              onCheckedChange={(v) => { const s = new Set(selectedConvos); activeConvos.forEach(c => v ? s.add(c.id) : s.delete(c.id)); setSelectedConvos(s); }} />
+                            <span className="text-sm font-medium text-primary">{selectedConvos.size} selected</span>
+                            <div className="flex-1" />
+                            <Button variant="destructive" size="sm" onClick={bulkDeleteConvos} className="gap-1.5 h-7 text-xs">
+                              <Trash2 className="w-3 h-3" /> Delete Selected
+                            </Button>
+                          </div>
+                        )}
+                        {activeConvos.map((c: any) => (
+                          <div key={c.id} className={`flex items-center gap-3 bg-card rounded-xl border p-4 transition-colors ${selectedConvos.has(c.id) ? "border-primary/40 bg-primary/5" : "border-border hover:bg-muted/30"}`}>
+                            <Checkbox checked={selectedConvos.has(c.id)} onCheckedChange={() => toggleConvo(c.id)} />
+                            <button className="flex-1 text-left" onClick={() => { setSelectedConvos(new Set()); setAdminSelectedConvo(c.id); }}>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-foreground text-sm truncate">{c.subject}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{c.profiles?.full_name || "User"} • {new Date(c.updated_at).toLocaleDateString()}</p>
+                                </div>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${c.status === "open" ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
+                              </div>
+                            </button>
+                            <button onClick={async (e) => { e.stopPropagation(); if (!confirm("Delete this conversation?")) return; await supabase.from("conversation_messages" as any).delete().eq("conversation_id", c.id); await supabase.from("conversations" as any).delete().eq("id", c.id); queryClient.invalidateQueries({ queryKey: ["admin-conversations"] }); toast({ title: "Deleted" }); }} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive shrink-0 transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {activeConvos.length > 0 && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Checkbox checked={activeConvos.every(c => selectedConvos.has(c.id))}
+                              onCheckedChange={(v) => { const s = new Set(selectedConvos); activeConvos.forEach(c => v ? s.add(c.id) : s.delete(c.id)); setSelectedConvos(s); }} />
+                            <span className="text-xs text-muted-foreground">Select all</span>
+                          </div>
+                        )}
+                        {activeConvos.length === 0 && (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <MessageSquare className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <p className="text-sm">No conversations</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Guest Contact Messages */}
+                    {msgTab === "guest" && (
+                      <div className="space-y-2">
+                        {selectedGuestMsgs.size > 0 && (
+                          <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5">
+                            <span className="text-sm font-medium text-primary">{selectedGuestMsgs.size} selected</span>
+                            <div className="flex-1" />
+                            <Button variant="destructive" size="sm" onClick={bulkDeleteGuestMsgs} className="gap-1.5 h-7 text-xs">
+                              <Trash2 className="w-3 h-3" /> Delete Selected
+                            </Button>
+                          </div>
+                        )}
+                        {(contactMessages || []).map((m: any) => (
+                          <div key={m.id} className={`flex items-start gap-3 bg-card rounded-xl border p-4 transition-colors ${selectedGuestMsgs.has(m.id) ? "border-primary/40 bg-primary/5" : m.is_read ? "border-border" : "border-secondary/30 bg-secondary/5"}`}>
+                            <Checkbox checked={selectedGuestMsgs.has(m.id)} onCheckedChange={() => toggleGuestMsg(m.id)} className="mt-0.5" />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-semibold text-foreground">{m.subject}</h3>
+                                <h3 className="font-semibold text-foreground text-sm">{m.subject}</h3>
                                 {!m.is_read && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">New</span>}
                               </div>
-                              <p className="text-sm text-muted-foreground mb-2">From: {m.name} ({m.email})</p>
+                              <p className="text-xs text-muted-foreground mb-1">From: {m.name} ({m.email})</p>
                               <p className="text-sm text-foreground whitespace-pre-wrap">{m.message}</p>
-                              <p className="text-xs text-muted-foreground mt-2">{new Date(m.created_at).toLocaleString()}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{new Date(m.created_at).toLocaleString()}</p>
                             </div>
                             <div className="flex gap-1 shrink-0">
-                              {!m.is_read && (
-                                <button onClick={() => markAsRead(m.id)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Mark as read"><Check className="w-3.5 h-3.5" /></button>
-                              )}
+                              {!m.is_read && <button onClick={() => markAsRead(m.id)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Mark as read"><Check className="w-3.5 h-3.5" /></button>}
                               <a href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Reply"><Mail className="w-3.5 h-3.5" /></a>
                               <button onClick={() => deleteContact(m.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {(!contactMessages || contactMessages.length === 0) && (!adminConversations || adminConversations.length === 0) && (
-                    <div className="text-center py-16 text-muted-foreground">
-                      <MessageSquare className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                      <p>No messages yet</p>
-                    </div>
-                  )}
-                </div>
-              )}
-              {!adminSelectedConvo && renderPagination(contactPage, totalContactPages, setContactPage, filteredContacts?.length || 0)}
-            </motion.div>
-          )}
+                        ))}
+                        {(contactMessages?.length || 0) > 0 && (
+                          <div className="flex items-center gap-2 pt-1">
+                            <Checkbox checked={(contactMessages || []).every((m: any) => selectedGuestMsgs.has(m.id))}
+                              onCheckedChange={(v) => { const s = new Set(selectedGuestMsgs); (contactMessages || []).forEach((m: any) => v ? s.add(m.id) : s.delete(m.id)); setSelectedGuestMsgs(s); }} />
+                            <span className="text-xs text-muted-foreground">Select all</span>
+                          </div>
+                        )}
+                        {(!contactMessages || contactMessages.length === 0) && (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <Mail className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <p className="text-sm">No guest messages</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })()}
 
           {/* ═══ SEO Settings Tab ═══ */}
           {tab === "seo" && (
@@ -3246,7 +3328,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                     <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://example.com/og-image.jpg" /></div>
                     <div>
                       <Label>Favicon (Site Icon)</Label>
-                      <div className="flex items-center gap-3 mt-1">
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
                         {seoForm.favicon_url && (
                           <div className="relative group">
                             <img src={seoForm.favicon_url} alt="Favicon" className="w-10 h-10 rounded border border-border object-contain bg-muted" />
@@ -3265,8 +3347,17 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
                             e.target.value = "";
                           }} className="hidden" disabled={uploading} />
                         </label>
+                        {companyForm?.logo_url && (
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5 text-xs h-9"
+                            onClick={() => {
+                              setSeoForm((prev: any) => ({ ...prev, favicon_url: companyForm.logo_url }));
+                              toast({ title: "Logo set as favicon", description: "Click Save Settings to apply." });
+                            }}>
+                            <Image className="w-3.5 h-3.5" /> Use Logo as Favicon
+                          </Button>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">Upload an icon image (PNG/ICO recommended, 32×32 or 64×64px)</p>
+                      <p className="text-xs text-muted-foreground mt-1">Upload an icon image (PNG/ICO recommended, 32×32 or 64×64px) or use the site logo.</p>
                     </div>
                   </div>
 
