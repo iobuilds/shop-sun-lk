@@ -497,27 +497,14 @@ export default function PCBOrder() {
                   </h2>
                   <p className="text-xs text-muted-foreground mb-4">You can add multiple boards — each with its own specs and services. They'll be submitted as one order.</p>
 
-                  {/* Drop zone */}
-                  <div
-                    onDragOver={e => { e.preventDefault(); setGerberDragging(true); }}
-                    onDragLeave={() => setGerberDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${gerberDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"}`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <Plus className="w-7 h-7 text-muted-foreground" />
-                      <p className="font-medium text-foreground text-sm">Drop Gerber files here or click to browse</p>
-                      <p className="text-xs text-muted-foreground">ZIP, RAR, GBR supported · max 50MB per file</p>
-                    </div>
-                    <input ref={fileInputRef} type="file" className="hidden" multiple
-                      accept=".zip,.rar,.gbr,.ger,.gtl,.gbl,.gbs,.gts,.gko"
-                      onChange={e => { if (e.target.files) Array.from(e.target.files).forEach(f => validateAndAddGerber(f)); }} />
-                  </div>
+                  {/* Hidden file input always present */}
+                  <input ref={fileInputRef} type="file" className="hidden" multiple
+                    accept=".zip,.rar,.gbr,.ger,.gtl,.gbl,.gbs,.gts,.gko"
+                    onChange={e => { if (e.target.files) Array.from(e.target.files).forEach(f => validateAndAddGerber(f)); }} />
 
-                  {/* Gerber entry cards */}
+                  {/* Gerber entry cards — shown first when files exist */}
                   {gerberEntries.length > 0 && (
-                    <div className="mt-4 space-y-4">
+                    <div className="space-y-4 mb-4">
                       {gerberEntries.map((entry, idx) => (
                         <GerberEntryCard
                           key={idx}
@@ -527,15 +514,29 @@ export default function PCBOrder() {
                           onRemove={() => removeGerberEntry(idx)}
                         />
                       ))}
-
-                      {/* Add more button */}
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 border border-dashed border-border rounded-xl text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors">
-                        <Plus className="w-4 h-4" /> Add another Gerber file
-                      </button>
                     </div>
                   )}
+
+                  {/* Drop zone — always shown, moves below cards once files are added */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setGerberDragging(true); }}
+                    onDragLeave={() => setGerberDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl cursor-pointer transition-all ${gerberDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/50"} ${gerberEntries.length > 0 ? "p-3" : "p-6"}`}
+                  >
+                    <div className={`flex items-center justify-center gap-2 ${gerberEntries.length > 0 ? "flex-row" : "flex-col"}`}>
+                      <Plus className={`text-muted-foreground shrink-0 ${gerberEntries.length > 0 ? "w-4 h-4" : "w-7 h-7"}`} />
+                      {gerberEntries.length > 0 ? (
+                        <span className="text-sm text-muted-foreground">Add another Gerber file</span>
+                      ) : (
+                        <>
+                          <p className="font-medium text-foreground text-sm">Drop Gerber files here or click to browse</p>
+                          <p className="text-xs text-muted-foreground">ZIP, RAR, GBR supported · max 50MB per file</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* ── Additional Notes (global) ── */}
