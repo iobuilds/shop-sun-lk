@@ -848,6 +848,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
 
   const [orderStatusFilter, setOrderStatusFilter] = useState("all");
   const [orderSearch, setOrderSearch] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [productStockFilter, setProductStockFilter] = useState("all");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
