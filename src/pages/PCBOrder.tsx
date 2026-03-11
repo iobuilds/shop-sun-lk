@@ -466,8 +466,28 @@ export default function PCBOrder() {
 
   const canPay = (o: any) => o.status === "quoted" && !isQuoteExpired(o) && o.payment_status !== "paid" && o.payment_status !== "under_review" && o.grand_total > 0;
   const canPayArrival = (o: any) => o.status === "arrived" && o.arrival_payment_status !== "paid" && o.arrival_payment_status !== "under_review" && ((o.arrival_shipping_fee || 0) + (o.arrival_tax_amount || 0)) > 0;
-  // Order needs user approval when admin updated quote (status = under_review for approval)
+  // Needs approval when admin sent revision (under_review)
   const needsApproval = (o: any) => o.status === "under_review";
+  // Needs revision payment when user approved revision but hasn't paid yet
+  const needsRevisionPayment = (o: any) => {
+    if (o.status !== "revision_paying") return false;
+    const slipLine = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+    return !slipLine; // no slip yet → needs payment
+  };
+  // Revision slip submitted, awaiting admin review
+  const revisionSlipUnderReview = (o: any) => {
+    if (o.status !== "revision_paying") return false;
+    const slipLine = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
+    return !!slipLine;
+  };
+  const getRevisionExtra = (o: any): number => {
+    const line = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_extra]:"));
+    return line ? parseFloat(line.replace("[revision_extra]:", "")) || 0 : 0;
+  };
+  const getRevisionNote = (o: any): string => {
+    const line = (o.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_note]:"));
+    return line ? line.replace("[revision_note]:", "").trim() : "";
+  };
 
   return (
     <>
