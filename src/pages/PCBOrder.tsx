@@ -136,6 +136,25 @@ export default function PCBOrder() {
     enabled: !!session?.user?.id,
   });
 
+  // Realtime subscription — auto-refresh orders when any row for this user changes
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const channel = supabase
+      .channel("pcb-orders-realtime")
+      .on(
+        "postgres_changes" as any,
+        {
+          event: "*",
+          schema: "public",
+          table: "pcb_order_requests",
+          filter: `user_id=eq.${session.user.id}`,
+        },
+        () => { refetchOrders(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session?.user?.id, refetchOrders]);
+
   const { data: bankAccounts } = useQuery({
     queryKey: ["bank-accounts-pcb"],
     queryFn: async () => {
