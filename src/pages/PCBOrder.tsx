@@ -873,7 +873,7 @@ export default function PCBOrder() {
                                     <div className="flex justify-between font-bold"><span>Additional Amount Due</span><span className="text-amber-800">Rs. {revExtra.toLocaleString()}</span></div>
                                   </div>
                                 )}
-                                <p className="text-xs text-amber-700 mb-2">Please upload your bank transfer slip for the revision amount. Manufacturing will resume once approved.</p>
+                                <p className="text-xs text-amber-700 mb-2">Upload your bank transfer slip for the revision amount. Manufacturing resumes once approved.</p>
                                 <label className="flex items-center gap-2 border border-amber-300 bg-background rounded-lg px-3 py-2 cursor-pointer hover:border-amber-500 transition-colors text-sm text-muted-foreground">
                                   <Upload className="w-4 h-4 text-amber-600 shrink-0" />
                                   Click to upload revision payment slip
@@ -888,15 +888,28 @@ export default function PCBOrder() {
                           {revisionSlipUnderReview(order) && (() => {
                             const revExtra = getRevisionExtra(order);
                             const slipLine = (order.admin_notes || "").split("\n").find((l: string) => l.startsWith("[revision_slip]:"));
-                            const slipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
+                            const uploadedSlipUrl = slipLine ? slipLine.replace("[revision_slip]:", "").trim() : null;
                             return (
                               <div className="border border-amber-300 bg-amber-50 rounded-lg p-3 mb-3">
-                                <p className="text-sm font-semibold text-amber-800 mb-1 flex items-center gap-1.5">
-                                  <Clock className="w-4 h-4" /> Revision Payment Under Review
+                                <p className="text-sm font-semibold text-amber-800 mb-1.5 flex items-center gap-1.5">
+                                  <Clock className="w-4 h-4" /> Revision Payment — Under Review
                                 </p>
-                                <p className="text-xs text-amber-700 mb-2">Your revision payment slip has been submitted. Manufacturing will resume once our team approves it.</p>
-                                {revExtra > 0 && <p className="text-xs text-amber-700 mb-1">Amount: Rs. {revExtra.toLocaleString()}</p>}
-                                {slipUrl && <a href={slipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View submitted slip</a>}
+                                <p className="text-xs text-amber-700 mb-2">Your slip has been submitted. Manufacturing resumes once our team approves it.</p>
+                                {revExtra > 0 && <p className="text-xs font-medium text-amber-800 mb-2">Amount: Rs. {revExtra.toLocaleString()}</p>}
+                                {uploadedSlipUrl && (
+                                  <div className="mb-2">
+                                    <a href={uploadedSlipUrl} target="_blank" rel="noopener noreferrer">
+                                      <img src={uploadedSlipUrl} alt="Revision slip" className="max-h-32 rounded-lg border border-amber-200 object-contain bg-white mb-1.5" onError={e => (e.currentTarget.style.display = "none")} />
+                                    </a>
+                                    <a href={uploadedSlipUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">View full slip ↗</a>
+                                  </div>
+                                )}
+                                {/* Allow re-submission */}
+                                <label className="inline-flex items-center gap-1.5 text-xs text-amber-700 underline cursor-pointer hover:text-amber-900 mt-1">
+                                  <Upload className="w-3 h-3" /> Re-upload slip
+                                  <input type="file" accept="image/*,.pdf" className="hidden"
+                                    onChange={e => { const f = e.target.files?.[0]; if (f) handleRevisionSlipUpload(f, order.id, order.admin_notes || ""); }} />
+                                </label>
                               </div>
                             );
                           })()}
