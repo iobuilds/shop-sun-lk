@@ -611,6 +611,183 @@ const AdminDashboard = () => {
   }, [isAdmin, isModerator, queryClient]);
 
 
+  const lowStockCount = products?.filter(p => {
+    const stock = Number(p.stock_quantity) || 0;
+    return stock > 0 && stock <= (stockSettings?.low_stock_threshold || 5);
+  }).length || 0;
+
+  const pendingOrderCount = orders?.filter(o => o.status === "pending" || o.status === "confirmed").length || 0;
+  const deliveryActionCount = orders?.filter(o => ["confirmed", "paid", "processing", "packed", "shipped"].includes(o.status)).length || 0;
+
+  // Micro Electronics category products
+  const microElectronicsCategory = categories?.find(c => c.name.toLowerCase().includes("micro"));
+  const microElectronicsProducts = products?.filter(p => p.category_id === microElectronicsCategory?.id) || [];
+
+  const allSidebarGroups = [
+    {
+      label: "Catalog", icon: Package, defaultOpen: true, adminOnly: true,
+      items: [
+        { id: "products" as Tab, label: "All Products", icon: Package, count: products?.length || 0 },
+        { id: "micro_electronics" as Tab, label: "Micro Electronics", icon: Wrench, count: microElectronicsProducts.length },
+        { id: "categories" as Tab, label: "Categories", icon: FolderTree, count: categories?.length || 0 },
+        { id: "combos" as Tab, label: "Combo Packs", icon: Layers, count: comboPacks?.length || 0 },
+        { id: "deals" as Tab, label: "Daily Deals", icon: Tag, count: deals?.length || 0 },
+        { id: "stock" as Tab, label: "Stock", icon: Package, count: lowStockCount },
+        { id: "qr_scan" as Tab, label: "QR Stock Scan", icon: QrCode, count: 0 },
+      ],
+    },
+    {
+      label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true, adminOnly: false,
+      permissionKey: "can_manage_orders" as const,
+      items: [
+        { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: pendingOrderCount },
+        { id: "delivery_updates" as Tab, label: "Delivery Updates", icon: Truck, count: deliveryActionCount },
+      ],
+    },
+    {
+      label: "Customer Support", icon: MessageSquare, defaultOpen: true, adminOnly: false,
+      items: [
+        ...(isAdmin || moderatorPermissions.can_view_contacts ? [{ id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts }] : []),
+        ...(isAdmin || moderatorPermissions.can_manage_preorders ? [{ id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount }] : []),
+        ...(isAdmin || moderatorPermissions.can_manage_pcb_orders ? [{ id: "pcb_orders" as Tab, label: "PCB Orders", icon: Layers, count: pendingPCBCount }] : []),
+      ],
+    },
+    {
+      label: "Customers", icon: Users, defaultOpen: true, adminOnly: true,
+      items: [
+        { id: "users" as Tab, label: "Users", icon: Users, count: allProfiles?.length || 0 },
+        { id: "reviews" as Tab, label: "Reviews", icon: Star, count: allReviews?.length || 0 },
+      ],
+    },
+    {
+      label: "Marketing", icon: Megaphone, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
+        { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
+        { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+        { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+      ],
+    },
+    {
+      label: "Payments & Finance", icon: CreditCard, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "payment_settings" as Tab, label: "Payment Methods", icon: CreditCard, count: 0 },
+        { id: "wallet" as Tab, label: "User Wallets", icon: Wallet, count: 0 },
+        { id: "shipping_settings" as Tab, label: "Shipping Charges", icon: Truck, count: 0 },
+        { id: "bank" as Tab, label: "Bank Details", icon: Building2, count: 0 },
+        { id: "sales" as Tab, label: "Sales", icon: DollarSign, count: 0 },
+      ],
+    },
+    {
+      label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
+        { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
+        { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
+        { id: "pages" as Tab, label: "Pages", icon: FileText, count: pages?.length || 0 },
+        { id: "company" as Tab, label: "Company Info", icon: Building2, count: 0 },
+      ],
+    },
+    {
+      label: "SMS Center", icon: Send, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
+        { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
+      ],
+    },
+    {
+      label: "Analytics & Reports", icon: TrendingUp, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
+      ],
+    },
+    {
+      label: "System Tools", icon: Wrench, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
+        { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+      ],
+    },
+  ];
+
+  // Filter sidebar groups based on role — moderators only see permitted sections
+  const sidebarGroups = allSidebarGroups
+    .map(g => {
+      if (!isAdmin && g.adminOnly) return null;
+      if (!isAdmin && g.items.length === 0) return null;
+      return g;
+    })
+    .filter(Boolean) as typeof allSidebarGroups;
+
+  // Redirect moderator away from tabs they can't access
+  useEffect(() => {
+    if (!isModerator || isAdmin) return;
+    const allowed = sidebarGroups.flatMap(g => g.items.map(i => i.id));
+    if (tab && !allowed.includes(tab)) {
+      const first = allowed[0] as Tab | undefined;
+      if (first) setTab(first);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moderatorPermissions, isAdmin, isModerator]);
+
+  // Flat list for mobile
+  const allTabs = sidebarGroups.flatMap(g => g.items);
+
+  // Track which groups are open
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    sidebarGroups.forEach(g => { initial[g.label] = g.defaultOpen; });
+    return initial;
+  });
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  // Auto-open the group containing the active tab
+  useEffect(() => {
+    const group = sidebarGroups.find(g => g.items.some(i => i.id === tab));
+    if (group && !openGroups[group.label]) {
+      setOpenGroups(prev => ({ ...prev, [group.label]: true }));
+    }
+  }, [tab]);
+
+  const ITEMS_PER_PAGE = 15;
+  const [productPage, setProductPage] = useState(0);
+  const [orderPage, setOrderPage] = useState(0);
+  const [dealPage, setDealPage] = useState(0);
+  const [couponPage, setCouponPage] = useState(0);
+  const [userPage, setUserPage] = useState(0);
+  const [reviewPage, setReviewPage] = useState(0);
+  const [contactPage, setContactPage] = useState(0);
+  const [smsLogPage, setSmsLogPage] = useState(0);
+
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all");
+  const [orderSearch, setOrderSearch] = useState("");
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [productStockFilter, setProductStockFilter] = useState("all");
+  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+  const [userSearch, setUserSearch] = useState("");
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [smsLogSearch, setSmsLogSearch] = useState("");
+  const [msgTab, setMsgTab] = useState<"normal" | "pcb" | "preorder" | "guest">("normal");
+  const [selectedConvos, setSelectedConvos] = useState<Set<string>>(new Set());
+  const [selectedGuestMsgs, setSelectedGuestMsgs] = useState<Set<string>>(new Set());
+
+  const filteredProducts = products?.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const stock = Number(p.stock_quantity) || 0;
+    const matchesStock = productStockFilter === "all" ? true
+      : productStockFilter === "out" ? stock === 0
+      : productStockFilter === "low" ? stock > 0 && stock <= lowStockThreshold
+      : productStockFilter === "in" ? stock > lowStockThreshold
+      : true;
+    const matchesCategory = productCategoryFilter === "all" || p.category_id === productCategoryFilter;
+    return matchesSearch && matchesStock && matchesCategory;
+  });
+  const totalProductPages = Math.ceil((filteredProducts?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts?.slice(productPage * ITEMS_PER_PAGE, (productPage + 1) * ITEMS_PER_PAGE);
 
 
   const reportData = useMemo(() => {
