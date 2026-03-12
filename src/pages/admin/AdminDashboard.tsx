@@ -1121,7 +1121,7 @@ const AdminDashboard = () => {
   const updateOrderStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Status updated" }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+    else { toast({ title: "Status updated" }); await logAdminAction("order_status_changed", "order", id, { status }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
   };
   const updatePaymentStatus = async (id: string, payment_status: string) => {
     const { error } = await supabase.from("orders").update({ payment_status }).eq("id", id);
