@@ -33,6 +33,7 @@ import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissions
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
 import ActivityLogs from "@/components/admin/ActivityLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
+import AdminDocumentation from "@/components/admin/AdminDocumentation";
 
 type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "documentation";
 
