@@ -179,11 +179,25 @@ const DatabaseTools = () => {
     try {
       const tempName = `upload-restore-${Date.now()}.zip`;
 
-      // Step 1: Get a signed upload URL from the edge function (avoids base64 size limits)
+      // Step 1: Get a signed upload URL from the edge function
       const { url: signedUploadUrl } = await callBackupFn({ action: "get_upload_url", file_name: tempName });
 
-      // Step 2: Upload the ZIP directly to storage via signed URL
-      const uploadRes = await fetch(signedUploadUrl, {
+      // Step 2: Replace any internal host (kong:8000, localhost) with the real public Supabase URL.
+      // On self-hosted VPS the signed URL uses the internal kong address which browsers can't reach.
+      const supabasePublicUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      let uploadUrl = signedUploadUrl;
+      try {
+        const parsed = new URL(signedUploadUrl);
+        if (parsed.hostname === "kong" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+          const publicParsed = new URL(supabasePublicUrl);
+          parsed.protocol = publicParsed.protocol;
+          parsed.host = publicParsed.host;
+          uploadUrl = parsed.toString();
+        }
+      } catch (_) { /* keep original if URL parsing fails */ }
+
+      // Step 3: Upload the ZIP directly to storage via signed URL
+      const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": "application/zip" },
         body: uploadedZipFile,
@@ -193,7 +207,7 @@ const DatabaseTools = () => {
         throw new Error(`Storage upload failed: ${errText}`);
       }
 
-      // Step 3: Trigger the restore
+      // Step 4: Trigger the restore
       const data = await callBackupFn({ action: "full_restore", file_name: tempName });
       toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${data.restored_files} storage files restored.` });
       fetchBackups();
