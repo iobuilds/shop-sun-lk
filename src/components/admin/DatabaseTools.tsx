@@ -65,23 +65,9 @@ const DatabaseTools = () => {
   const callBackupFn = async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Not authenticated");
-    // Always call edge functions on Lovable Cloud (project ID is fixed)
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID || "rcefmfiqqqsfurkdljup";
-    const fnUrl = `https://${projectId}.supabase.co/functions/v1/db-backup`;
-    const res = await fetch(fnUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`,
-        "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || res.statusText);
-    }
-    return res.json();
+    const res = await supabase.functions.invoke("db-backup", { body });
+    if (res.error) throw new Error(res.error.message);
+    return res.data;
   };
 
   const fetchBackups = async () => {
