@@ -103,8 +103,12 @@ const ReferralCodesManager = () => {
   };
 
   const handleSave = async () => {
-    if (!form.code.trim() || !form.discount_value) {
-      toast({ title: "Code and discount value are required", variant: "destructive" });
+    if (!form.code.trim()) {
+      toast({ title: "Code is required", variant: "destructive" });
+      return;
+    }
+    if (form.code_purpose === "discount" && !form.discount_value) {
+      toast({ title: "Discount value is required for discount codes", variant: "destructive" });
       return;
     }
     setSaving(true);
