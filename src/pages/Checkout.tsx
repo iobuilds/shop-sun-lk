@@ -487,7 +487,41 @@ const Checkout = () => {
                     </div>
                   )}
 
+                   {/* Referral Code */}
+                  <div className="border-t border-border pt-3">
+                    {appliedReferral ? (
+                      <div className="flex items-center justify-between bg-secondary/5 border border-secondary/20 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-secondary" />
+                          <div>
+                            <span className="text-sm font-medium text-secondary">{appliedReferral.code}</span>
+                            {appliedReferral.name && <span className="text-xs text-muted-foreground ml-1">({appliedReferral.name})</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-secondary">-Rs. {appliedReferral.discount.toLocaleString()}</span>
+                          <button type="button" onClick={removeReferral} className="p-0.5 hover:bg-secondary/10 rounded"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                          placeholder="Referral code"
+                          className="text-sm"
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyReferral())}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={applyReferral} disabled={validatingReferral || !referralCode.trim()}>
+                          {validatingReferral ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">Have a referral code? Enter it above for a discount.</p>
+                  </div>
+
                   {/* Wallet Credit */}
+
                   {walletBalance > 0 && (
                     <div className="border-t border-border pt-3">
                       <div className="flex items-center justify-between border border-border rounded-lg px-3 py-2">
