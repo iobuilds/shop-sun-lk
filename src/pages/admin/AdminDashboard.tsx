@@ -867,7 +867,7 @@ const AdminDashboard = () => {
   const filteredUsers = (allProfiles || []).filter((u: any) => {
     const q = userSearch.toLowerCase();
     const matchSearch = !q || (u.full_name || "").toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q);
-    const role = getUserRole ? userRoles?.find((r: any) => r.user_id === u.user_id)?.role || "user" : "user";
+    const role = userRoles?.find((r: any) => r.user_id === u.user_id)?.role || "user";
     const matchRole = userRoleFilter === "all" || role === userRoleFilter;
     const matchStatus = userStatusFilter === "all" || (userStatusFilter === "suspended" ? u.is_suspended : !u.is_suspended);
     return matchSearch && matchRole && matchStatus;
