@@ -7,13 +7,26 @@ const corsHeaders = {
 };
 
 const TABLES = [
+  // Settings & catalog
   "site_settings", "categories", "products", "banners", "promo_banners",
   "combo_packs", "combo_pack_items", "daily_deals", "pages", "coupons",
-  "sms_templates", "profiles", "user_roles",
+  "sms_templates",
+  // Users & roles
+  "profiles", "user_roles", "moderator_permissions",
+  // Orders & fulfillment
   "orders", "order_items", "order_status_history",
+  // Pre-orders & PCB
+  "preorder_requests", "preorder_items", "pcb_order_requests",
+  // Stock & inventory
+  "stock_receipts",
+  // Customer & engagement
   "reviews", "wishlists", "contact_messages", "sms_logs",
-  "product_external_links", "product_similar_items", "otp_verifications",
+  "product_external_links", "product_similar_items",
+  // Auth & notifications
+  "otp_verifications", "user_notifications",
+  // Coupons & wallets
   "coupon_assignments", "coupon_usage", "wallets", "wallet_transactions",
+  // Messaging & logs
   "conversations", "conversation_messages", "db_backup_logs",
 ];
 
