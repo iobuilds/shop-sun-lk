@@ -2403,7 +2403,14 @@ const AdminDashboard = () => {
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={userActionLoading}>Cancel</AlertDialogCancel>
                     <Button
-                      onClick={handleDeleteUser}
+                      onClick={async () => {
+                        if (!deleteTarget) return;
+                        setUserActionLoading(true);
+                        const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete_user", userId: deleteTarget.id } });
+                        setUserActionLoading(false);
+                        if (error) toast({ title: "Error deleting", description: error.message, variant: "destructive" });
+                        else { toast({ title: "User deleted" }); await logAdminAction("user_deleted", "user", deleteTarget.id, { name: deleteTarget.name }); setDeleteDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+                      }}
                       disabled={userActionLoading}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
