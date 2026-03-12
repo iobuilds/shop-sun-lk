@@ -97,6 +97,7 @@ const DatabaseTools = () => {
       case "full_backup": return "create a full ZIP backup";
       case "cleanup": return "clean the database";
       case "full_restore": return "restore the full site from ZIP";
+      case "schedule_backup": return "schedule an automatic backup";
       default: return "restore the database";
     }
   };
