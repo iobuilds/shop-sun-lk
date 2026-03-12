@@ -1272,11 +1272,6 @@ const AdminDashboard = () => {
   const moderatorTabs: Tab[] = ["orders", "delivery_updates"];
   const canAccessTab = (tabId: Tab) => isAdmin || moderatorTabs.includes(tabId);
 
-  // Helper to get user role
-  const getUserRole = (userId: string) => {
-    const role = userRoles?.find(r => r.user_id === userId);
-    return role?.role || "user";
-  };
 
   const activeTabData = allTabs.find(t => t.id === tab);
   const activeGroupData = sidebarGroups.find(g => g.items.some(i => i.id === tab));
