@@ -70,6 +70,19 @@ const Auth = () => {
     setOtpSending(true);
     try {
       const formattedPhone = formatPhone(phone);
+
+      // Check if phone is already registered
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("user_id")
+        .eq("phone", formattedPhone)
+        .maybeSingle();
+      if (existingProfile) {
+        toast.error("This phone number is already registered. Please log in instead.");
+        setOtpSending(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("send-sms", {
         body: {
           phone: formattedPhone,
