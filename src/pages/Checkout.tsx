@@ -270,6 +270,7 @@ const Checkout = () => {
           shipping_address: form,
           payment_method: paymentMethod,
           coupon_code: appliedCoupon?.code || null,
+          referral_code: appliedReferral?.code || null,
           wallet_amount: walletCredit > 0 ? walletCredit : null,
         },
       });
