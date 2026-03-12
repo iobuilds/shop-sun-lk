@@ -611,16 +611,7 @@ const AdminDashboard = () => {
   }, [isAdmin, isModerator, queryClient]);
 
 
-
-const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
-  allProfiles: any[];
-  selectedPhones: string;
-  onChange: (phones: string) => void;
-}) => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
-
-  const selectedList = selectedPhones.split(",").map(p => p.trim()).filter(Boolean);
+  const lowStockCount
 
   const filteredPickerUsers = useMemo(() => {
     if (!searchTerm || searchTerm.length < 2) return [];
