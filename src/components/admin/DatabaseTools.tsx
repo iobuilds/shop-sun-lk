@@ -20,7 +20,8 @@ interface BackupLog {
 interface BackupFile {
   name: string;
   created_at: string;
-  metadata: { size?: number };
+  updated_at: string;
+  metadata: { size?: number; contentLength?: number; mimetype?: string };
 }
 
 const DatabaseTools = () => {

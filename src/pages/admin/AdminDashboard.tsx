@@ -3655,9 +3655,9 @@ const AdminDashboard = () => {
 
           {/* ═══ Documentation Tab ═══ */}
           {tab === "documentation" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="animate-in fade-in duration-200">
               <AdminDocumentation />
-            </motion.div>
+            </div>
           )}
 
           {/* ═══ SMS Templates Tab ═══ */}
