@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAdminAction } from "@/lib/logAdminAction";
 import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone, BookOpen } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -937,7 +938,7 @@ const AdminDashboard = () => {
   const deleteProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Product deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); setSelectedProducts(prev => { const s = new Set(prev); s.delete(id); return s; }); }
+    else { toast({ title: "Product deleted" }); await logAdminAction("product_deleted", "product", id); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); setSelectedProducts(prev => { const s = new Set(prev); s.delete(id); return s; }); }
   };
   const toggleProductSelection = (id: string) => setSelectedProducts(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleSelectAllProducts = () => {
@@ -966,7 +967,7 @@ const AdminDashboard = () => {
     const payload: any = { name: productForm.name, slug: productForm.slug, description: productForm.description || null, price: Number(productForm.price) || 0, discount_price: productForm.discount_price ? Number(productForm.discount_price) : null, cost_price: productForm.cost_price ? Number(productForm.cost_price) : null, sku: productForm.sku || null, stock_quantity: productForm.stock_quantity ? Number(productForm.stock_quantity) : 0, category_id: productForm.category_id || null, images: productForm.images ? productForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: productForm.is_active, is_featured: productForm.is_featured, video_url: productForm.video_url || null, datasheet_url: productForm.datasheet_url || null, shipping_type: productForm.shipping_type || null, ships_from: productForm.ships_from || null, delivery_eta: productForm.delivery_eta || null };
     const { error } = editingProductId ? await supabase.from("products").update(payload).eq("id", editingProductId) : await supabase.from("products").insert(payload);
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
-    else { toast({ title: editingProductId ? "Product updated" : "Product created" }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
+    else { toast({ title: editingProductId ? "Product updated" : "Product created" }); await logAdminAction(editingProductId ? "product_updated" : "product_created", "product", editingProductId ?? undefined, { name: payload.name }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
   };
 
   // ── Category handlers ──
@@ -998,7 +999,7 @@ const AdminDashboard = () => {
   const deleteBanner = async (id: string) => {
     const { error } = await supabase.from("banners").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Banner deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+    else { toast({ title: "Banner deleted" }); await logAdminAction("banner_deleted", "banner", id); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
   };
   const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -1012,7 +1013,7 @@ const AdminDashboard = () => {
     const payload = { title: bannerForm.title, subtitle: bannerForm.subtitle || null, image_url: bannerForm.image_url, link_url: bannerForm.link_url || null, sort_order: Number(bannerForm.sort_order) || 0, is_active: bannerForm.is_active };
     const { error } = editingBannerId ? await supabase.from("banners").update(payload).eq("id", editingBannerId) : await supabase.from("banners").insert(payload);
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
-    else { toast({ title: editingBannerId ? "Banner updated" : "Banner created" }); setBannerDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+    else { toast({ title: editingBannerId ? "Banner updated" : "Banner created" }); await logAdminAction(editingBannerId ? "banner_updated" : "banner_created", "banner", editingBannerId ?? undefined, { title: payload.title }); setBannerDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
   };
 
   // ── Promo banner handlers ──
@@ -1101,7 +1102,7 @@ const AdminDashboard = () => {
   const deleteCoupon = async (id: string) => {
     const { error } = await supabase.from("coupons").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Coupon deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }); }
+    else { toast({ title: "Coupon deleted" }); await logAdminAction("coupon_deleted", "coupon", id); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }); }
   };
   const saveCoupon = async () => {
     if (!couponForm.code.trim()) return toast({ title: "Code required", variant: "destructive" });
@@ -1113,14 +1114,14 @@ const AdminDashboard = () => {
       if (editingCouponId) await (supabase as any).from("coupon_assignments").delete().eq("coupon_id", saved.id);
       await (supabase as any).from("coupon_assignments").insert(phones.map((phone: string) => ({ coupon_id: saved.id, phone, used: false })));
     }
-    toast({ title: editingCouponId ? "Coupon updated" : "Coupon created" }); setCouponDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+    toast({ title: editingCouponId ? "Coupon updated" : "Coupon created" }); await logAdminAction(editingCouponId ? "coupon_updated" : "coupon_created", "coupon", editingCouponId ?? saved?.id, { code: payload.code }); setCouponDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
   };
 
   // ── Order handlers ──
   const updateOrderStatus = async (id: string, status: string) => {
     const { error } = await supabase.from("orders").update({ status }).eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Status updated" }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+    else { toast({ title: "Status updated" }); await logAdminAction("order_status_changed", "order", id, { status }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
   };
   const updatePaymentStatus = async (id: string, payment_status: string) => {
     const { error } = await supabase.from("orders").update({ payment_status }).eq("id", id);
@@ -1138,7 +1139,7 @@ const AdminDashboard = () => {
   const deleteOrder = async (id: string) => {
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Order deleted" }); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+    else { toast({ title: "Order deleted" }); await logAdminAction("order_deleted", "order", id); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
   };
   const bulkUpdateOrderStatus = async (status: string) => {
     const ids = Array.from(selectedOrders);
@@ -1167,12 +1168,13 @@ const AdminDashboard = () => {
     const { error } = await supabase.from("profiles").update({ is_suspended: false, suspended_at: null, suspended_reason: null } as any).eq("user_id", userId);
     setUserActionLoading(false);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "User unsuspended" }); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+    else { toast({ title: "User unsuspended" }); await logAdminAction("user_unsuspended", "user", userId); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
   };
   const handleDeleteUser = (u: any) => { setDeleteTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setDeleteDialog(true); };
   const handleRoleChange = async (userId: string, role: string) => {
     await supabase.from("user_roles").delete().eq("user_id", userId);
     if (role !== "user") await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+    await logAdminAction("user_role_changed", "user", userId, { new_role: role });
     toast({ title: `Role set to ${role}` }); queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] }); setRoleDialog(false);
   };
   const handleSaveEditUser = async () => {
@@ -2375,7 +2377,14 @@ const AdminDashboard = () => {
                   </div>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleSuspendUser} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogAction onClick={async () => {
+                      if (!suspendTarget) return;
+                      setUserActionLoading(true);
+                      const { error } = await supabase.from("profiles").update({ is_suspended: true, suspended_at: new Date().toISOString(), suspended_reason: suspendReason || null } as any).eq("user_id", suspendTarget.id);
+                      setUserActionLoading(false);
+                      if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+                      else { toast({ title: "User suspended" }); await logAdminAction("user_suspended", "user", suspendTarget.id, { reason: suspendReason || "No reason given", name: suspendTarget.name }); setSuspendDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+                    }} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />} Suspend
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -2394,7 +2403,14 @@ const AdminDashboard = () => {
                   <AlertDialogFooter>
                     <AlertDialogCancel disabled={userActionLoading}>Cancel</AlertDialogCancel>
                     <Button
-                      onClick={handleDeleteUser}
+                      onClick={async () => {
+                        if (!deleteTarget) return;
+                        setUserActionLoading(true);
+                        const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete_user", userId: deleteTarget.id } });
+                        setUserActionLoading(false);
+                        if (error) toast({ title: "Error deleting", description: error.message, variant: "destructive" });
+                        else { toast({ title: "User deleted" }); await logAdminAction("user_deleted", "user", deleteTarget.id, { name: deleteTarget.name }); setDeleteDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+                      }}
                       disabled={userActionLoading}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
