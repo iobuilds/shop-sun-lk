@@ -313,7 +313,45 @@ const DatabaseTools = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isBusy = creating || creatingFull || restoring || cleaning;
+  const fetchScheduled = async () => {
+    try {
+      const data = await callBackupFn({ action: "list_scheduled" });
+      setScheduledJobs(data.jobs || []);
+      setScheduledLogs(data.logs || []);
+    } catch { /* non-critical */ }
+  };
+
+  const executeScheduleBackup = async () => {
+    if (!scheduleDate || !scheduleTime) return;
+    setScheduling(true);
+    try {
+      const [hh, mm] = scheduleTime.split(":").map(Number);
+      const dt = new Date(scheduleDate);
+      dt.setHours(hh, mm, 0, 0);
+      const data = await callBackupFn({ action: "schedule_backup", scheduled_at: dt.toISOString(), label: scheduleLabel });
+      toast({ title: "Backup scheduled", description: `Will run on ${format(dt, "PPP 'at' HH:mm")}` });
+      setScheduleDate(undefined);
+      setScheduleTime("02:00");
+      setScheduleLabel("");
+      fetchScheduled();
+    } catch (e: any) {
+      toast({ title: "Schedule failed", description: e.message, variant: "destructive" });
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const cancelScheduled = async (jobName: string) => {
+    try {
+      await callBackupFn({ action: "cancel_scheduled", job_name: jobName });
+      toast({ title: "Scheduled backup cancelled" });
+      fetchScheduled();
+    } catch (e: any) {
+      toast({ title: "Cancel failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const isBusy = creating || creatingFull || restoring || cleaning || scheduling;
 
   return (
     <div className="space-y-6">
