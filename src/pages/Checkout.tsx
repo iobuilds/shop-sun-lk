@@ -454,6 +454,17 @@ const Checkout = () => {
                         </div>
                       </label>
                     )}
+                    {payhereEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "payhere" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="payhere" />
+                        <Smartphone className="w-5 h-5 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">PayHere</p>
+                          <p className="text-xs text-muted-foreground">Visa, Master, eZ Cash, mCash, GENIE & more</p>
+                        </div>
+                        <img src="https://www.payhere.lk/downloads/images/payhere_long_banner.png" alt="PayHere" className="h-5 object-contain opacity-80" />
+                      </label>
+                    )}
                     {bankEnabled && (
                       <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "bank_transfer" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
                         <RadioGroupItem value="bank_transfer" />
