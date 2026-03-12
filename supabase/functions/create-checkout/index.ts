@@ -229,7 +229,7 @@ serve(async (req) => {
       shipping_fee = localFee;
     }
 
-    const payable_before_wallet = subtotal + shipping_fee - discount_amount;
+    const payable_before_wallet = subtotal + shipping_fee - discount_amount - referral_discount;
     // If coupon exceeds payable, calculate extra credit for wallet
     let coupon_wallet_credit = 0;
     if (payable_before_wallet < 0) {
