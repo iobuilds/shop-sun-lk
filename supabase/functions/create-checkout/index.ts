@@ -140,7 +140,49 @@ serve(async (req) => {
       await supabaseAdmin.from("coupons").update({ used_count: coupon.used_count + 1 }).eq("id", coupon.id);
     }
 
+    // Validate and apply referral code
+    let referral_discount = 0;
+    let validated_referral_code: string | null = null;
+    let referral_code_id: string | null = null;
+    if (referral_code) {
+      const { data: referral, error: refError } = await supabaseAdmin
+        .from("referral_codes")
+        .select("*")
+        .eq("code", referral_code.toUpperCase().trim())
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (refError) throw refError;
+      if (!referral) throw new Error("Invalid referral code");
+      if (referral.expires_at && new Date(referral.expires_at) < new Date()) throw new Error("Referral code has expired");
+      if (referral.max_uses && referral.used_count >= referral.max_uses) throw new Error("Referral code usage limit reached");
+      if (referral.min_order_amount && subtotal < referral.min_order_amount) throw new Error(`Minimum order Rs. ${referral.min_order_amount} required for referral code`);
+
+      if (referral.per_user_limit) {
+        const { count } = await supabaseAdmin
+          .from("referral_code_usage")
+          .select("*", { count: "exact", head: true })
+          .eq("referral_code_id", referral.id)
+          .eq("user_id", user.id);
+        if ((count || 0) >= referral.per_user_limit) throw new Error("You have already used this referral code the maximum number of times");
+      }
+
+      if (referral.discount_type === "percentage") {
+        referral_discount = Math.round(subtotal * (referral.discount_value / 100));
+        if (referral.max_discount_cap && referral_discount > referral.max_discount_cap) {
+          referral_discount = referral.max_discount_cap;
+        }
+      } else {
+        referral_discount = Math.min(referral.discount_value, subtotal);
+      }
+
+      validated_referral_code = referral.code;
+      referral_code_id = referral.id;
+      await supabaseAdmin.from("referral_codes").update({ used_count: referral.used_count + 1 }).eq("id", referral.id);
+    }
+
     // Wallet credit usage
+
     let wallet_deduction = 0;
     if (wallet_amount && wallet_amount > 0) {
       const { data: wallet } = await supabaseAdmin
