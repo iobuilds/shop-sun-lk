@@ -544,10 +544,17 @@ const Checkout = () => {
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary">
-                        <span>Discount</span>
+                        <span>Coupon Discount</span>
                         <span>-Rs. {Math.min(discount, subtotal + shipping).toLocaleString()}</span>
                       </div>
                     )}
+                    {referralDiscount > 0 && (
+                      <div className="flex justify-between text-secondary">
+                        <span>Referral Discount</span>
+                        <span>-Rs. {referralDiscount.toLocaleString()}</span>
+                      </div>
+                    )}
+
                     {appliedCoupon?.category_message && (
                       <p className="text-[10px] text-amber-600">{appliedCoupon.category_message}</p>
                     )}
