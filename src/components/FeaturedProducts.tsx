@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ShoppingCart, Star, Heart, Truck, Package } from "lucide-react";
+import { ShoppingCart, Star, Heart, Truck, Package, Zap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 import type { Tables } from "@/integrations/supabase/types";
@@ -13,19 +13,22 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const saved = product.discount_price ? product.discount_price - product.price : 0;
+  const inStock = (product.stock_quantity || 0) > 0;
+  const lowStock = inStock && (product.stock_quantity || 0) <= 5;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      transition={{ delay: index * 0.06, duration: 0.4 }}
+      transition={{ delay: index * 0.05, duration: 0.4 }}
+      className="group"
     >
       <Link
         to={`/product/${product.slug}`}
-        className="group bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block"
+        className="bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block h-full hover:border-secondary/40 transition-colors duration-200"
       >
-        <div className="relative overflow-hidden">
+        <div className="relative overflow-hidden bg-muted/20">
           <img
             src={product.images?.[0] || "/placeholder.svg"}
             alt={product.name}
@@ -37,22 +40,27 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
               Featured
             </span>
           )}
+          {!inStock && (
+            <div className="absolute inset-0 bg-card/60 flex items-center justify-center">
+              <span className="bg-muted text-muted-foreground text-xs font-semibold px-3 py-1 rounded-full">Out of Stock</span>
+            </div>
+          )}
           <button
             onClick={(e) => { e.preventDefault(); toggleWishlist(product.id); }}
-            className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 ${
+            className={`absolute top-2 right-2 w-8 h-8 rounded-full bg-card/80 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-sm ${
               isInWishlist(product.id) ? "text-destructive" : "text-muted-foreground hover:text-destructive"
             }`}
           >
             <Heart className={`w-4 h-4 ${isInWishlist(product.id) ? "fill-current" : ""}`} />
           </button>
           {saved > 0 && (
-            <span className="absolute bottom-2 left-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-2 py-0.5 rounded-md">
+            <span className="absolute bottom-2 left-2 bg-destructive/90 text-destructive-foreground text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
               Save Rs. {saved.toLocaleString()}
             </span>
           )}
         </div>
         <div className="p-3">
-          <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1.5 min-h-[2.5rem] group-hover:text-secondary transition-colors">
+          <h3 className="text-sm font-medium text-foreground line-clamp-2 mb-1.5 min-h-[2.5rem] group-hover:text-secondary transition-colors duration-200">
             {product.name}
           </h3>
           <div className="flex items-center gap-1 mb-1.5">
@@ -66,24 +74,22 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
             </div>
             <span className="text-[10px] text-muted-foreground">({product.review_count || 0})</span>
           </div>
-          {/* Shipping & Stock Info */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2 text-[10px]">
-            <span className="flex items-center gap-0.5 text-muted-foreground">
-              🇱🇰 Local
-            </span>
+          {/* Stock & Delivery */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2.5 text-[10px]">
             <span className="flex items-center gap-0.5 text-secondary">
               <Truck className="w-3 h-3" />
               {product.price >= 5000 ? "Free Delivery" : "Rs. 350"}
             </span>
-            <span className="text-muted-foreground">ETA: 2-4 days</span>
-            <span className={`flex items-center gap-0.5 ${
-              (product.stock_quantity || 0) <= 0 ? "text-destructive" :
-              (product.stock_quantity || 0) <= 5 ? "text-accent" : "text-muted-foreground"
-            }`}>
-              <Package className="w-3 h-3" />
-              {(product.stock_quantity || 0) <= 0 ? "Out of Stock" :
-               (product.stock_quantity || 0) <= 5 ? `Only ${product.stock_quantity} left` : "In Stock"}
-            </span>
+            {lowStock ? (
+              <span className="flex items-center gap-0.5 text-accent-foreground font-semibold">
+                <Zap className="w-3 h-3" />
+                Only {product.stock_quantity} left!
+              </span>
+            ) : inStock ? (
+              <span className="flex items-center gap-0.5 text-muted-foreground">
+                <Package className="w-3 h-3" /> In Stock
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -97,6 +103,7 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
             <button
               onClick={(e) => {
                 e.preventDefault();
+                if (!inStock) return;
                 addItem({
                   id: product.id,
                   name: product.name,
@@ -105,8 +112,8 @@ const ProductCard = ({ product, index }: { product: Product; index: number }) =>
                   slug: product.slug,
                 });
               }}
-              disabled={(product.stock_quantity || 0) <= 0}
-              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!inStock}
+              className="w-9 h-9 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-secondary hover:text-secondary-foreground transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
             >
               <ShoppingCart className="w-4 h-4" />
             </button>
@@ -136,8 +143,11 @@ const FeaturedProducts = () => {
   return (
     <section>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold font-display text-foreground">Featured Products</h2>
-        <Link to="/products" className="text-sm text-secondary hover:text-secondary/80 font-medium transition-colors">
+        <div>
+          <h2 className="text-2xl font-bold font-display text-foreground">Featured Products</h2>
+          <p className="text-sm text-muted-foreground mt-1">Hand-picked for quality & value</p>
+        </div>
+        <Link to="/search" className="text-sm text-secondary hover:text-secondary/80 font-medium transition-colors">
           View All →
         </Link>
       </div>
