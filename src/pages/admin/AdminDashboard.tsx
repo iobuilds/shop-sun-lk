@@ -28,6 +28,7 @@ import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager"
 import QRStockScanner from "@/components/admin/QRStockScanner";
 import AdminPreOrders from "@/components/admin/AdminPreOrders";
 import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
+import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
 
 type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders";
 
