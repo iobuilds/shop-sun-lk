@@ -89,6 +89,7 @@ const ReferralCodesManager = () => {
       code: rc.code,
       name: rc.name || "",
       description: rc.description || "",
+      code_purpose: rc.code_purpose || "discount",
       discount_type: rc.discount_type,
       discount_value: String(rc.discount_value),
       max_discount_cap: rc.max_discount_cap ? String(rc.max_discount_cap) : "",
