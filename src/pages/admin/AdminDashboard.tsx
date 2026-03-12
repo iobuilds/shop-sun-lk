@@ -707,6 +707,7 @@ const AdminDashboard = () => {
       items: [
         { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+        { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
       ],
     },
   ];
