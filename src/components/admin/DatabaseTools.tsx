@@ -177,14 +177,16 @@ const DatabaseTools = () => {
     setRestoring(true);
     setConfirmUploadFullRestore(false);
     try {
-      // Upload the ZIP file to db-backups first
       const tempName = `upload-restore-${Date.now()}.zip`;
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
 
+      // Convert ZIP to base64 and upload via edge function (avoids direct storage auth issues)
       const arrayBuffer = await uploadedZipFile.arrayBuffer();
-      const { error: upErr } = await supabase.storage.from("db-backups").upload(tempName, new Uint8Array(arrayBuffer), { contentType: "application/zip", upsert: false });
-      if (upErr) throw new Error("Failed to upload ZIP: " + upErr.message);
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary);
+
+      await callBackupFn({ action: "upload_zip", file_name: tempName, file_data: base64 });
 
       // Now call full_restore with that file
       const data = await callBackupFn({ action: "full_restore", file_name: tempName });
