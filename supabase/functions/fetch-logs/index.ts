@@ -47,9 +47,10 @@ serve(async (req) => {
     const endTime = new Date();
     const startTime = new Date(endTime.getTime() - hours * 60 * 60 * 1000);
 
-    // Try Supabase Management Analytics API for real logs
     let logs: any[] = [];
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Use the Supabase Management API token (personal access token from supabase.com/dashboard/account/tokens)
+    const managementToken = Deno.env.get("MANAGEMENT_API_TOKEN") ?? "";
 
     // SQL queries for different log types
     const sqlQueries: Record<string, string> = {
@@ -129,98 +130,109 @@ serve(async (req) => {
     const analyticsType = log_type === "api" ? "api" : log_type === "edge" ? "edge" : log_type;
     const sql = sqlQueries[analyticsType] || sqlQueries["api"];
 
-    // Call Supabase Management Analytics API
-    const analyticsRes = await fetch(
-      `https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({ sql }),
-      }
-    );
+    // Call Supabase Management Analytics API using the personal access token
+    if (managementToken) {
+      const analyticsRes = await fetch(
+        `https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${managementToken}`,
+          },
+          body: JSON.stringify({ sql }),
+        }
+      );
 
-    if (analyticsRes.ok) {
-      const analyticsData = await analyticsRes.json();
-      const rawRows = analyticsData?.result ?? [];
+      if (analyticsRes.ok) {
+        const analyticsData = await analyticsRes.json();
+        const rawRows = analyticsData?.result ?? [];
 
-      if (analyticsType === "api") {
-        logs = rawRows.map((row: any) => {
-          const msg = row.event_message || "";
-          // Parse event_message format: "METHOD | STATUS | IP | ID | URL"
-          const parts = msg.split(" | ");
-          const method = parts[0]?.trim() || row.method || "GET";
-          const status = parts[1]?.trim() || row.status || "200";
-          const ip = parts[2]?.trim() || row.ip_address || null;
-          const reqId = parts[3]?.trim() || null;
-          const fullUrl = parts[4]?.trim() || "";
-          const path = fullUrl ? new URL(fullUrl).pathname + (new URL(fullUrl).search || "") : row.path || "";
-          return {
+        if (analyticsType === "api") {
+          logs = rawRows.map((row: any) => {
+            const msg = row.event_message || "";
+            const parts = msg.split(" | ");
+            const method = parts[0]?.trim() || row.method || "GET";
+            const status = parts[1]?.trim() || row.status || "200";
+            const ip = parts[2]?.trim() || row.ip_address || null;
+            const reqId = parts[3]?.trim() || null;
+            const fullUrl = parts[4]?.trim() || "";
+            let path = row.path || "";
+            try {
+              if (fullUrl) path = new URL(fullUrl).pathname + (new URL(fullUrl).search || "");
+            } catch (_) {}
+            return {
+              id: row.id,
+              timestamp: new Date(row.timestamp / 1000).toISOString(),
+              level: parseInt(status) >= 400 ? "error" : "info",
+              event_message: msg,
+              method,
+              status,
+              path,
+              ip,
+              req_id: reqId,
+              source: "api",
+            };
+          });
+        } else if (analyticsType === "edge") {
+          logs = rawRows.map((row: any) => {
+            const msg = row.event_message || "";
+            const parts = msg.split(" | ");
+            const method = parts[0]?.trim() || row.method || "POST";
+            const status = parts[1]?.trim() || row.status_code?.toString() || "200";
+            const ip = parts[2]?.trim() || null;
+            let path = "";
+            try {
+              if (parts[4]) path = new URL(parts[4].trim()).pathname;
+            } catch (_) {}
+            return {
+              id: row.id,
+              timestamp: new Date(row.timestamp / 1000).toISOString(),
+              level: parseInt(status) >= 400 ? "error" : "info",
+              event_message: msg,
+              method,
+              status,
+              path,
+              ip,
+              execution_ms: row.execution_time_ms,
+              function_id: row.function_id,
+              source: "edge",
+            };
+          });
+        } else if (analyticsType === "postgres") {
+          logs = rawRows.map((row: any) => ({
             id: row.id,
             timestamp: new Date(row.timestamp / 1000).toISOString(),
-            level: "info",
-            event_message: msg,
-            method,
-            status,
-            path,
-            ip,
-            req_id: reqId,
-            source: "api",
-          };
-        });
-      } else if (analyticsType === "edge") {
-        logs = rawRows.map((row: any) => {
-          const msg = row.event_message || "";
-          const parts = msg.split(" | ");
-          const method = parts[0]?.trim() || row.method || "POST";
-          const status = parts[1]?.trim() || row.status_code?.toString() || "200";
-          const ip = parts[2]?.trim() || null;
-          const path = parts[4] ? new URL(parts[4].trim()).pathname : "";
-          return {
+            level: row.error_severity === "ERROR" ? "error" : "info",
+            event_message: row.event_message || row.query || "",
+            method: "SQL",
+            status: row.error_severity === "ERROR" ? "500" : "200",
+            path: row.query ? row.query.slice(0, 60) : "",
+            ip: null,
+            source: "postgres",
+            details: { query: row.query, detail: row.detail, hint: row.hint, duration_ms: row.duration_ms },
+          }));
+        } else if (analyticsType === "auth") {
+          logs = rawRows.map((row: any) => ({
             id: row.id,
             timestamp: new Date(row.timestamp / 1000).toISOString(),
-            level: parseInt(status) >= 400 ? "error" : "info",
-            event_message: msg,
-            method,
-            status,
-            path,
-            ip,
-            execution_ms: row.execution_time_ms,
-            function_id: row.function_id,
-            source: "edge",
-          };
-        });
-      } else if (analyticsType === "postgres") {
-        logs = rawRows.map((row: any) => ({
-          id: row.id,
-          timestamp: new Date(row.timestamp / 1000).toISOString(),
-          level: row.error_severity === "ERROR" ? "error" : "info",
-          event_message: row.event_message || row.query || "",
-          method: "SQL",
-          status: row.error_severity === "ERROR" ? "500" : "200",
-          path: row.query ? row.query.slice(0, 60) : "",
-          ip: null,
-          source: "postgres",
-          details: { query: row.query, detail: row.detail, hint: row.hint, duration_ms: row.duration_ms },
-        }));
-      } else if (analyticsType === "auth") {
-        logs = rawRows.map((row: any) => ({
-          id: row.id,
-          timestamp: new Date(row.timestamp / 1000).toISOString(),
-          level: row.level === "error" ? "error" : "info",
-          event_message: row.event_message || row.msg || "",
-          method: row.method || "POST",
-          status: row.status?.toString() || "200",
-          path: row.path || "/auth/v1",
-          ip: null,
-          source: "auth",
-        }));
+            level: row.level === "error" ? "error" : "info",
+            event_message: row.event_message || row.msg || "",
+            method: row.method || "POST",
+            status: row.status?.toString() || "200",
+            path: row.path || "/auth/v1",
+            ip: null,
+            source: "auth",
+          }));
+        }
+      } else {
+        // Log error for debugging
+        const errText = await analyticsRes.text();
+        console.error("Management API error:", analyticsRes.status, errText);
       }
     }
 
-    // If analytics API returned nothing, fall back to our own tables
+    // If analytics API returned nothing (no token or no results), fall back to our own tables
     if (logs.length === 0) {
       const [actRes, smsRes] = await Promise.all([
         supabaseAdmin
@@ -276,7 +288,7 @@ serve(async (req) => {
 
     logs = logs.slice(0, limit);
 
-    return new Response(JSON.stringify({ success: true, logs, count: logs.length }), {
+    return new Response(JSON.stringify({ success: true, logs, count: logs.length, has_management_token: !!managementToken }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });

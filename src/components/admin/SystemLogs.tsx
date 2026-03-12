@@ -78,7 +78,7 @@ function LogRow({ log }: { log: LogEntry }) {
         </td>
         {/* Level/Source badge */}
         <td className="px-3 py-2 whitespace-nowrap">
-          <Badge variant="outline" className="text-xs font-mono font-bold bg-sky-500/10 text-sky-500 border-sky-500/20">
+          <Badge variant="outline" className="text-xs font-mono font-bold bg-primary/10 text-primary border-primary/20">
             LOG
           </Badge>
         </td>
@@ -146,6 +146,7 @@ const LOG_TYPES = [
 
 const SystemLogs = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [hasManagementToken, setHasManagementToken] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [hours, setHours] = useState("1");
@@ -161,6 +162,9 @@ const SystemLogs = () => {
       });
       if (error) throw error;
       setLogs(data?.logs || []);
+      if (data?.has_management_token !== undefined) {
+        setHasManagementToken(data.has_management_token);
+      }
     } catch (err: any) {
       console.error("Failed to fetch logs:", err);
     } finally {
@@ -222,6 +226,14 @@ const SystemLogs = () => {
             Logs
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">Debug errors and track activity in your app.</p>
+          {hasManagementToken === false && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              ⚠️ Management API token missing — showing fallback logs only (activity &amp; SMS logs). Real API/Auth/Postgres logs require a valid token.
+            </p>
+          )}
+          {hasManagementToken === true && (
+            <p className="text-xs text-primary mt-1">✓ Connected to Supabase Analytics API — showing real logs.</p>
+          )}
         </div>
       </div>
 
