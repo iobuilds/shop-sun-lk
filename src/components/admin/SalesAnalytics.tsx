@@ -9,6 +9,20 @@ interface SalesAnalyticsProps {
   products: any[];
 }
 
+const downloadCSV = (data: any[], filename: string) => {
+  if (!data.length) return;
+  const headers = Object.keys(data[0]);
+  const rows = data.map(row => headers.map(h => JSON.stringify(row[h] ?? "")).join(","));
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 const SalesAnalytics = ({ orders, products }: SalesAnalyticsProps) => {
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("daily");
 
