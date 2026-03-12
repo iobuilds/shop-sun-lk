@@ -2372,27 +2372,25 @@ const AdminDashboard = () => {
                       size="sm"
                       className="justify-start gap-2"
                       disabled={roleTarget?.currentRole === "admin" || userActionLoading}
-                      onClick={() => handleRoleChange("admin")}
+                      onClick={() => roleTarget && handleRoleChange(roleTarget.id, "admin")}
                     >
                       <Shield className="w-4 h-4" /> Admin
-                      <span className="text-xs text-muted-foreground ml-auto">Full access to everything</span>
                     </Button>
                     <Button
-                      variant={roleTarget?.currentRole === "moderator" ? "default" : "outline"}
+                      variant="outline"
                       size="sm"
                       className="justify-start gap-2"
                       disabled={roleTarget?.currentRole === "moderator" || userActionLoading}
-                      onClick={() => handleRoleChange("moderator")}
+                      onClick={() => roleTarget && handleRoleChange(roleTarget.id, "moderator")}
                     >
                       <Shield className="w-4 h-4" /> Moderator
-                      <span className="text-xs text-muted-foreground ml-auto">Manage orders only</span>
                     </Button>
                     <Button
-                      variant={roleTarget?.currentRole === "user" ? "default" : "outline"}
+                      variant="outline"
                       size="sm"
                       className="justify-start gap-2"
                       disabled={roleTarget?.currentRole === "user" || userActionLoading}
-                      onClick={() => handleRoleChange("user")}
+                      onClick={() => roleTarget && handleRoleChange(roleTarget.id, "user")}
                     >
                       <Users className="w-4 h-4" /> User
                       <span className="text-xs text-muted-foreground ml-auto">No admin access</span>
