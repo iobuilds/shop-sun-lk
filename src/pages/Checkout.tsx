@@ -48,6 +48,11 @@ const Checkout = () => {
   const [useWallet, setUseWallet] = useState(false);
   const [showCoupons, setShowCoupons] = useState(false);
 
+  // Referral code state
+  const [referralCode, setReferralCode] = useState("");
+  const [appliedReferral, setAppliedReferral] = useState<{ code: string; discount: number; name?: string } | null>(null);
+  const [validatingReferral, setValidatingReferral] = useState(false);
+
   // Available coupons
   const { data: availableCoupons } = useQuery({
     queryKey: ["checkout-available-coupons", session?.user?.id, subtotal],
