@@ -1,10 +1,11 @@
 import { useState, useEffect, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { ShoppingCart, Clock } from "lucide-react";
+import { ShoppingCart, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Link, useNavigate } from "react-router-dom";
+import { useCart } from "@/contexts/CartContext";
 
 const CountdownTimer = forwardRef<HTMLDivElement, { endsAt: string }>(({ endsAt }, _ref) => {
   const [timeLeft, setTimeLeft] = useState({ h: 0, m: 0, s: 0 });
@@ -26,7 +27,7 @@ const CountdownTimer = forwardRef<HTMLDivElement, { endsAt: string }>(({ endsAt 
   return (
     <div className="flex items-center gap-1 text-xs font-mono">
       <Clock className="w-3 h-3 text-destructive" />
-      <span className="text-destructive font-semibold">
+      <span className="text-destructive font-bold tabular-nums">
         {String(timeLeft.h).padStart(2, "0")}:{String(timeLeft.m).padStart(2, "0")}:{String(timeLeft.s).padStart(2, "0")}
       </span>
     </div>
@@ -36,6 +37,8 @@ CountdownTimer.displayName = "CountdownTimer";
 
 const DailyDeals = () => {
   const navigate = useNavigate();
+  const { addItem } = useCart();
+
   const { data: deals, isLoading } = useQuery({
     queryKey: ["daily-deals"],
     queryFn: async () => {
@@ -79,12 +82,15 @@ const DailyDeals = () => {
     <section>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold font-display text-foreground">🔥 Daily Deals</h2>
-          <span className="text-xs font-medium text-destructive bg-destructive/10 px-2.5 py-1 rounded-full">
+          <div className="flex items-center gap-2">
+            <Flame className="w-6 h-6 text-destructive" />
+            <h2 className="text-2xl font-bold font-display text-foreground">Daily Deals</h2>
+          </div>
+          <span className="text-xs font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2.5 py-1 rounded-full animate-pulse">
             Limited Time
           </span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => navigate("/deals")} className="text-secondary hover:text-secondary/80">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/deals")} className="text-secondary hover:text-secondary/80 font-medium">
           View All →
         </Button>
       </div>
@@ -93,6 +99,7 @@ const DailyDeals = () => {
           const product = deal.products as any;
           if (!product) return null;
           const originalPrice = product.discount_price || product.price;
+          const dealPrice = deal.deal_price || product.price;
 
           return (
             <motion.div
@@ -100,11 +107,12 @@ const DailyDeals = () => {
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1, duration: 0.4 }}
+              transition={{ delay: i * 0.08, duration: 0.4 }}
+              className="group"
             >
               <Link
                 to={`/product/${product.slug}`}
-                className="group bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block"
+                className="bg-card rounded-xl border border-border card-elevated overflow-hidden cursor-pointer block h-full"
               >
                 <div className="relative overflow-hidden">
                   <img
@@ -113,18 +121,17 @@ const DailyDeals = () => {
                     className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
                   />
-                  <span className="absolute top-2 left-2 deal-gradient text-secondary-foreground text-xs font-bold px-2 py-1 rounded-md">
+                  <span className="absolute top-2 left-2 deal-gradient text-white text-xs font-bold px-2.5 py-1 rounded-md shadow-md">
                     -{deal.discount_percent}%
                   </span>
                 </div>
                 <div className="p-3">
-                  <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Deal</p>
-                  <h3 className="text-sm font-semibold text-foreground line-clamp-2 mb-2 group-hover:text-secondary transition-colors">
+                  <h3 className="text-sm font-semibold text-foreground line-clamp-2 mb-2 group-hover:text-secondary transition-colors min-h-[2.5rem]">
                     {product.name}
                   </h3>
-                  <div className="flex items-baseline gap-2 mb-2">
+                  <div className="flex items-baseline gap-2 mb-2.5">
                     <span className="text-base font-bold text-foreground">
-                      Rs. {(deal.deal_price || product.price).toLocaleString()}
+                      Rs. {dealPrice.toLocaleString()}
                     </span>
                     <span className="text-xs text-muted-foreground line-through">
                       Rs. {originalPrice.toLocaleString()}
@@ -133,7 +140,16 @@ const DailyDeals = () => {
                   <div className="flex items-center justify-between">
                     <CountdownTimer endsAt={deal.ends_at} />
                     <button
-                      onClick={(e) => e.preventDefault()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        addItem({
+                          id: product.id,
+                          name: product.name,
+                          price: dealPrice,
+                          image: product.images?.[0] || "/placeholder.svg",
+                          slug: product.slug,
+                        });
+                      }}
                       className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary/10 text-secondary hover:bg-secondary hover:text-secondary-foreground transition-all duration-300"
                     >
                       <ShoppingCart className="w-4 h-4" />

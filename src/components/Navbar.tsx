@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
@@ -434,35 +434,27 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Category nav — justified */}
-      <div className="hidden md:block border-t border-border">
+      {/* Category nav */}
+      <div className="hidden md:block border-t border-border bg-card/50">
         <div className="container mx-auto px-4">
-          <nav className="flex items-center justify-between h-11">
-            <div className="flex items-center gap-0.5">
-              <div className="group relative">
-                <button className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-foreground hover:text-secondary transition-colors">
-                  All Categories
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              </div>
+          <nav className="flex items-center justify-between h-10">
+            <div className="flex items-center gap-0">
               {navCategories.map((cat) => (
                 <Link
                   key={cat.slug}
                   to={`/category/${cat.slug}`}
-                  className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors whitespace-nowrap"
+                  className="px-3 h-10 flex items-center text-[13px] text-muted-foreground hover:text-secondary hover:bg-secondary/5 transition-all duration-150 whitespace-nowrap font-medium"
                 >
                   {cat.name}
                 </Link>
               ))}
-
-              {/* Custom links from admin config */}
               {visibleCustomLinks.map((link) => (
                 <a
                   key={link.id}
                   href={link.url}
                   target={link.external ? "_blank" : undefined}
                   rel={link.external ? "noopener noreferrer" : undefined}
-                  className="px-3 py-2 text-sm text-muted-foreground hover:text-secondary transition-colors flex items-center gap-1 whitespace-nowrap"
+                  className="px-3 h-10 flex items-center gap-1 text-[13px] text-muted-foreground hover:text-secondary hover:bg-secondary/5 transition-all duration-150 whitespace-nowrap font-medium"
                 >
                   {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
                   {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
@@ -477,14 +469,14 @@ const Navbar = () => {
               {config.show_daily_deals && (
                 <Link
                   to="/deals"
-                  className="px-3 py-2 text-sm font-semibold text-destructive hover:text-destructive/80 transition-colors flex items-center gap-1 whitespace-nowrap"
+                  className="px-3 h-10 flex items-center gap-1 text-[13px] font-semibold text-destructive hover:bg-destructive/5 transition-all duration-150 whitespace-nowrap"
                 >
-                  🔥 Daily Deals
+                  🔥 Deals
                 </Link>
               )}
               <Link
                 to="/pre-order"
-                className="px-3 py-1.5 text-sm font-semibold text-secondary-foreground bg-secondary hover:bg-secondary/90 transition-colors rounded-md flex items-center gap-1 whitespace-nowrap"
+                className="mx-2 px-3 py-1.5 text-[13px] font-semibold text-secondary-foreground bg-secondary hover:bg-secondary/90 transition-colors duration-150 rounded-md flex items-center gap-1 whitespace-nowrap shadow-sm"
               >
                 📦 Pre-Order
               </Link>

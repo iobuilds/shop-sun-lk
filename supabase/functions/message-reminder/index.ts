@@ -79,8 +79,6 @@ serve(async (req) => {
       const smsMessage = `NanoCircuit.lk: You have a new message from support. Please check your dashboard messages.`;
       
       const textlkApiKey = Deno.env.get("TEXTLK_API_KEY");
-      const textlkSenderId = Deno.env.get("TEXTLK_SENDER_ID");
-
       if (textlkApiKey) {
         try {
           const smsResponse = await fetch("https://app.text.lk/api/v3/sms/send", {
@@ -91,7 +89,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               recipient: profile.phone,
-              sender_id: textlkSenderId,
+              sender_id: "IO Builds",
               message: smsMessage,
             }),
           });

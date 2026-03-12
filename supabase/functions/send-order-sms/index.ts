@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
-const textlkSenderId = Deno.env.get("TEXTLK_SENDER_ID");
+const SENDER_ID = "IO Builds";
 
 const STATUS_TEMPLATE_MAP: Record<string, string> = {
   pending: "order_placed",
@@ -138,7 +138,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         recipient: phone,
-        sender_id: textlkSenderId,
+        sender_id: SENDER_ID,
         type: "plain",
         message: finalMessage,
       }),
