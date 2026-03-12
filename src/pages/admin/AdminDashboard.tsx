@@ -1252,6 +1252,12 @@ const AdminDashboard = () => {
     else { toast({ title: "All SMS logs cleared" }); queryClient.invalidateQueries({ queryKey: ["admin-sms-logs"] }); }
   };
 
+  // Helper to get user role — must be defined before early returns
+  const getUserRole = (userId: string) => {
+    const role = userRoles?.find(r => r.user_id === userId);
+    return role?.role || "user";
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
