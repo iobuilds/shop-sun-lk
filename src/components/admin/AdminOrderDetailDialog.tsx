@@ -99,7 +99,11 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
 
   const handleDownloadInvoice = () => {
     if (!order) return;
-    generateAdminInvoice(order, companySettings);
+    generateAdminInvoice({
+      ...order,
+      referral_code: referralUsage?.code || null,
+      referral_discount: referralUsage?.discount_applied || 0,
+    }, companySettings);
   };
 
   if (!order) return null;
