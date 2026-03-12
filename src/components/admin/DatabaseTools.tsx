@@ -179,16 +179,21 @@ const DatabaseTools = () => {
     try {
       const tempName = `upload-restore-${Date.now()}.zip`;
 
-      // Convert ZIP to base64 and upload via edge function (avoids direct storage auth issues)
-      const arrayBuffer = await uploadedZipFile.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-      const base64 = btoa(binary);
+      // Step 1: Get a signed upload URL from the edge function (avoids base64 size limits)
+      const { url: signedUploadUrl } = await callBackupFn({ action: "get_upload_url", file_name: tempName });
 
-      await callBackupFn({ action: "upload_zip", file_name: tempName, file_data: base64 });
+      // Step 2: Upload the ZIP directly to storage via signed URL
+      const uploadRes = await fetch(signedUploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/zip" },
+        body: uploadedZipFile,
+      });
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        throw new Error(`Storage upload failed: ${errText}`);
+      }
 
-      // Now call full_restore with that file
+      // Step 3: Trigger the restore
       const data = await callBackupFn({ action: "full_restore", file_name: tempName });
       toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${data.restored_files} storage files restored.` });
       fetchBackups();
