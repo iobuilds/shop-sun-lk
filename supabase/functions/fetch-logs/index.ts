@@ -41,52 +41,187 @@ serve(async (req) => {
     const body = await req.json();
     const { log_type = "api", search = "", hours = 1, limit = 100 } = body;
 
-    // Fetch logs from Supabase Management API
     const projectRef = Deno.env.get("SUPABASE_URL")?.match(/https:\/\/([^.]+)\./)?.[1];
     if (!projectRef) throw new Error("Could not determine project ref");
 
-    // Use service role key as the management token for self-hosted, 
-    // or fall back to querying internal logs tables
-    // For Lovable Cloud (managed Supabase), we query the postgres logs via SQL
     const endTime = new Date();
     const startTime = new Date(endTime.getTime() - hours * 60 * 60 * 1000);
 
+    // Try Supabase Management Analytics API for real logs
     let logs: any[] = [];
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    if (log_type === "edge") {
-      // Edge function logs from edge_logs table (available in managed Supabase)
-      const { data, error } = await supabaseAdmin
-        .rpc("get_edge_logs" as any, {
-          p_limit: limit,
-          p_start: startTime.toISOString(),
-          p_end: endTime.toISOString(),
-          p_search: search || null,
-        })
-        .select();
+    // SQL queries for different log types
+    const sqlQueries: Record<string, string> = {
+      api: `
+        SELECT
+          id,
+          timestamp,
+          event_message,
+          m.method,
+          m.status_code::text as status,
+          m.path,
+          m.search,
+          m.referer,
+          m.ip_address
+        FROM edge_logs
+        CROSS JOIN unnest(metadata) as m
+        WHERE timestamp >= ${startTime.getTime() * 1000}
+          AND timestamp <= ${endTime.getTime() * 1000}
+        ORDER BY timestamp DESC
+        LIMIT ${limit}
+      `,
+      postgres: `
+        SELECT
+          id,
+          postgres_logs.timestamp,
+          event_message,
+          parsed.error_severity,
+          parsed.query,
+          parsed.detail,
+          parsed.hint,
+          parsed.duration_ms
+        FROM postgres_logs
+        CROSS JOIN unnest(metadata) as m
+        CROSS JOIN unnest(m.parsed) as parsed
+        WHERE timestamp >= ${startTime.getTime() * 1000}
+          AND timestamp <= ${endTime.getTime() * 1000}
+        ORDER BY timestamp DESC
+        LIMIT ${limit}
+      `,
+      auth: `
+        SELECT
+          id,
+          auth_logs.timestamp,
+          event_message,
+          metadata.level,
+          metadata.status,
+          metadata.path,
+          metadata.msg,
+          metadata.error
+        FROM auth_logs
+        CROSS JOIN unnest(metadata) as metadata
+        WHERE timestamp >= ${startTime.getTime() * 1000}
+          AND timestamp <= ${endTime.getTime() * 1000}
+        ORDER BY timestamp DESC
+        LIMIT ${limit}
+      `,
+      edge: `
+        SELECT
+          id,
+          function_edge_logs.timestamp,
+          event_message,
+          response.status_code,
+          request.method,
+          m.function_id,
+          m.execution_time_ms
+        FROM function_edge_logs
+        CROSS JOIN unnest(metadata) as m
+        CROSS JOIN unnest(m.response) as response
+        CROSS JOIN unnest(m.request) as request
+        WHERE timestamp >= ${startTime.getTime() * 1000}
+          AND timestamp <= ${endTime.getTime() * 1000}
+        ORDER BY timestamp DESC
+        LIMIT ${limit}
+      `,
+    };
 
-      if (error) {
-        // Fallback: return recent activity logs as substitute
-        const { data: actLogs } = await supabaseAdmin
-          .from("admin_activity_logs")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(limit);
-        logs = (actLogs || []).map((l: any) => ({
-          id: l.id,
-          timestamp: l.created_at,
-          level: "info",
-          event_message: `[${l.action}] by ${l.admin_email || l.admin_id} — target: ${l.target_type || ""}:${l.target_id || ""}`,
-          method: "LOG",
-          status: "200",
-          path: `/${l.action}`,
-          ip: l.ip_address || null,
-        }));
-      } else {
-        logs = data || [];
+    const analyticsType = log_type === "api" ? "api" : log_type === "edge" ? "edge" : log_type;
+    const sql = sqlQueries[analyticsType] || sqlQueries["api"];
+
+    // Call Supabase Management Analytics API
+    const analyticsRes = await fetch(
+      `https://api.supabase.com/v1/projects/${projectRef}/analytics/endpoints/logs.all`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ sql }),
       }
-    } else {
-      // API / Postgres logs — use postgres_logs or fallback to sms_logs + activity combined
-      // For self-hosted VPS, we compose from our own audit tables
+    );
+
+    if (analyticsRes.ok) {
+      const analyticsData = await analyticsRes.json();
+      const rawRows = analyticsData?.result ?? [];
+
+      if (analyticsType === "api") {
+        logs = rawRows.map((row: any) => {
+          const msg = row.event_message || "";
+          // Parse event_message format: "METHOD | STATUS | IP | ID | URL"
+          const parts = msg.split(" | ");
+          const method = parts[0]?.trim() || row.method || "GET";
+          const status = parts[1]?.trim() || row.status || "200";
+          const ip = parts[2]?.trim() || row.ip_address || null;
+          const reqId = parts[3]?.trim() || null;
+          const fullUrl = parts[4]?.trim() || "";
+          const path = fullUrl ? new URL(fullUrl).pathname + (new URL(fullUrl).search || "") : row.path || "";
+          return {
+            id: row.id,
+            timestamp: new Date(row.timestamp / 1000).toISOString(),
+            level: "info",
+            event_message: msg,
+            method,
+            status,
+            path,
+            ip,
+            req_id: reqId,
+            source: "api",
+          };
+        });
+      } else if (analyticsType === "edge") {
+        logs = rawRows.map((row: any) => {
+          const msg = row.event_message || "";
+          const parts = msg.split(" | ");
+          const method = parts[0]?.trim() || row.method || "POST";
+          const status = parts[1]?.trim() || row.status_code?.toString() || "200";
+          const ip = parts[2]?.trim() || null;
+          const path = parts[4] ? new URL(parts[4].trim()).pathname : "";
+          return {
+            id: row.id,
+            timestamp: new Date(row.timestamp / 1000).toISOString(),
+            level: parseInt(status) >= 400 ? "error" : "info",
+            event_message: msg,
+            method,
+            status,
+            path,
+            ip,
+            execution_ms: row.execution_time_ms,
+            function_id: row.function_id,
+            source: "edge",
+          };
+        });
+      } else if (analyticsType === "postgres") {
+        logs = rawRows.map((row: any) => ({
+          id: row.id,
+          timestamp: new Date(row.timestamp / 1000).toISOString(),
+          level: row.error_severity === "ERROR" ? "error" : "info",
+          event_message: row.event_message || row.query || "",
+          method: "SQL",
+          status: row.error_severity === "ERROR" ? "500" : "200",
+          path: row.query ? row.query.slice(0, 60) : "",
+          ip: null,
+          source: "postgres",
+          details: { query: row.query, detail: row.detail, hint: row.hint, duration_ms: row.duration_ms },
+        }));
+      } else if (analyticsType === "auth") {
+        logs = rawRows.map((row: any) => ({
+          id: row.id,
+          timestamp: new Date(row.timestamp / 1000).toISOString(),
+          level: row.level === "error" ? "error" : "info",
+          event_message: row.event_message || row.msg || "",
+          method: row.method || "POST",
+          status: row.status?.toString() || "200",
+          path: row.path || "/auth/v1",
+          ip: null,
+          source: "auth",
+        }));
+      }
+    }
+
+    // If analytics API returned nothing, fall back to our own tables
+    if (logs.length === 0) {
       const [actRes, smsRes] = await Promise.all([
         supabaseAdmin
           .from("admin_activity_logs")
@@ -128,10 +263,18 @@ serve(async (req) => {
       }));
 
       logs = [...activityLogs, ...smsLogs]
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .filter((l) => !search || JSON.stringify(l).toLowerCase().includes(search.toLowerCase()))
-        .slice(0, limit);
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }
+
+    // Apply search filter
+    if (search) {
+      const s = search.toLowerCase();
+      logs = logs.filter((l) =>
+        JSON.stringify(l).toLowerCase().includes(s)
+      );
+    }
+
+    logs = logs.slice(0, limit);
 
     return new Response(JSON.stringify({ success: true, logs, count: logs.length }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
