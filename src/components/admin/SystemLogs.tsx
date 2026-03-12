@@ -226,6 +226,14 @@ const SystemLogs = () => {
             Logs
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">Debug errors and track activity in your app.</p>
+          {hasManagementToken === false && (
+            <p className="text-xs text-destructive mt-1 flex items-center gap-1">
+              ⚠️ Management API token missing — showing fallback logs only (activity &amp; SMS logs). Real API/Auth/Postgres logs require a valid token.
+            </p>
+          )}
+          {hasManagementToken === true && (
+            <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Connected to Supabase Analytics API — showing real logs.</p>
+          )}
         </div>
       </div>
 
