@@ -28,6 +28,7 @@ import HomepageSectionsManager from "@/components/admin/HomepageSectionsManager"
 import QRStockScanner from "@/components/admin/QRStockScanner";
 import AdminPreOrders from "@/components/admin/AdminPreOrders";
 import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
+import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
 
 type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders";
 
@@ -4127,66 +4128,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           {/* ═══ SMS Templates Tab ═══ */}
           {tab === "sms_templates" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold font-display text-foreground">SMS Templates</h2>
-                <Button size="sm" className="gap-1" onClick={() => {
-                  setEditingTemplateId(null);
-                  setTemplateForm({ template_key: "", name: "", message_template: "", description: "", is_active: true });
-                  setTemplateDialog(true);
-                }}><Plus className="w-4 h-4" /> Add Template</Button>
-              </div>
-              <p className="text-sm text-muted-foreground mb-4">Placeholders: {"{{customer_name}}, {{order_id}}, {{total}}, {{status}}, {{tracking_info}}, {{eta}}, {{OTP5}}"}</p>
-              {/* SMS Balance Card */}
-              <div className="bg-card rounded-xl border border-border p-4 mb-6 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-secondary/10 flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-secondary" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground font-medium">SMS Balance</p>
-                  <p className="text-lg font-bold text-foreground">
-                    {smsBalance?.balance !== null && smsBalance?.balance !== undefined
-                      ? `Rs. ${Number(smsBalance.balance).toLocaleString()}`
-                      : "—"}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {smsTemplates?.map((t: any) => (
-                  <div key={t.id} className="bg-card rounded-xl border border-border p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-foreground">{t.name}</span>
-                        <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground font-mono">{t.template_key}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded ${t.is_active ? 'bg-secondary/10 text-secondary' : 'bg-destructive/10 text-destructive'}`}>
-                          {t.is_active ? 'Active' : 'Disabled'}
-                        </span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button onClick={() => {
-                          setEditingTemplateId(t.id);
-                          setTemplateForm({ template_key: t.template_key, name: t.name, message_template: t.message_template, description: t.description || "", is_active: t.is_active });
-                          setTemplateDialog(true);
-                        }} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={async () => {
-                          if (!confirm("Delete this template?")) return;
-                          await supabase.from("sms_templates" as any).delete().eq("id", t.id);
-                          queryClient.invalidateQueries({ queryKey: ["admin-sms-templates"] });
-                          toast({ title: "Template deleted" });
-                        }} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground bg-muted/50 p-2 rounded font-mono">{t.message_template}</p>
-                    {t.description && <p className="text-xs text-muted-foreground mt-1">{t.description}</p>}
-                    <p className="text-xs text-muted-foreground mt-1">{t.message_template.length} characters</p>
-                  </div>
-                ))}
-                {(!smsTemplates || smsTemplates.length === 0) && (
-                  <div className="text-center py-16 text-muted-foreground">
-                    <Send className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>No SMS templates yet</p>
-                  </div>
-                )}
-              </div>
+              <SMSTemplatesManager />
             </motion.div>
           )}
 
