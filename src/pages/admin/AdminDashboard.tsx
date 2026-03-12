@@ -1174,6 +1174,7 @@ const AdminDashboard = () => {
   const handleRoleChange = async (userId: string, role: string) => {
     await supabase.from("user_roles").delete().eq("user_id", userId);
     if (role !== "user") await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+    await logAdminAction("user_role_changed", "user", userId, { new_role: role });
     toast({ title: `Role set to ${role}` }); queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] }); setRoleDialog(false);
   };
   const handleSaveEditUser = async () => {
