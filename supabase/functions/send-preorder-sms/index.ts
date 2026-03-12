@@ -110,7 +110,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({ recipient: phone, sender_id: SENDER_ID, type: "plain", message: msg }),
+      body: JSON.stringify({ recipient: phone, sender_id: Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit", type: "plain", message: msg }),
     });
 
     const smsResult = await smsResponse.json();

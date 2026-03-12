@@ -67,7 +67,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         recipient: phone,
-        sender_id: SENDER_ID,
+        sender_id: Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit",
         type: smsType,
         message: finalMessage,
       }),
