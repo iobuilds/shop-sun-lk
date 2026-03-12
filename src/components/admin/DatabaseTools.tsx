@@ -37,12 +37,20 @@ const DatabaseTools = () => {
   const [restoring, setRestoring] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+
+  // Schedule state
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
+  const [scheduleTime, setScheduleTime] = useState("02:00");
+  const [scheduleLabel, setScheduleLabel] = useState("");
+  const [scheduledJobs, setScheduledJobs] = useState<{ jobid: number; jobname: string; schedule: string; active: boolean }[]>([]);
+  const [scheduledLogs, setScheduledLogs] = useState<BackupLog[]>([]);
 
   // Password confirmation state
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "full_backup" | "restore" | "full_restore" | "upload_restore" | "upload_full_restore" | "cleanup"; payload?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "full_backup" | "restore" | "full_restore" | "upload_restore" | "upload_full_restore" | "cleanup" | "schedule_backup"; payload?: any } | null>(null);
   const [verifying, setVerifying] = useState(false);
 
   // Restore confirm state
