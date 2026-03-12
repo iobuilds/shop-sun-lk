@@ -611,9 +611,7 @@ const AdminDashboard = () => {
   }, [isAdmin, isModerator, queryClient]);
 
 
-  const lowStockCount
-
-  const filteredPickerUsers = useMemo(() => {
+  const lowStockCount = products?.filter(p => {
     if (!searchTerm || searchTerm.length < 2) return [];
     const term = searchTerm.toLowerCase();
     return (allProfiles || [])
