@@ -19,6 +19,7 @@ interface BackupLog {
   file_size: number | null;
   created_by_email: string | null;
   created_at: string;
+  note?: string | null;
 }
 
 interface BackupFile {
