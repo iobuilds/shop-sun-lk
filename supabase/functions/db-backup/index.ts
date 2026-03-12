@@ -383,6 +383,23 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Get a signed upload URL so the browser can PUT the ZIP directly (no base64 / size limit) ──
+  if (action === "get_upload_url") {
+    try {
+      const { file_name } = body;
+      if (!file_name) {
+        return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const { data, error } = await adminClient.storage.from("db-backups").createSignedUploadUrl(file_name);
+      if (error || !data) {
+        return new Response(JSON.stringify({ error: "Could not create signed upload URL: " + error?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      return new Response(JSON.stringify({ url: data.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   // ── Upload ZIP from browser (multipart) and store in db-backups ──
   if (action === "upload_zip") {
     try {
