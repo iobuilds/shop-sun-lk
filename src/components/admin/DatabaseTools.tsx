@@ -404,6 +404,87 @@ const DatabaseTools = () => {
           </div>
         </CardContent>
       </Card>
+      {/* Schedule Backup Card */}
+      <Card className="border-secondary/30">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-secondary">
+            <CalendarDays className="w-4 h-4" /> Schedule a Backup
+          </CardTitle>
+          <CardDescription>
+            Pick a specific date and time to automatically trigger a database backup.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Date picker */}
+            <div className="space-y-1.5">
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-40 justify-start text-left font-normal", !scheduleDate && "text-muted-foreground")}>
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    {scheduleDate ? format(scheduleDate, "PP") : "Pick date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={scheduleDate}
+                    onSelect={setScheduleDate}
+                    disabled={(d) => d < new Date()}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            {/* Time input */}
+            <div className="space-y-1.5">
+              <Label>Time (24h)</Label>
+              <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-32" />
+            </div>
+            {/* Label */}
+            <div className="space-y-1.5 flex-1 min-w-36">
+              <Label>Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input value={scheduleLabel} onChange={(e) => setScheduleLabel(e.target.value)} placeholder="e.g. Pre-launch backup" />
+            </div>
+            <Button
+              onClick={() => requestPasswordConfirmation("schedule_backup")}
+              disabled={!scheduleDate || !scheduleTime || isBusy}
+              className="gap-2"
+            >
+              {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+              Schedule
+            </Button>
+          </div>
+
+          {/* Upcoming scheduled jobs */}
+          {scheduledJobs.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Scheduled Backups</p>
+              {scheduledJobs.map((job) => {
+                const log = scheduledLogs.find((l) => l.file_name === job.jobname);
+                const parts = log?.note?.split("|") ?? [];
+                const scheduledAt = parts[0]?.trim();
+                const label = parts[1]?.trim();
+                return (
+                  <div key={job.jobid} className="flex items-center justify-between bg-secondary/5 rounded-lg px-3 py-2 border border-secondary/20">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{label || job.jobname}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {scheduledAt ? format(new Date(scheduledAt), "PPP 'at' HH:mm") : job.schedule} · cron: {job.schedule}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => cancelScheduled(job.jobname)} className="hover:bg-destructive/10 shrink-0">
+                      <X className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Database Cleanup */}
       <Card className="border-destructive/30">
