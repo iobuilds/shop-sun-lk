@@ -281,43 +281,57 @@ const ReferralCodesManager = () => {
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Summer Sale Referral" />
             </div>
 
+            {/* Code Purpose */}
             <div>
-              <Label>Description (optional)</Label>
-              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brief description..." />
+              <Label>Code Purpose *</Label>
+              <Select value={form.code_purpose} onValueChange={(v) => setForm({ ...form, code_purpose: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="discount">Discount — applies a discount at checkout</SelectItem>
+                  <SelectItem value="reference">Reference Only — tracking/referral, no discount</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.code_purpose === "reference" && (
+                <p className="text-xs text-muted-foreground mt-1">Users can enter this code but no discount will be applied. Useful for tracking referrals.</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Discount Type *</Label>
-                <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="fixed">Fixed Amount (Rs.)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Discount Value *</Label>
-                <Input
-                  type="number" min="0"
-                  value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
-                  placeholder={form.discount_type === "percentage" ? "10" : "500"}
-                />
-              </div>
-            </div>
+            {form.code_purpose === "discount" && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Discount Type *</Label>
+                    <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount (Rs.)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Discount Value *</Label>
+                    <Input
+                      type="number" min="0"
+                      value={form.discount_value}
+                      onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                      placeholder={form.discount_type === "percentage" ? "10" : "500"}
+                    />
+                  </div>
+                </div>
 
-            {form.discount_type === "percentage" && (
-              <div>
-                <Label>Max Discount Cap (Rs.)</Label>
-                <Input
-                  type="number" min="0"
-                  value={form.max_discount_cap}
-                  onChange={(e) => setForm({ ...form, max_discount_cap: e.target.value })}
-                  placeholder="Leave blank for no cap"
-                />
-              </div>
+                {form.discount_type === "percentage" && (
+                  <div>
+                    <Label>Max Discount Cap (Rs.)</Label>
+                    <Input
+                      type="number" min="0"
+                      value={form.max_discount_cap}
+                      onChange={(e) => setForm({ ...form, max_discount_cap: e.target.value })}
+                      placeholder="Leave blank for no cap"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="grid grid-cols-2 gap-3">
