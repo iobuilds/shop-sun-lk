@@ -89,15 +89,16 @@ const DatabaseTools = () => {
     }
   };
 
+  const CONFIRM_WORD = "CONFIRM";
+
   const verifyPasswordAndExecute = async () => {
-    if (!password.trim()) { setPasswordError("Please enter your password"); return; }
+    if (password.trim().toUpperCase() !== CONFIRM_WORD) {
+      setPasswordError(`Type "${CONFIRM_WORD}" exactly to proceed`);
+      return;
+    }
     setVerifying(true);
     setPasswordError("");
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Unable to verify identity");
-      const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
-      if (error) { setPasswordError("Incorrect password. Please try again."); setVerifying(false); return; }
       setPasswordDialog(false);
       setPassword("");
 
