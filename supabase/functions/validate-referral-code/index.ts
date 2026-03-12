@@ -60,8 +60,11 @@ serve(async (req) => {
       });
     }
 
-    // Check min order amount
-    if (referral.min_order_amount && subtotal < referral.min_order_amount) {
+    // For reference-only codes, skip min order and per user limit on discount, but still validate
+    const isReference = referral.code_purpose === "reference";
+
+    // Check min order amount (only for discount codes)
+    if (!isReference && referral.min_order_amount && subtotal < referral.min_order_amount) {
       return new Response(JSON.stringify({ valid: false, error: `Minimum order Rs. ${referral.min_order_amount} required for this referral code` }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200,
       });
@@ -81,15 +84,17 @@ serve(async (req) => {
       }
     }
 
-    // Calculate discount
+    // Calculate discount (0 for reference-only codes)
     let discount = 0;
-    if (referral.discount_type === "percentage") {
-      discount = Math.round(subtotal * (referral.discount_value / 100));
-      if (referral.max_discount_cap && discount > referral.max_discount_cap) {
-        discount = referral.max_discount_cap;
+    if (!isReference) {
+      if (referral.discount_type === "percentage") {
+        discount = Math.round(subtotal * (referral.discount_value / 100));
+        if (referral.max_discount_cap && discount > referral.max_discount_cap) {
+          discount = referral.max_discount_cap;
+        }
+      } else {
+        discount = Math.min(referral.discount_value, subtotal);
       }
-    } else {
-      discount = Math.min(referral.discount_value, subtotal);
     }
 
     return new Response(
@@ -98,6 +103,7 @@ serve(async (req) => {
         code: referral.code,
         name: referral.name,
         description: referral.description,
+        code_purpose: referral.code_purpose || "discount",
         discount,
         discount_type: referral.discount_type,
         discount_value: referral.discount_value,

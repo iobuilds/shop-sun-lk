@@ -28,6 +28,7 @@ interface ReferralCodeForm {
 
 const emptyForm: ReferralCodeForm = {
   code: "", name: "", description: "",
+  code_purpose: "discount",
   discount_type: "percentage", discount_value: "",
   max_discount_cap: "", min_order_amount: "",
   max_uses: "", per_user_limit: "1",
