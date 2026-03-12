@@ -255,10 +255,14 @@ const Auth = () => {
       >
         <div className="text-center mb-6">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
-              <span className="text-secondary-foreground font-bold text-xl font-display">N</span>
-            </div>
-            <span className="text-2xl font-bold font-display text-foreground">NanoCircuit.lk</span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={storeName} className="h-10 w-auto object-contain" />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                <span className="text-secondary-foreground font-bold text-xl font-display">{initial}</span>
+              </div>
+            )}
+            <span className="text-2xl font-bold font-display text-foreground">{storeName}</span>
           </Link>
           <h1 className="text-2xl font-bold font-display text-foreground">
             {step === "otp"
