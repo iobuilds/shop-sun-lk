@@ -13,6 +13,7 @@ import { useBranding } from "@/hooks/useBranding";
 type Step = "form" | "otp" | "address";
 
 const Auth = () => {
+  const { storeName, logoUrl, initial } = useBranding();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
