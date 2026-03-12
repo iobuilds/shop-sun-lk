@@ -31,6 +31,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [statusHistory, setStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
+  const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
 
   useEffect(() => {
     if (!order || !open) return;
@@ -50,6 +51,22 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
     // Load customer profile
     supabase.from("profiles").select("*").eq("user_id", order.user_id).maybeSingle()
       .then(({ data }) => setCustomerProfile(data));
+    // Load referral usage for this order
+    setReferralUsage(null);
+    (supabase as any)
+      .from("referral_code_usage")
+      .select("discount_applied, referral_codes(code, code_purpose)")
+      .eq("order_id", order.id)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setReferralUsage({
+            code: data.referral_codes?.code || "",
+            discount_applied: data.discount_applied || 0,
+            code_purpose: data.referral_codes?.code_purpose || "discount",
+          });
+        }
+      });
   }, [order, open]);
 
   const saveUpdate = async () => {
