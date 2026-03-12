@@ -1,12 +1,27 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { DollarSign, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { DollarSign, TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, Download } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 interface SalesAnalyticsProps {
   orders: any[];
   products: any[];
 }
+
+const downloadCSV = (data: any[], filename: string) => {
+  if (!data.length) return;
+  const headers = Object.keys(data[0]);
+  const rows = data.map(row => headers.map(h => JSON.stringify(row[h] ?? "")).join(","));
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 const SalesAnalytics = ({ orders, products }: SalesAnalyticsProps) => {
   const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("daily");
@@ -96,20 +111,62 @@ const SalesAnalytics = ({ orders, products }: SalesAnalyticsProps) => {
     return key;
   };
 
+  const handleDownloadSalesCSV = () => {
+    if (!analytics) return;
+    const rows = analytics.salesData.map(row => ({
+      Period: formatLabel(row.period),
+      Orders: row.orders,
+      Items: row.items,
+      Revenue_Rs: row.revenue,
+      Cost_Rs: row.cost,
+      Discounts_Rs: row.discounts,
+      Profit_Rs: row.profit,
+      Margin_Pct: row.margin.toFixed(1),
+      Avg_Order_Rs: Math.round(row.avgOrderValue),
+    }));
+    downloadCSV(rows, `sales-analytics-${period}-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
+  const handleDownloadOrdersCSV = () => {
+    if (!orders) return;
+    const rows = orders.map((o: any) => ({
+      Order_ID: o.id,
+      Date: o.created_at ? new Date(o.created_at).toLocaleString() : "",
+      Status: o.status,
+      Payment_Status: o.payment_status,
+      Payment_Method: o.payment_method,
+      Subtotal_Rs: o.subtotal,
+      Shipping_Rs: o.shipping_fee,
+      Discount_Rs: o.discount_amount,
+      Total_Rs: o.total,
+      Coupon: o.coupon_code || "",
+      Tracking: o.tracking_number || "",
+    }));
+    downloadCSV(rows, `orders-${new Date().toISOString().slice(0, 10)}.csv`);
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-xl font-bold font-display text-foreground">Sales Analytics</h2>
-        <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="daily">Daily</SelectItem>
-            <SelectItem value="monthly">Monthly</SelectItem>
-            <SelectItem value="yearly">Yearly</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={(v: any) => setPeriod(v)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" variant="outline" onClick={handleDownloadSalesCSV} disabled={!analytics?.salesData.length}>
+            <Download className="w-4 h-4 mr-1" /> Sales CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleDownloadOrdersCSV} disabled={!orders?.length}>
+            <Download className="w-4 h-4 mr-1" /> Orders CSV
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
