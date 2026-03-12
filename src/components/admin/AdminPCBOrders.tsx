@@ -280,6 +280,13 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
     try {
       const shortId = order.id.slice(0, 8).toUpperCase();
 
+      // Fetch user profile for SMS
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("phone, full_name")
+        .eq("user_id", order.user_id)
+        .maybeSingle();
+
       if (type === "revision") {
         if (action === "approve") {
           // Clear revision slip tag, keep other notes, set back to sourcing
