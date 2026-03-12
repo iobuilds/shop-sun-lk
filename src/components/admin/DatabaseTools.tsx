@@ -1,12 +1,16 @@
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
-import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame, FileArchive } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame, FileArchive, CalendarDays, X } from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -15,6 +19,7 @@ interface BackupLog {
   file_size: number | null;
   created_by_email: string | null;
   created_at: string;
+  note?: string | null;
 }
 
 interface BackupFile {
@@ -33,12 +38,20 @@ const DatabaseTools = () => {
   const [restoring, setRestoring] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+
+  // Schedule state
+  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
+  const [scheduleTime, setScheduleTime] = useState("02:00");
+  const [scheduleLabel, setScheduleLabel] = useState("");
+  const [scheduledJobs, setScheduledJobs] = useState<{ jobid: number; jobname: string; schedule: string; active: boolean }[]>([]);
+  const [scheduledLogs, setScheduledLogs] = useState<BackupLog[]>([]);
 
   // Password confirmation state
   const [passwordDialog, setPasswordDialog] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "full_backup" | "restore" | "full_restore" | "upload_restore" | "upload_full_restore" | "cleanup"; payload?: any } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "full_backup" | "restore" | "full_restore" | "upload_restore" | "upload_full_restore" | "cleanup" | "schedule_backup"; payload?: any } | null>(null);
   const [verifying, setVerifying] = useState(false);
 
   // Restore confirm state
@@ -70,7 +83,7 @@ const DatabaseTools = () => {
     }
   };
 
-  useEffect(() => { fetchBackups(); }, []);
+  useEffect(() => { fetchBackups(); fetchScheduled(); }, []);
 
   const requestPasswordConfirmation = (actionType: typeof pendingAction extends null ? never : NonNullable<typeof pendingAction>["type"], payload?: any) => {
     setPendingAction({ type: actionType, payload });
@@ -85,6 +98,7 @@ const DatabaseTools = () => {
       case "full_backup": return "create a full ZIP backup";
       case "cleanup": return "clean the database";
       case "full_restore": return "restore the full site from ZIP";
+      case "schedule_backup": return "schedule an automatic backup";
       default: return "restore the database";
     }
   };
@@ -108,6 +122,7 @@ const DatabaseTools = () => {
       else if (pendingAction?.type === "upload_restore") await executeUploadRestore();
       else if (pendingAction?.type === "upload_full_restore") await executeUploadFullRestore();
       else if (pendingAction?.type === "cleanup") await executeCleanup();
+      else if (pendingAction?.type === "schedule_backup") await executeScheduleBackup();
     } catch (e: any) {
       setPasswordError(e.message);
     } finally {
@@ -299,7 +314,45 @@ const DatabaseTools = () => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isBusy = creating || creatingFull || restoring || cleaning;
+  const fetchScheduled = async () => {
+    try {
+      const data = await callBackupFn({ action: "list_scheduled" });
+      setScheduledJobs(data.jobs || []);
+      setScheduledLogs(data.logs || []);
+    } catch { /* non-critical */ }
+  };
+
+  const executeScheduleBackup = async () => {
+    if (!scheduleDate || !scheduleTime) return;
+    setScheduling(true);
+    try {
+      const [hh, mm] = scheduleTime.split(":").map(Number);
+      const dt = new Date(scheduleDate);
+      dt.setHours(hh, mm, 0, 0);
+      const data = await callBackupFn({ action: "schedule_backup", scheduled_at: dt.toISOString(), label: scheduleLabel });
+      toast({ title: "Backup scheduled", description: `Will run on ${format(dt, "PPP 'at' HH:mm")}` });
+      setScheduleDate(undefined);
+      setScheduleTime("02:00");
+      setScheduleLabel("");
+      fetchScheduled();
+    } catch (e: any) {
+      toast({ title: "Schedule failed", description: e.message, variant: "destructive" });
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const cancelScheduled = async (jobName: string) => {
+    try {
+      await callBackupFn({ action: "cancel_scheduled", job_name: jobName });
+      toast({ title: "Scheduled backup cancelled" });
+      fetchScheduled();
+    } catch (e: any) {
+      toast({ title: "Cancel failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const isBusy = creating || creatingFull || restoring || cleaning || scheduling;
 
   return (
     <div className="space-y-6">
@@ -350,6 +403,87 @@ const DatabaseTools = () => {
             </Button>
             <input type="file" accept=".zip" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadZipRestore} disabled={isBusy} />
           </div>
+        </CardContent>
+      </Card>
+      {/* Schedule Backup Card */}
+      <Card className="border-secondary/30">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2 text-secondary">
+            <CalendarDays className="w-4 h-4" /> Schedule a Backup
+          </CardTitle>
+          <CardDescription>
+            Pick a specific date and time to automatically trigger a database backup.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            {/* Date picker */}
+            <div className="space-y-1.5">
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-40 justify-start text-left font-normal", !scheduleDate && "text-muted-foreground")}>
+                    <CalendarDays className="mr-2 h-4 w-4" />
+                    {scheduleDate ? format(scheduleDate, "PP") : "Pick date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={scheduleDate}
+                    onSelect={setScheduleDate}
+                    disabled={(d) => d < new Date()}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            {/* Time input */}
+            <div className="space-y-1.5">
+              <Label>Time (24h)</Label>
+              <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-32" />
+            </div>
+            {/* Label */}
+            <div className="space-y-1.5 flex-1 min-w-36">
+              <Label>Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input value={scheduleLabel} onChange={(e) => setScheduleLabel(e.target.value)} placeholder="e.g. Pre-launch backup" />
+            </div>
+            <Button
+              onClick={() => requestPasswordConfirmation("schedule_backup")}
+              disabled={!scheduleDate || !scheduleTime || isBusy}
+              className="gap-2"
+            >
+              {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
+              Schedule
+            </Button>
+          </div>
+
+          {/* Upcoming scheduled jobs */}
+          {scheduledJobs.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Scheduled Backups</p>
+              {scheduledJobs.map((job) => {
+                const log = scheduledLogs.find((l) => l.file_name === job.jobname);
+                const parts = log?.note?.split("|") ?? [];
+                const scheduledAt = parts[0]?.trim();
+                const label = parts[1]?.trim();
+                return (
+                  <div key={job.jobid} className="flex items-center justify-between bg-secondary/5 rounded-lg px-3 py-2 border border-secondary/20">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{label || job.jobname}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {scheduledAt ? format(new Date(scheduledAt), "PPP 'at' HH:mm") : job.schedule} · cron: {job.schedule}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => cancelScheduled(job.jobname)} className="hover:bg-destructive/10 shrink-0">
+                      <X className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
