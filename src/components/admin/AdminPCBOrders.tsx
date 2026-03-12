@@ -275,9 +275,10 @@ export default function AdminPCBOrders({ orders, onRefresh, allProfiles }: Admin
 
   const handlePaymentReview = async (order: any, type: "quote" | "arrival" | "revision", action: "approve" | "reject", rejectReason = "") => {
     setApprovingId(order.id + type);
+    const sendPCBSms = (orderId: string, templateKey: string, extraData?: Record<string, string>) =>
+      supabase.functions.invoke("send-pcb-sms", { body: { order_id: orderId, template_key: templateKey, extra_data: extraData } });
     try {
       const shortId = order.id.slice(0, 8).toUpperCase();
-      const profile = getProfile(order.user_id);
 
       if (type === "revision") {
         if (action === "approve") {
