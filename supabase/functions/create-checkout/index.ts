@@ -69,6 +69,7 @@ serve(async (req) => {
     let discount_amount = 0;
     let validated_coupon_code: string | null = null;
     if (coupon_code) {
+
       const { data: coupon, error: couponError } = await supabaseAdmin
         .from("coupons")
         .select("*")

@@ -2223,7 +2223,19 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Referral Codes Tab ═══ */}
+          {tab === "referral_codes" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Referral Codes</h2>
+                <p className="text-sm text-muted-foreground mt-1">Create and manage referral codes that users can apply at checkout for discounts.</p>
+              </div>
+              <ReferralCodesManager />
+            </motion.div>
+          )}
+
           {/* ═══ Users Tab ═══ */}
+
           {tab === "users" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
