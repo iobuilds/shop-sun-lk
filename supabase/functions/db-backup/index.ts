@@ -383,6 +383,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Upload ZIP from browser (multipart) and store in db-backups ──
+  if (action === "upload_zip") {
+    try {
+      const { file_name, file_data } = body; // file_data is base64
+      if (!file_name || !file_data) {
+        return new Response(JSON.stringify({ error: "file_name and file_data required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const binaryStr = atob(file_data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const { error: upErr } = await adminClient.storage.from("db-backups").upload(file_name, bytes, { contentType: "application/zip", upsert: false });
+      if (upErr) throw new Error("Storage upload failed: " + upErr.message);
+      return new Response(JSON.stringify({ success: true, file_name }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   if (action === "list") {
     const { data: files, error } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
     if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
