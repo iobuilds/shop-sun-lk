@@ -387,6 +387,7 @@ const Checkout = () => {
       if (data.error) throw new Error(data.error);
 
       clearCart();
+      logSiteAction("order_placed", "order", data.order_id, { payment_method: paymentMethod, total: finalTotal, items: items.length });
 
       // Show wallet credit message if applicable
       if (data.coupon_wallet_credit > 0) {
