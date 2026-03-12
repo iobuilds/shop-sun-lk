@@ -275,6 +275,16 @@ serve(async (req) => {
         }
       }
 
+      // Record referral code usage
+      if (referral_code_id && referral_discount > 0) {
+        await supabaseAdmin.from("referral_code_usage").insert({
+          referral_code_id,
+          user_id: user.id,
+          order_id: order.id,
+          discount_applied: referral_discount,
+        });
+      }
+
       // Deduct wallet
       if (wallet_deduction > 0) {
         const { data: wallet } = await supabaseAdmin
