@@ -1168,7 +1168,7 @@ const AdminDashboard = () => {
     const { error } = await supabase.from("profiles").update({ is_suspended: false, suspended_at: null, suspended_reason: null } as any).eq("user_id", userId);
     setUserActionLoading(false);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "User unsuspended" }); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+    else { toast({ title: "User unsuspended" }); await logAdminAction("user_unsuspended", "user", userId); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
   };
   const handleDeleteUser = (u: any) => { setDeleteTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setDeleteDialog(true); };
   const handleRoleChange = async (userId: string, role: string) => {
