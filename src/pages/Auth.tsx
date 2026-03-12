@@ -158,6 +158,7 @@ const Auth = () => {
       });
       if (signUpError) throw signUpError;
 
+      logSiteAction("user_registered", "user", email, { name: fullName, city: city.trim() });
       toast.success("Account created! Please check your email to verify.");
       resetForm();
       setIsLogin(true);
