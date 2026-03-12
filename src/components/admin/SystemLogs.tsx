@@ -146,6 +146,7 @@ const LOG_TYPES = [
 
 const SystemLogs = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [hasManagementToken, setHasManagementToken] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [hours, setHours] = useState("1");
