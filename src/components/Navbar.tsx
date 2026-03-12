@@ -296,8 +296,8 @@ const Navbar = () => {
               const height = company?.navbar_logo_height || 36;
               return (
                 <>
-                  {mode !== "text_only" && company?.logo_url ? (
-                    <img src={company.logo_url} alt={storeName} style={{ height: `${height}px` }} className="object-contain" />
+                  {mode !== "text_only" && logoUrl ? (
+                    <img src={logoUrl} alt={storeName} style={{ height: `${height}px` }} className="object-contain" />
                   ) : mode !== "text_only" ? (
                     <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
                       <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
