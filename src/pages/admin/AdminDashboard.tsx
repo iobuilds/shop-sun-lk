@@ -33,6 +33,7 @@ import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
 import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissionsManager";
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
 import ActivityLogs from "@/components/admin/ActivityLogs";
+import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
 
