@@ -700,7 +700,7 @@ const DatabaseTools = () => {
               <li>All coupons, deals, and promotions</li>
               <li>All banners, pages, and site settings</li>
               <li>All reviews, wishlists, contacts</li>
-              <li>All SMS logs and templates</li>
+              <li>All SMS logs (templates are preserved)</li>
             </ul>
             <p className="text-sm font-medium text-foreground">✅ User accounts and roles will be preserved.</p>
             <div className="bg-destructive/10 text-destructive text-sm rounded-lg p-3 font-medium">⚠️ This action cannot be undone. Create a backup first!</div>

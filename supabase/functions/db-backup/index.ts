@@ -18,6 +18,7 @@ const TABLES = [
   "product_external_links", "product_similar_items",
   "otp_verifications", "user_notifications",
   "coupon_assignments", "coupon_usage", "wallets", "wallet_transactions",
+  "referral_codes", "referral_code_usage",
   "conversations", "conversation_messages", "db_backup_logs",
 ];
 
