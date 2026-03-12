@@ -1102,7 +1102,7 @@ const AdminDashboard = () => {
   const deleteCoupon = async (id: string) => {
     const { error } = await supabase.from("coupons").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Coupon deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }); }
+    else { toast({ title: "Coupon deleted" }); await logAdminAction("coupon_deleted", "coupon", id); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }); }
   };
   const saveCoupon = async () => {
     if (!couponForm.code.trim()) return toast({ title: "Code required", variant: "destructive" });
