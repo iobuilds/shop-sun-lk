@@ -148,10 +148,13 @@ const Checkout = () => {
   const walletBalance = Number(walletData?.balance || 0);
 
   const discount = appliedCoupon?.discount || 0;
-  const payableBeforeWallet = Math.max(0, subtotal + shipping - discount);
-  const couponExtraCredit = discount > (subtotal + shipping) ? discount - (subtotal + shipping) : 0;
+  const referralDiscount = appliedReferral?.discount || 0;
+  const totalDiscount = discount + referralDiscount;
+  const payableBeforeWallet = Math.max(0, subtotal + shipping - totalDiscount);
+  const couponExtraCredit = totalDiscount > (subtotal + shipping) ? totalDiscount - (subtotal + shipping) : 0;
   const walletCredit = useWallet ? Math.min(walletBalance, payableBeforeWallet) : 0;
   const total = Math.max(0, payableBeforeWallet - walletCredit);
+
 
   // Set default payment method based on enabled options
   useEffect(() => {
