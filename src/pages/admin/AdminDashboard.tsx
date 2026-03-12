@@ -769,6 +769,7 @@ const AdminDashboard = () => {
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
   const [userSearch, setUserSearch] = useState("");
   const [reviewSearch, setReviewSearch] = useState("");
+  const [reviewVisFilter, setReviewVisFilter] = useState<"all" | "visible" | "hidden">("all");
   const [contactSearch, setContactSearch] = useState("");
   const [smsLogSearch, setSmsLogSearch] = useState("");
   const [msgTab, setMsgTab] = useState<"normal" | "pcb" | "preorder" | "guest">("normal");
