@@ -740,6 +740,7 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     },
     {
       label: "Orders & Fulfillment", icon: ShoppingBag, defaultOpen: true, adminOnly: false,
+      permissionKey: "can_manage_orders" as const,
       items: [
         { id: "orders" as Tab, label: "Orders", icon: ShoppingBag, count: pendingOrderCount },
         { id: "delivery_updates" as Tab, label: "Delivery Updates", icon: Truck, count: deliveryActionCount },
@@ -748,9 +749,9 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     {
       label: "Customer Support", icon: MessageSquare, defaultOpen: true, adminOnly: false,
       items: [
-        { id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts },
-        { id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount },
-        { id: "pcb_orders" as Tab, label: "PCB Orders", icon: Layers, count: pendingPCBCount },
+        ...(isAdmin || moderatorPermissions.can_view_contacts ? [{ id: "contacts" as Tab, label: "Messages", icon: MessageSquare, count: unreadContacts }] : []),
+        ...(isAdmin || moderatorPermissions.can_manage_preorders ? [{ id: "preorders" as Tab, label: "Pre-Orders", icon: ShoppingCart, count: pendingPreorderCount }] : []),
+        ...(isAdmin || moderatorPermissions.can_manage_pcb_orders ? [{ id: "pcb_orders" as Tab, label: "PCB Orders", icon: Layers, count: pendingPCBCount }] : []),
       ],
     },
     {
@@ -805,15 +806,33 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
     {
       label: "System Tools", icon: Wrench, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
       ],
     },
   ];
 
-  // Filter sidebar groups based on role
-  const sidebarGroups = isAdmin
-    ? allSidebarGroups
-    : allSidebarGroups.filter(g => !g.adminOnly);
+  // Filter sidebar groups based on role — moderators only see permitted sections
+  const sidebarGroups = allSidebarGroups
+    .map(g => {
+      // Skip admin-only groups for moderators
+      if (!isAdmin && g.adminOnly) return null;
+      // Filter out empty groups (e.g. Customer Support with no permitted items)
+      if (!isAdmin && g.items.length === 0) return null;
+      return g;
+    })
+    .filter(Boolean) as typeof allSidebarGroups;
+
+  // Redirect moderator away from tabs they can't access
+  useEffect(() => {
+    if (!isModerator || isAdmin) return;
+    const allowed = sidebarGroups.flatMap(g => g.items.map(i => i.id));
+    if (tab && !allowed.includes(tab)) {
+      const first = allowed[0] as Tab | undefined;
+      if (first) setTab(first);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moderatorPermissions, isAdmin, isModerator]);
 
   // Flat list for mobile
   const allTabs = sidebarGroups.flatMap(g => g.items);
