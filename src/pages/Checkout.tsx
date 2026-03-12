@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
