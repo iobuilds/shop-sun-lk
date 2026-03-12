@@ -202,6 +202,11 @@ const ReferralCodesManager = () => {
                     <button onClick={() => copyCode(rc.code)} className="text-muted-foreground hover:text-foreground transition-colors">
                       <Copy className="w-3.5 h-3.5" />
                     </button>
+                    {rc.code_purpose === "reference" ? (
+                      <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">Reference Only</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-600">Discount</Badge>
+                    )}
                     {rc.is_active && !isExpired ? (
                       <Badge variant="secondary" className="text-xs">Active</Badge>
                     ) : isExpired ? (
@@ -212,15 +217,20 @@ const ReferralCodesManager = () => {
                   </div>
                   {rc.name && <p className="text-sm font-medium text-foreground mt-1">{rc.name}</p>}
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap text-xs text-muted-foreground">
-                    <span className="font-semibold text-secondary">
-                      {rc.discount_type === "percentage" ? `${rc.discount_value}% off` : `Rs. ${Number(rc.discount_value).toLocaleString()} off`}
-                      {rc.max_discount_cap ? ` (max Rs. ${Number(rc.max_discount_cap).toLocaleString()})` : ""}
-                    </span>
+                    {rc.code_purpose !== "reference" && (
+                      <span className="font-semibold text-secondary">
+                        {rc.discount_type === "percentage" ? `${rc.discount_value}% off` : `Rs. ${Number(rc.discount_value).toLocaleString()} off`}
+                        {rc.max_discount_cap ? ` (max Rs. ${Number(rc.max_discount_cap).toLocaleString()})` : ""}
+                      </span>
+                    )}
+                    {rc.code_purpose === "reference" && (
+                      <span className="text-muted-foreground italic">Tracking / reference use — no discount applied</span>
+                    )}
                     {rc.min_order_amount > 0 && <span>Min: Rs. {Number(rc.min_order_amount).toLocaleString()}</span>}
                     {rc.expires_at && <span>Expires: {new Date(rc.expires_at).toLocaleDateString()}</span>}
                     {rc.max_uses && <span>Max uses: {rc.max_uses}</span>}
                     <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" /> {stats.count} uses · Rs. {stats.total.toLocaleString()} saved
+                      <Users className="w-3 h-3" /> {stats.count} uses · Rs. {stats.total.toLocaleString()} tracked
                     </span>
                   </div>
                 </div>
