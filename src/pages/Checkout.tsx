@@ -282,8 +282,94 @@ const Checkout = () => {
       toast.error("Please fill in all required fields");
       return;
     }
+    if (!paymentMethod) {
+      toast.error("Please select a payment method");
+      return;
+    }
 
     setSubmitting(true);
+
+    // ── PayHere ───────────────────────────────────────────────
+    if (paymentMethod === "payhere") {
+      try {
+        const { data, error } = await supabase.functions.invoke("payhere-generate-hash", {
+          body: {
+            items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
+            shipping_address: form,
+            coupon_code: appliedCoupon?.code || null,
+            referral_code: appliedReferral?.code || null,
+            wallet_amount: walletCredit > 0 ? walletCredit : null,
+          },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message || "Failed to initialise PayHere");
+
+        // First create the order record via create-checkout with payhere method
+        const { data: orderData, error: orderError } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
+            shipping_address: form,
+            payment_method: "payhere",
+            coupon_code: appliedCoupon?.code || null,
+            referral_code: appliedReferral?.code || null,
+            wallet_amount: walletCredit > 0 ? walletCredit : null,
+          },
+        });
+        if (orderError || orderData?.error) throw new Error(orderData?.error || orderError?.message || "Failed to create order");
+
+        const orderId = orderData.order_id;
+
+        if (!window.payhere) throw new Error("PayHere script not loaded. Please refresh and try again.");
+
+        const origin = window.location.origin;
+
+        window.payhere.onCompleted = async (completedOrderId: string) => {
+          clearCart();
+          navigate(`/order-success?order_id=${orderId}&method=payhere`);
+        };
+
+        window.payhere.onDismissed = () => {
+          toast.error("Payment was dismissed. You can try again.");
+          setSubmitting(false);
+        };
+
+        window.payhere.onError = (error: string) => {
+          toast.error(`PayHere error: ${error}`);
+          setSubmitting(false);
+        };
+
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const notifyUrl = `https://${projectId}.supabase.co/functions/v1/payhere-notify`;
+
+        window.payhere.startPayment({
+          sandbox: data.sandbox,
+          merchant_id: data.merchant_id,
+          return_url: `${origin}/order-success?order_id=${orderId}&method=payhere`,
+          cancel_url: `${origin}/checkout`,
+          notify_url: notifyUrl,
+          order_id: orderId,
+          items: items.map((i: any) => i.name || "Item").join(", ").slice(0, 100),
+          amount: data.amount,
+          currency: data.currency,
+          hash: data.hash,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone,
+          address: data.address,
+          city: data.city,
+          country: data.country,
+          delivery_address: data.delivery_address,
+          delivery_city: data.delivery_city,
+          delivery_country: data.delivery_country,
+        });
+      } catch (err: any) {
+        toast.error(err.message || "PayHere checkout failed");
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ── Stripe / Bank ─────────────────────────────────────────
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
