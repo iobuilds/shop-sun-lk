@@ -15,6 +15,7 @@ interface ReferralCodeForm {
   code: string;
   name: string;
   description: string;
+  code_purpose: string;
   discount_type: string;
   discount_value: string;
   max_discount_cap: string;
