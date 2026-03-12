@@ -5,23 +5,34 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Tables to clean - excludes profiles, user_roles, db_backup_logs
+// Tables to clean - excludes profiles, user_roles, moderator_permissions, db_backup_logs
 const CLEANUP_TABLES = [
   // Child tables first (reverse dependency order)
   "combo_pack_items",
   "order_items",
   "order_status_history",
+  "preorder_items",
   "product_external_links",
   "product_similar_items",
+  "coupon_assignments",
+  "coupon_usage",
+  "wallet_transactions",
+  "conversation_messages",
   "wishlists",
   "reviews",
   "sms_logs",
   "otp_verifications",
+  "user_notifications",
+  "stock_receipts",
   "daily_deals",
   "contact_messages",
   // Parent tables
+  "preorder_requests",
+  "pcb_order_requests",
   "orders",
   "combo_packs",
+  "wallets",
+  "conversations",
   "products",
   "categories",
   "banners",
