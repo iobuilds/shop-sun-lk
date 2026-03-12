@@ -5,10 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Search, Activity, User, Shield, Trash2, Mail, Key, UserCheck, UserX } from "lucide-react";
+import { RefreshCw, Search, Activity, User, Shield, Trash2, Mail, Key, UserCheck, UserX, ShoppingCart, Cpu, Package, MessageSquare } from "lucide-react";
 import { format } from "date-fns";
 
 const ACTION_META: Record<string, { label: string; color: string; icon: any }> = {
+  // Admin actions
   user_suspended:       { label: "User Suspended",       color: "bg-destructive/10 text-destructive border-destructive/20", icon: UserX },
   user_unsuspended:     { label: "User Unsuspended",      color: "bg-green-500/10 text-green-600 border-green-500/20",       icon: UserCheck },
   user_deleted:         { label: "User Deleted",          color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2 },
@@ -25,6 +26,13 @@ const ACTION_META: Record<string, { label: string; color: string; icon: any }> =
   banner_deleted:       { label: "Banner Deleted",        color: "bg-destructive/10 text-destructive border-destructive/20", icon: Trash2 },
   db_backup:            { label: "DB Backup",             color: "bg-teal-500/10 text-teal-600 border-teal-500/20",         icon: Activity },
   db_cleanup:           { label: "DB Cleanup",            color: "bg-orange-500/10 text-orange-600 border-orange-500/20",   icon: Activity },
+  // User / site actions
+  user_registered:      { label: "New Registration",      color: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20", icon: UserCheck },
+  user_login:           { label: "User Login",            color: "bg-sky-500/10 text-sky-600 border-sky-500/20",            icon: User },
+  order_placed:         { label: "Order Placed",          color: "bg-green-500/10 text-green-600 border-green-500/20",      icon: ShoppingCart },
+  pcb_order_submitted:  { label: "PCB Order Submitted",   color: "bg-purple-500/10 text-purple-600 border-purple-500/20",  icon: Cpu },
+  preorder_submitted:   { label: "Pre-order Submitted",   color: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20",  icon: Package },
+  contact_message_sent: { label: "Contact Message",       color: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",  icon: MessageSquare },
 };
 
 const getActionMeta = (action: string) =>

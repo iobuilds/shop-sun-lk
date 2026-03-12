@@ -22,6 +22,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:          { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },
@@ -351,6 +352,7 @@ export default function PCBOrder() {
       });
       if (error) throw error;
 
+      logSiteAction("pcb_order_submitted", "pcb_order", undefined, { qty: parseInt(firstEntry.quantity), layers: parseInt(firstEntry.layer_count) || 2, color: firstEntry.pcb_color });
       toast({ title: "✅ PCB order submitted!", description: "We'll review and provide a quote shortly." });
       setGerberEntries([]);
       setCustomerNote("");

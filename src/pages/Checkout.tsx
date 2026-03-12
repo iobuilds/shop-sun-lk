@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useShippingCalculation } from "@/hooks/useShippingCalculation";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 // Fetch payment method settings
 const usePaymentMethodSettings = () => useQuery({
@@ -386,6 +387,7 @@ const Checkout = () => {
       if (data.error) throw new Error(data.error);
 
       clearCart();
+      logSiteAction("order_placed", "order", data.order_id, { payment_method: paymentMethod, items: items.length });
 
       // Show wallet credit message if applicable
       if (data.coupon_wallet_credit > 0) {

@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ShieldCheck, MapPin, ChevronLeft } from "lucide-react";
 import { useBranding } from "@/hooks/useBranding";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 type Step = "form" | "otp" | "address";
 
@@ -157,6 +158,7 @@ const Auth = () => {
       });
       if (signUpError) throw signUpError;
 
+      logSiteAction("user_registered", "user", email, { name: fullName, city: city.trim() });
       toast.success("Account created! Please check your email to verify.");
       resetForm();
       setIsLogin(true);
@@ -214,6 +216,7 @@ const Auth = () => {
         const isAdminOrMod = roles.includes("admin") || roles.includes("moderator");
         
         toast.success("Welcome back!");
+        logSiteAction("user_login", "user", signInData.user.id, { email: signInData.user.email, role: roles[0] || "user" });
         navigate(isAdminOrMod ? "/admin" : "/");
       }
     } catch (error: any) {

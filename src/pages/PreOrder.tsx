@@ -16,6 +16,7 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending Review",  color: "text-yellow-600 bg-yellow-50 border-yellow-200",    icon: Clock },
@@ -311,6 +312,7 @@ export default function PreOrder() {
       const { error: itemsError } = await supabase.from("preorder_items").insert(itemRows);
       if (itemsError) throw itemsError;
 
+      logSiteAction("preorder_submitted", "preorder", req.id, { items: validItems.length });
       toast({ title: "✅ Pre-order submitted!", description: "We'll review and get back to you with a quote." });
       setItems([emptyItem()]);
       setCustomerNote("");

@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import type { Session } from "@supabase/supabase-js";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 const contactSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -83,6 +84,7 @@ const ContactForm = () => {
       }
       
       setSubmitted(true);
+      logSiteAction("contact_message_sent", "contact", undefined, { subject: result.data.subject, logged_in: isLoggedIn });
       toast.success("Message sent successfully!");
     } catch (err: any) {
       toast.error(err.message || "Failed to send message");
