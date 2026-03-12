@@ -967,7 +967,7 @@ const AdminDashboard = () => {
     const payload: any = { name: productForm.name, slug: productForm.slug, description: productForm.description || null, price: Number(productForm.price) || 0, discount_price: productForm.discount_price ? Number(productForm.discount_price) : null, cost_price: productForm.cost_price ? Number(productForm.cost_price) : null, sku: productForm.sku || null, stock_quantity: productForm.stock_quantity ? Number(productForm.stock_quantity) : 0, category_id: productForm.category_id || null, images: productForm.images ? productForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: productForm.is_active, is_featured: productForm.is_featured, video_url: productForm.video_url || null, datasheet_url: productForm.datasheet_url || null, shipping_type: productForm.shipping_type || null, ships_from: productForm.ships_from || null, delivery_eta: productForm.delivery_eta || null };
     const { error } = editingProductId ? await supabase.from("products").update(payload).eq("id", editingProductId) : await supabase.from("products").insert(payload);
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
-    else { toast({ title: editingProductId ? "Product updated" : "Product created" }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
+    else { toast({ title: editingProductId ? "Product updated" : "Product created" }); await logAdminAction(editingProductId ? "product_updated" : "product_created", "product", editingProductId ?? undefined, { name: payload.name }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
   };
 
   // ── Category handlers ──
