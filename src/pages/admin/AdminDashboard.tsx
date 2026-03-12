@@ -668,7 +668,9 @@ const AdminDashboard = () => {
         { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
         { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
         { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+        { id: "referral_codes" as Tab, label: "Referral Codes", icon: Users, count: 0 },
         { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+
       ],
     },
     {
