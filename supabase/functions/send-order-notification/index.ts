@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
-const SENDER_ID = "IO Builds";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -120,7 +119,7 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               recipient: phone,
-              sender_id: SENDER_ID,
+              sender_id: Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit",
               type: "plain",
               message,
             }),
