@@ -39,7 +39,6 @@ const CLEANUP_TABLES = [
   "promo_banners",
   "pages",
   "coupons",
-  "sms_templates",
   "site_settings",
 ];
 
