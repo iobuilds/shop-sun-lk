@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
-const SENDER_ID = "IO Builds";
+cconst textlkSenderId = Deno.env.get("TEXTLK_SENDER_ID");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -109,7 +109,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({ recipient: phone, sender_id: SENDER_ID, type: "plain", message: msg }),
+      body: JSON.stringify({ recipient: phone, sender_id: textlkSenderId, type: "plain", message: msg }),
     });
 
     const smsResult = await smsResponse.json();
