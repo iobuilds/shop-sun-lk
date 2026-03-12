@@ -1,24 +1,10 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, Youtube, Mail, Phone, MapPin } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useBranding } from "@/hooks/useBranding";
 
 const Footer = () => {
-  const { data: company } = useQuery({
-    queryKey: ["site-company-settings"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("site_settings" as any)
-        .select("*")
-        .eq("key", "company")
-        .maybeSingle();
-      if (error) throw error;
-      return (data as any)?.value as any || null;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { storeName, logoUrl, company } = useBranding();
 
-  const storeName = company?.store_name || "NanoCircuit.lk";
   const description = company?.description || "Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing supplies and more.";
   const address = company?.address || "No. 42, Galle Road, Colombo 03, Sri Lanka";
   const phone = company?.phone || "+94 77 123 4567";
