@@ -167,13 +167,16 @@ serve(async (req) => {
         if ((count || 0) >= referral.per_user_limit) throw new Error("You have already used this referral code the maximum number of times");
       }
 
-      if (referral.discount_type === "percentage") {
-        referral_discount = Math.round(subtotal * (referral.discount_value / 100));
-        if (referral.max_discount_cap && referral_discount > referral.max_discount_cap) {
-          referral_discount = referral.max_discount_cap;
+      // Only apply discount if code_purpose is 'discount', not 'reference'
+      if (referral.code_purpose !== "reference") {
+        if (referral.discount_type === "percentage") {
+          referral_discount = Math.round(subtotal * (referral.discount_value / 100));
+          if (referral.max_discount_cap && referral_discount > referral.max_discount_cap) {
+            referral_discount = referral.max_discount_cap;
+          }
+        } else {
+          referral_discount = Math.min(referral.discount_value, subtotal);
         }
-      } else {
-        referral_discount = Math.min(referral.discount_value, subtotal);
       }
 
       validated_referral_code = referral.code;
