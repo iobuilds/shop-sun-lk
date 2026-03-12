@@ -938,7 +938,7 @@ const AdminDashboard = () => {
   const deleteProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Product deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); setSelectedProducts(prev => { const s = new Set(prev); s.delete(id); return s; }); }
+    else { toast({ title: "Product deleted" }); await logAdminAction("product_deleted", "product", id); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); setSelectedProducts(prev => { const s = new Set(prev); s.delete(id); return s; }); }
   };
   const toggleProductSelection = (id: string) => setSelectedProducts(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleSelectAllProducts = () => {
