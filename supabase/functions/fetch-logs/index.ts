@@ -49,7 +49,8 @@ serve(async (req) => {
 
     // Try Supabase Management Analytics API for real logs
     let logs: any[] = [];
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    // Management API token is required for the analytics API (service role key doesn't work)
+    const managementToken = Deno.env.get("MANAGEMENT_API_TOKEN") ?? "";
 
     // SQL queries for different log types
     const sqlQueries: Record<string, string> = {
