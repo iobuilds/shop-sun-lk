@@ -596,6 +596,7 @@ const AdminDashboard = () => {
       { table: "coupons",               keys: ["admin-coupons"] },
       { table: "reviews",               keys: ["admin-reviews"] },
       { table: "sms_logs",              keys: ["admin-sms-logs"] },
+      { table: "admin_activity_logs",   keys: ["admin-activity-logs"] },
     ];
 
     const channels = WATCHED.map(({ table, keys }) =>
