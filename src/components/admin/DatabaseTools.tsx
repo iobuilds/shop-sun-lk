@@ -82,7 +82,7 @@ const DatabaseTools = () => {
     }
   };
 
-  useEffect(() => { fetchBackups(); }, []);
+  useEffect(() => { fetchBackups(); fetchScheduled(); }, []);
 
   const requestPasswordConfirmation = (actionType: typeof pendingAction extends null ? never : NonNullable<typeof pendingAction>["type"], payload?: any) => {
     setPendingAction({ type: actionType, payload });
