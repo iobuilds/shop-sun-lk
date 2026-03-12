@@ -78,7 +78,7 @@ function LogRow({ log }: { log: LogEntry }) {
         </td>
         {/* Level/Source badge */}
         <td className="px-3 py-2 whitespace-nowrap">
-          <Badge variant="outline" className="text-xs font-mono font-bold bg-sky-500/10 text-sky-500 border-sky-500/20">
+          <Badge variant="outline" className="text-xs font-mono font-bold bg-primary/10 text-primary border-primary/20">
             LOG
           </Badge>
         </td>
