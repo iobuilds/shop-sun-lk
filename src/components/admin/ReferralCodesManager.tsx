@@ -203,9 +203,9 @@ const ReferralCodesManager = () => {
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                     {rc.code_purpose === "reference" ? (
-                      <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">Reference Only</Badge>
+                      <Badge variant="outline" className="text-xs border-primary text-primary">Reference Only</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs border-green-500 text-green-600">Discount</Badge>
+                      <Badge variant="outline" className="text-xs border-secondary text-secondary">Discount</Badge>
                     )}
                     {rc.is_active && !isExpired ? (
                       <Badge variant="secondary" className="text-xs">Active</Badge>
