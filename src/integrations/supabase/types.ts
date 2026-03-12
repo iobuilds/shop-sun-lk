@@ -484,6 +484,39 @@ export type Database = {
         }
         Relationships: []
       }
+      moderator_permissions: {
+        Row: {
+          can_manage_orders: boolean
+          can_manage_pcb_orders: boolean
+          can_manage_preorders: boolean
+          can_view_contacts: boolean
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_manage_orders?: boolean
+          can_manage_pcb_orders?: boolean
+          can_manage_preorders?: boolean
+          can_view_contacts?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_manage_orders?: boolean
+          can_manage_pcb_orders?: boolean
+          can_manage_preorders?: boolean
+          can_view_contacts?: boolean
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       order_items: {
         Row: {
           created_at: string | null
