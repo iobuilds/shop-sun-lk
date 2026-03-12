@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { generateAdminInvoice } from "@/lib/generateAdminInvoice";
 import {
   Clock, Truck, Save, StickyNote, CalendarDays, FileDown, Loader2,
-  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt
+  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag
 } from "lucide-react";
 
 interface Props {
@@ -30,6 +31,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [statusHistory, setStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
+  const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
 
   useEffect(() => {
     if (!order || !open) return;
@@ -49,6 +51,22 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
     // Load customer profile
     supabase.from("profiles").select("*").eq("user_id", order.user_id).maybeSingle()
       .then(({ data }) => setCustomerProfile(data));
+    // Load referral usage for this order
+    setReferralUsage(null);
+    (supabase as any)
+      .from("referral_code_usage")
+      .select("discount_applied, referral_codes(code, code_purpose)")
+      .eq("order_id", order.id)
+      .maybeSingle()
+      .then(({ data }: any) => {
+        if (data) {
+          setReferralUsage({
+            code: data.referral_codes?.code || "",
+            discount_applied: data.discount_applied || 0,
+            code_purpose: data.referral_codes?.code_purpose || "discount",
+          });
+        }
+      });
   }, [order, open]);
 
   const saveUpdate = async () => {
@@ -81,7 +99,11 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
 
   const handleDownloadInvoice = () => {
     if (!order) return;
-    generateAdminInvoice(order, companySettings);
+    generateAdminInvoice({
+      ...order,
+      referral_code: referralUsage?.code || null,
+      referral_discount: referralUsage?.discount_applied || 0,
+    }, companySettings);
   };
 
   if (!order) return null;
@@ -168,6 +190,25 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
               <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>Rs. {order.subtotal?.toLocaleString()}</span></div>
               {order.discount_amount > 0 && (
                 <div className="flex justify-between"><span className="text-muted-foreground">Coupon Discount {order.coupon_code ? `(${order.coupon_code})` : ""}</span><span className="text-secondary">-Rs. {order.discount_amount?.toLocaleString()}</span></div>
+              )}
+              {referralUsage && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    Referral Code
+                    <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded tracking-wider">{referralUsage.code}</span>
+                    {referralUsage.code_purpose === "reference" ? (
+                      <Badge variant="outline" className="text-xs border-primary text-primary">Reference</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs border-secondary text-secondary">Discount</Badge>
+                    )}
+                  </span>
+                  {referralUsage.code_purpose === "discount" && referralUsage.discount_applied > 0 ? (
+                    <span className="text-secondary font-medium">-Rs. {referralUsage.discount_applied?.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs italic">tracked only</span>
+                  )}
+                </div>
               )}
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>{order.shipping_fee > 0 ? `Rs. ${order.shipping_fee?.toLocaleString()}` : "Free"}</span></div>
               <div className="border-t border-border pt-1.5 flex justify-between font-semibold text-base">

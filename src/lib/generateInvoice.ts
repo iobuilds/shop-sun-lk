@@ -11,6 +11,8 @@ interface InvoiceOrder {
   payment_method: string;
   payment_status: string;
   coupon_code?: string | null;
+  referral_code?: string | null;
+  referral_discount?: number;
   shipping_address?: any;
   order_items: {
     quantity: number;
@@ -110,6 +112,20 @@ export const generateInvoice = (order: InvoiceOrder) => {
     doc.text("Discount:", xLabel, summaryY);
     doc.setTextColor(0, 150, 0);
     doc.text(`-Rs. ${order.discount_amount.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    doc.setTextColor(80, 80, 80);
+    summaryY += 6;
+  }
+
+  if (order.referral_code && (order.referral_discount ?? 0) > 0) {
+    doc.text(`Referral (${order.referral_code}):`, xLabel, summaryY);
+    doc.setTextColor(0, 150, 0);
+    doc.text(`-Rs. ${(order.referral_discount ?? 0).toLocaleString()}`, xValue, summaryY, { align: "right" });
+    doc.setTextColor(80, 80, 80);
+    summaryY += 6;
+  } else if (order.referral_code) {
+    doc.text(`Referral Code: ${order.referral_code}`, xLabel, summaryY);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Reference only", xValue, summaryY, { align: "right" });
     doc.setTextColor(80, 80, 80);
     summaryY += 6;
   }
