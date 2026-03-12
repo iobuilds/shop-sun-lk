@@ -1251,6 +1251,105 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_code_usage: {
+        Row: {
+          discount_applied: number
+          id: string
+          order_id: string | null
+          referral_code_id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          discount_applied?: number
+          id?: string
+          order_id?: string | null
+          referral_code_id: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          discount_applied?: number
+          id?: string
+          order_id?: string | null
+          referral_code_id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_code_usage_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_code_usage_referral_code_id_fkey"
+            columns: ["referral_code_id"]
+            isOneToOne: false
+            referencedRelation: "referral_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          max_discount_cap: number | null
+          max_uses: number | null
+          min_order_amount: number | null
+          name: string | null
+          per_user_limit: number | null
+          updated_at: string
+          used_count: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_discount_cap?: number | null
+          max_uses?: number | null
+          min_order_amount?: number | null
+          name?: string | null
+          per_user_limit?: number | null
+          updated_at?: string
+          used_count?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          max_discount_cap?: number | null
+          max_uses?: number | null
+          min_order_amount?: number | null
+          name?: string | null
+          per_user_limit?: number | null
+          updated_at?: string
+          used_count?: number
+        }
+        Relationships: []
+      }
       reviews: {
         Row: {
           comment: string | null

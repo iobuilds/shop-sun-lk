@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +47,11 @@ const Checkout = () => {
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [useWallet, setUseWallet] = useState(false);
   const [showCoupons, setShowCoupons] = useState(false);
+
+  // Referral code state
+  const [referralCode, setReferralCode] = useState("");
+  const [appliedReferral, setAppliedReferral] = useState<{ code: string; discount: number; name?: string } | null>(null);
+  const [validatingReferral, setValidatingReferral] = useState(false);
 
   // Available coupons
   const { data: availableCoupons } = useQuery({
@@ -143,10 +148,13 @@ const Checkout = () => {
   const walletBalance = Number(walletData?.balance || 0);
 
   const discount = appliedCoupon?.discount || 0;
-  const payableBeforeWallet = Math.max(0, subtotal + shipping - discount);
-  const couponExtraCredit = discount > (subtotal + shipping) ? discount - (subtotal + shipping) : 0;
+  const referralDiscount = appliedReferral?.discount || 0;
+  const totalDiscount = discount + referralDiscount;
+  const payableBeforeWallet = Math.max(0, subtotal + shipping - totalDiscount);
+  const couponExtraCredit = totalDiscount > (subtotal + shipping) ? totalDiscount - (subtotal + shipping) : 0;
   const walletCredit = useWallet ? Math.min(walletBalance, payableBeforeWallet) : 0;
   const total = Math.max(0, payableBeforeWallet - walletCredit);
+
 
   // Set default payment method based on enabled options
   useEffect(() => {
@@ -210,10 +218,35 @@ const Checkout = () => {
     setCouponCode("");
   };
 
+  const applyReferral = async () => {
+    if (!referralCode.trim()) return;
+    setValidatingReferral(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-referral-code", {
+        body: { code: referralCode, subtotal },
+      });
+      if (error) throw error;
+      if (!data.valid) throw new Error(data.error);
+      setAppliedReferral({ code: data.code, discount: data.discount, name: data.name });
+      setReferralCode(data.code);
+      toast.success(`Referral code applied! You save Rs. ${data.discount.toLocaleString()}`);
+    } catch (err: any) {
+      toast.error(err.message || "Invalid referral code");
+    } finally {
+      setValidatingReferral(false);
+    }
+  };
+
+  const removeReferral = () => {
+    setAppliedReferral(null);
+    setReferralCode("");
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-secondary" />
+
       </div>
     );
   }
@@ -238,6 +271,7 @@ const Checkout = () => {
           shipping_address: form,
           payment_method: paymentMethod,
           coupon_code: appliedCoupon?.code || null,
+          referral_code: appliedReferral?.code || null,
           wallet_amount: walletCredit > 0 ? walletCredit : null,
         },
       });
@@ -454,7 +488,41 @@ const Checkout = () => {
                     </div>
                   )}
 
+                   {/* Referral Code */}
+                  <div className="border-t border-border pt-3">
+                    {appliedReferral ? (
+                      <div className="flex items-center justify-between bg-secondary/5 border border-secondary/20 rounded-lg px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-secondary" />
+                          <div>
+                            <span className="text-sm font-medium text-secondary">{appliedReferral.code}</span>
+                            {appliedReferral.name && <span className="text-xs text-muted-foreground ml-1">({appliedReferral.name})</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-secondary">-Rs. {appliedReferral.discount.toLocaleString()}</span>
+                          <button type="button" onClick={removeReferral} className="p-0.5 hover:bg-secondary/10 rounded"><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Input
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                          placeholder="Referral code"
+                          className="text-sm"
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyReferral())}
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={applyReferral} disabled={validatingReferral || !referralCode.trim()}>
+                          {validatingReferral ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Apply"}
+                        </Button>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">Have a referral code? Enter it above for a discount.</p>
+                  </div>
+
                   {/* Wallet Credit */}
+
                   {walletBalance > 0 && (
                     <div className="border-t border-border pt-3">
                       <div className="flex items-center justify-between border border-border rounded-lg px-3 py-2">
@@ -477,10 +545,17 @@ const Checkout = () => {
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-secondary">
-                        <span>Discount</span>
+                        <span>Coupon Discount</span>
                         <span>-Rs. {Math.min(discount, subtotal + shipping).toLocaleString()}</span>
                       </div>
                     )}
+                    {referralDiscount > 0 && (
+                      <div className="flex justify-between text-secondary">
+                        <span>Referral Discount</span>
+                        <span>-Rs. {referralDiscount.toLocaleString()}</span>
+                      </div>
+                    )}
+
                     {appliedCoupon?.category_message && (
                       <p className="text-[10px] text-amber-600">{appliedCoupon.category_message}</p>
                     )}

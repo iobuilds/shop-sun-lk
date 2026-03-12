@@ -32,8 +32,9 @@ import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
 import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissionsManager";
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
 import ActivityLogs from "@/components/admin/ActivityLogs";
+import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -667,7 +668,9 @@ const AdminDashboard = () => {
         { id: "banners" as Tab, label: "Hero Banners", icon: Image, count: banners?.length || 0 },
         { id: "promo_banners" as Tab, label: "Promo Banners", icon: Image, count: promoBanners?.length || 0 },
         { id: "coupons" as Tab, label: "Coupons", icon: Ticket, count: coupons?.length || 0 },
+        { id: "referral_codes" as Tab, label: "Referral Codes", icon: Users, count: 0 },
         { id: "seo" as Tab, label: "SEO", icon: Search, count: 0 },
+
       ],
     },
     {
@@ -2220,7 +2223,19 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Referral Codes Tab ═══ */}
+          {tab === "referral_codes" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="mb-6">
+                <h2 className="text-xl font-bold font-display text-foreground">Referral Codes</h2>
+                <p className="text-sm text-muted-foreground mt-1">Create and manage referral codes that users can apply at checkout for discounts.</p>
+              </div>
+              <ReferralCodesManager />
+            </motion.div>
+          )}
+
           {/* ═══ Users Tab ═══ */}
+
           {tab === "users" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
