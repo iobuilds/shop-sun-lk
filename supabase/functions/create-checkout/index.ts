@@ -29,7 +29,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError || !user?.email) throw new Error("Not authenticated");
 
-    const { items, shipping_address, payment_method, coupon_code, wallet_amount } = await req.json();
+    const { items, shipping_address, payment_method, coupon_code, wallet_amount, referral_code } = await req.json();
 
     if (!items || items.length === 0) throw new Error("Cart is empty");
 
