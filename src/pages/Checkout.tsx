@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ const usePaymentMethodSettings = () => useQuery({
   queryFn: async () => {
     const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "payment_methods").maybeSingle();
     if (error) throw error;
-    return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+    return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true, payhere_enabled: false, payhere_sandbox: true };
   },
   staleTime: 5 * 60 * 1000,
 });
@@ -28,6 +28,13 @@ const usePaymentMethodSettings = () => useQuery({
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Session } from "@supabase/supabase-js";
+
+// Declare payhere global loaded from CDN
+declare global {
+  interface Window {
+    payhere: any;
+  }
+}
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -39,7 +46,9 @@ const Checkout = () => {
   const { shipping, shippingNote, freeShippingGap, hasOverseas } = useShippingCalculation(items, subtotal);
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
+  const payhereEnabled = pmSettings?.payhere_enabled === true;
   const [paymentMethod, setPaymentMethod] = useState("");
+  const payhereScriptLoaded = useRef(false);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
@@ -160,9 +169,20 @@ const Checkout = () => {
   useEffect(() => {
     if (!paymentMethod && pmSettings) {
       if (stripeEnabled) setPaymentMethod("stripe");
+      else if (payhereEnabled) setPaymentMethod("payhere");
       else if (bankEnabled) setPaymentMethod("bank_transfer");
     }
-  }, [pmSettings, stripeEnabled, bankEnabled, paymentMethod]);
+  }, [pmSettings, stripeEnabled, bankEnabled, payhereEnabled, paymentMethod]);
+
+  // Load PayHere JS SDK from CDN when needed
+  useEffect(() => {
+    if (!payhereEnabled || payhereScriptLoaded.current) return;
+    const script = document.createElement("script");
+    script.src = "https://www.payhere.lk/lib/payhere.js";
+    script.async = true;
+    script.onload = () => { payhereScriptLoaded.current = true; };
+    document.body.appendChild(script);
+  }, [payhereEnabled]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -262,8 +282,94 @@ const Checkout = () => {
       toast.error("Please fill in all required fields");
       return;
     }
+    if (!paymentMethod) {
+      toast.error("Please select a payment method");
+      return;
+    }
 
     setSubmitting(true);
+
+    // ── PayHere ───────────────────────────────────────────────
+    if (paymentMethod === "payhere") {
+      try {
+        const { data, error } = await supabase.functions.invoke("payhere-generate-hash", {
+          body: {
+            items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
+            shipping_address: form,
+            coupon_code: appliedCoupon?.code || null,
+            referral_code: appliedReferral?.code || null,
+            wallet_amount: walletCredit > 0 ? walletCredit : null,
+          },
+        });
+        if (error || data?.error) throw new Error(data?.error || error?.message || "Failed to initialise PayHere");
+
+        // First create the order record via create-checkout with payhere method
+        const { data: orderData, error: orderError } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            items: items.map((i) => ({ id: i.id, quantity: i.quantity })),
+            shipping_address: form,
+            payment_method: "payhere",
+            coupon_code: appliedCoupon?.code || null,
+            referral_code: appliedReferral?.code || null,
+            wallet_amount: walletCredit > 0 ? walletCredit : null,
+          },
+        });
+        if (orderError || orderData?.error) throw new Error(orderData?.error || orderError?.message || "Failed to create order");
+
+        const orderId = orderData.order_id;
+
+        if (!window.payhere) throw new Error("PayHere script not loaded. Please refresh and try again.");
+
+        const origin = window.location.origin;
+
+        window.payhere.onCompleted = async (completedOrderId: string) => {
+          clearCart();
+          navigate(`/order-success?order_id=${orderId}&method=payhere`);
+        };
+
+        window.payhere.onDismissed = () => {
+          toast.error("Payment was dismissed. You can try again.");
+          setSubmitting(false);
+        };
+
+        window.payhere.onError = (error: string) => {
+          toast.error(`PayHere error: ${error}`);
+          setSubmitting(false);
+        };
+
+        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+        const notifyUrl = `https://${projectId}.supabase.co/functions/v1/payhere-notify`;
+
+        window.payhere.startPayment({
+          sandbox: data.sandbox,
+          merchant_id: data.merchant_id,
+          return_url: `${origin}/order-success?order_id=${orderId}&method=payhere`,
+          cancel_url: `${origin}/checkout`,
+          notify_url: notifyUrl,
+          order_id: orderId,
+          items: items.map((i: any) => i.name || "Item").join(", ").slice(0, 100),
+          amount: data.amount,
+          currency: data.currency,
+          hash: data.hash,
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          phone: data.phone,
+          address: data.address,
+          city: data.city,
+          country: data.country,
+          delivery_address: data.delivery_address,
+          delivery_city: data.delivery_city,
+          delivery_country: data.delivery_country,
+        });
+      } catch (err: any) {
+        toast.error(err.message || "PayHere checkout failed");
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // ── Stripe / Bank ─────────────────────────────────────────
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
@@ -346,6 +452,17 @@ const Checkout = () => {
                           <p className="text-sm font-medium text-foreground">Credit / Debit Card</p>
                           <p className="text-xs text-muted-foreground">Visa, MasterCard via Stripe</p>
                         </div>
+                      </label>
+                    )}
+                    {payhereEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "payhere" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="payhere" />
+                        <Smartphone className="w-5 h-5 text-muted-foreground" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">PayHere</p>
+                          <p className="text-xs text-muted-foreground">Visa, Master, eZ Cash, mCash, GENIE & more</p>
+                        </div>
+                        <img src="https://www.payhere.lk/downloads/images/payhere_long_banner.png" alt="PayHere" className="h-5 object-contain opacity-80" />
                       </label>
                     )}
                     {bankEnabled && (

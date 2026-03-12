@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -3134,6 +3134,36 @@ const AdminDashboard = () => {
                       />
                     </div>
                   </div>
+
+                  {/* PayHere */}
+                  <div className="bg-card rounded-xl border border-border p-5 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Smartphone className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">PayHere (LK)</p>
+                          <p className="text-xs text-muted-foreground">Visa, Master, eZ Cash, mCash & more via PayHere</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={!!paymentMethodSettings.payhere_enabled}
+                        onCheckedChange={(v) => setPaymentMethodSettings({ ...paymentMethodSettings, payhere_enabled: v })}
+                      />
+                    </div>
+                    {paymentMethodSettings.payhere_enabled && (
+                      <div className="border-t border-border pt-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-foreground font-medium">Sandbox Mode</p>
+                          <p className="text-xs text-muted-foreground">Enable for testing — disable in production</p>
+                        </div>
+                        <Switch
+                          checked={paymentMethodSettings.payhere_sandbox !== false}
+                          onCheckedChange={(v) => setPaymentMethodSettings({ ...paymentMethodSettings, payhere_sandbox: v })}
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   <p className="text-xs text-muted-foreground">⚠️ At least one payment method must remain enabled. Disabled methods will not be shown on the checkout page.</p>
                 </div>
               ) : (
