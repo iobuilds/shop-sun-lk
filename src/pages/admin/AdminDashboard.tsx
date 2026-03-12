@@ -1114,7 +1114,7 @@ const AdminDashboard = () => {
       if (editingCouponId) await (supabase as any).from("coupon_assignments").delete().eq("coupon_id", saved.id);
       await (supabase as any).from("coupon_assignments").insert(phones.map((phone: string) => ({ coupon_id: saved.id, phone, used: false })));
     }
-    toast({ title: editingCouponId ? "Coupon updated" : "Coupon created" }); setCouponDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+    toast({ title: editingCouponId ? "Coupon updated" : "Coupon created" }); await logAdminAction(editingCouponId ? "coupon_updated" : "coupon_created", "coupon", editingCouponId ?? saved?.id, { code: payload.code }); setCouponDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
   };
 
   // ── Order handlers ──
