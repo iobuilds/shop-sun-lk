@@ -2377,7 +2377,14 @@ const AdminDashboard = () => {
                   </div>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleSuspendUser} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogAction onClick={async () => {
+                      if (!suspendTarget) return;
+                      setUserActionLoading(true);
+                      const { error } = await supabase.from("profiles").update({ is_suspended: true, suspended_at: new Date().toISOString(), suspended_reason: suspendReason || null } as any).eq("user_id", suspendTarget.id);
+                      setUserActionLoading(false);
+                      if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+                      else { toast({ title: "User suspended" }); await logAdminAction("user_suspended", "user", suspendTarget.id, { reason: suspendReason || "No reason given", name: suspendTarget.name }); setSuspendDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+                    }} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />} Suspend
                     </AlertDialogAction>
                   </AlertDialogFooter>
