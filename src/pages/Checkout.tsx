@@ -169,9 +169,20 @@ const Checkout = () => {
   useEffect(() => {
     if (!paymentMethod && pmSettings) {
       if (stripeEnabled) setPaymentMethod("stripe");
+      else if (payhereEnabled) setPaymentMethod("payhere");
       else if (bankEnabled) setPaymentMethod("bank_transfer");
     }
-  }, [pmSettings, stripeEnabled, bankEnabled, paymentMethod]);
+  }, [pmSettings, stripeEnabled, bankEnabled, payhereEnabled, paymentMethod]);
+
+  // Load PayHere JS SDK from CDN when needed
+  useEffect(() => {
+    if (!payhereEnabled || payhereScriptLoaded.current) return;
+    const script = document.createElement("script");
+    script.src = "https://www.payhere.lk/lib/payhere.js";
+    script.async = true;
+    script.onload = () => { payhereScriptLoaded.current = true; };
+    document.body.appendChild(script);
+  }, [payhereEnabled]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
