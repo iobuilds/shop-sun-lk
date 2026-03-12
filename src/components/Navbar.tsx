@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, ChevronDown, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
