@@ -8,10 +8,12 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ShieldCheck, MapPin, ChevronLeft } from "lucide-react";
+import { useBranding } from "@/hooks/useBranding";
 
 type Step = "form" | "otp" | "address";
 
 const Auth = () => {
+  const { storeName, logoUrl, initial } = useBranding();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -253,10 +255,14 @@ const Auth = () => {
       >
         <div className="text-center mb-6">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
-              <span className="text-secondary-foreground font-bold text-xl font-display">N</span>
-            </div>
-            <span className="text-2xl font-bold font-display text-foreground">NanoCircuit.lk</span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={storeName} className="h-10 w-auto object-contain" />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
+                <span className="text-secondary-foreground font-bold text-xl font-display">{initial}</span>
+              </div>
+            )}
+            <span className="text-2xl font-bold font-display text-foreground">{storeName}</span>
           </Link>
           <h1 className="text-2xl font-bold font-display text-foreground">
             {step === "otp"

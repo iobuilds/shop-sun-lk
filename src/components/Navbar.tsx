@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useBranding } from "@/hooks/useBranding";
 
 interface CustomLink {
   id: string;
@@ -71,21 +72,8 @@ const Navbar = () => {
     staleTime: 60000,
   });
 
-  // Company settings (logo, store name)
-  const { data: company } = useQuery({
-    queryKey: ["site-company-settings"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("site_settings" as any)
-        .select("*")
-        .eq("key", "company")
-        .maybeSingle();
-      return (data as any)?.value as any || null;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { storeName, logoUrl, company } = useBranding();
 
-  const storeName = company?.store_name || "NanoCircuit.lk";
 
   // Navbar config from site_settings
   const { data: navConfig } = useQuery({
@@ -308,8 +296,8 @@ const Navbar = () => {
               const height = company?.navbar_logo_height || 36;
               return (
                 <>
-                  {mode !== "text_only" && company?.logo_url ? (
-                    <img src={company.logo_url} alt={storeName} style={{ height: `${height}px` }} className="object-contain" />
+                  {mode !== "text_only" && logoUrl ? (
+                    <img src={logoUrl} alt={storeName} style={{ height: `${height}px` }} className="object-contain" />
                   ) : mode !== "text_only" ? (
                     <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
                       <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
