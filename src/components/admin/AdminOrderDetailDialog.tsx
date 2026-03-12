@@ -191,6 +191,25 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
               {order.discount_amount > 0 && (
                 <div className="flex justify-between"><span className="text-muted-foreground">Coupon Discount {order.coupon_code ? `(${order.coupon_code})` : ""}</span><span className="text-secondary">-Rs. {order.discount_amount?.toLocaleString()}</span></div>
               )}
+              {referralUsage && (
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" />
+                    Referral Code
+                    <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded tracking-wider">{referralUsage.code}</span>
+                    {referralUsage.code_purpose === "reference" ? (
+                      <Badge variant="outline" className="text-xs border-primary text-primary">Reference</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs border-secondary text-secondary">Discount</Badge>
+                    )}
+                  </span>
+                  {referralUsage.code_purpose === "discount" && referralUsage.discount_applied > 0 ? (
+                    <span className="text-secondary font-medium">-Rs. {referralUsage.discount_applied?.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs italic">tracked only</span>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between"><span className="text-muted-foreground">Shipping</span><span>{order.shipping_fee > 0 ? `Rs. ${order.shipping_fee?.toLocaleString()}` : "Free"}</span></div>
               <div className="border-t border-border pt-1.5 flex justify-between font-semibold text-base">
                 <span>Total</span><span>Rs. {order.total?.toLocaleString()}</span>

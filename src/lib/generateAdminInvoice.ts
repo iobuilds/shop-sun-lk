@@ -185,6 +185,20 @@ export const generateAdminInvoice = async (order: InvoiceOrder, company?: Compan
     summaryY += 6;
   }
 
+  if (order.referral_code && (order.referral_discount ?? 0) > 0) {
+    doc.text(`Referral (${order.referral_code}):`, xLabel, summaryY);
+    doc.setTextColor(0, 150, 0);
+    doc.text(`-${currencySymbol} ${(order.referral_discount ?? 0).toLocaleString()}`, xValue, summaryY, { align: "right" });
+    doc.setTextColor(80, 80, 80);
+    summaryY += 6;
+  } else if (order.referral_code) {
+    doc.text(`Referral Code: ${order.referral_code}`, xLabel, summaryY);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Reference only", xValue, summaryY, { align: "right" });
+    doc.setTextColor(80, 80, 80);
+    summaryY += 6;
+  }
+
   doc.text("Shipping:", xLabel, summaryY);
   doc.text(order.shipping_fee > 0 ? `${currencySymbol} ${order.shipping_fee.toLocaleString()}` : "Free", xValue, summaryY, { align: "right" });
   summaryY += 8;
