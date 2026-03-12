@@ -3229,7 +3229,7 @@ const AdminDashboard = () => {
           )}
 
           {tab === "sales" && (
-            <SalesAnalytics orders={orders || []} products={products || []} />
+            <SalesAnalytics orders={orders || []} products={products || []} preorderRequests={preorderRequests || []} pcbOrders={pcbOrders || []} />
           )}
 
           {/* ═══ Reports Tab ═══ */}
