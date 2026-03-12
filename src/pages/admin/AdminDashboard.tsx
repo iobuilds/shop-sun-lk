@@ -1957,6 +1957,32 @@ const AdminDashboard = () => {
                       </div>
                     </div>
                     <div className="flex gap-1">
+                      {p.image_url && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Download image"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(p.image_url);
+                              const blob = await res.blob();
+                              const ext = blob.type.includes("png") ? "png" : "jpg";
+                              const filename = `${p.title.replace(/\s+/g, "-").toLowerCase()}-banner.${ext}`;
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = filename;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast({ title: "⬇️ Downloading", description: filename });
+                            } catch {
+                              toast({ title: "Download failed", variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => openEditPromo(p)}><Pencil className="w-4 h-4" /></Button>
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePromo(p.id)}><Trash2 className="w-4 h-4" /></Button>
                     </div>
