@@ -352,6 +352,7 @@ export default function PCBOrder() {
       });
       if (error) throw error;
 
+      logSiteAction("pcb_order_submitted", "pcb_order", undefined, { qty: parseInt(firstEntry.quantity), layers: parseInt(firstEntry.layer_count) || 2, color: firstEntry.pcb_color });
       toast({ title: "✅ PCB order submitted!", description: "We'll review and provide a quote shortly." });
       setGerberEntries([]);
       setCustomerNote("");

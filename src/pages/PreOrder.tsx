@@ -312,6 +312,7 @@ export default function PreOrder() {
       const { error: itemsError } = await supabase.from("preorder_items").insert(itemRows);
       if (itemsError) throw itemsError;
 
+      logSiteAction("preorder_submitted", "preorder", req.id, { items: validItems.length });
       toast({ title: "✅ Pre-order submitted!", description: "We'll review and get back to you with a quote." });
       setItems([emptyItem()]);
       setCustomerNote("");
