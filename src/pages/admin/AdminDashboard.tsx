@@ -999,7 +999,7 @@ const AdminDashboard = () => {
   const deleteBanner = async (id: string) => {
     const { error } = await supabase.from("banners").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Banner deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+    else { toast({ title: "Banner deleted" }); await logAdminAction("banner_deleted", "banner", id); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
   };
   const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; if (!file) return;
