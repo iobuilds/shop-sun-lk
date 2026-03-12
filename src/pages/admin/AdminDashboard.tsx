@@ -612,7 +612,6 @@ const AdminDashboard = () => {
 
 
   const lowStockCount = products?.filter(p => {
-    if (!searchTerm || searchTerm.length < 2) return [];
     const term = searchTerm.toLowerCase();
     return (allProfiles || [])
       .filter((p: any) => {
