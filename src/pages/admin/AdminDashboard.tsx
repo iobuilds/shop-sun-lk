@@ -3653,6 +3653,13 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Documentation Tab ═══ */}
+          {tab === "documentation" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <AdminDocumentation />
+            </motion.div>
+          )}
+
           {/* ═══ SMS Templates Tab ═══ */}
           {tab === "sms_templates" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
