@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { generateAdminInvoice } from "@/lib/generateAdminInvoice";
 import {
   Clock, Truck, Save, StickyNote, CalendarDays, FileDown, Loader2,
-  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt
+  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag
 } from "lucide-react";
 
 interface Props {

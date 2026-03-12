@@ -12,6 +12,8 @@ interface InvoiceOrder {
   payment_method: string;
   payment_status: string;
   coupon_code?: string | null;
+  referral_code?: string | null;
+  referral_discount?: number;
   shipping_address?: any;
   order_items: {
     quantity: number;
