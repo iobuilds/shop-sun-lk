@@ -845,6 +845,413 @@ const AdminDashboard = () => {
     return { totalSales, totalRevenue, pendingRevenue, monthlyRevenue, bestSellers, paymentMethods: Array.from(paymentMethods.entries()), statusBreakdown: Array.from(statusMap.entries()), totalProfit, totalCost, totalProducts, totalStockValue, totalStockCostValue, totalStockQty, lowStockProducts, outOfStockProducts };
   }, [orders, products, lowStockThreshold]);
 
+  // ── Derived data for orders, deals, coupons, users, smsLogs ──
+  const filteredOrders = (orders || []).filter((o: any) => {
+    const matchStatus = orderStatusFilter === "all" || o.status === orderStatusFilter;
+    const q = orderSearch.toLowerCase();
+    const matchSearch = !q || o.id.toLowerCase().includes(q)
+      || (o.shipping_address as any)?.full_name?.toLowerCase().includes(q)
+      || (o.shipping_address as any)?.phone?.toLowerCase().includes(q)
+      || (o.tracking_number || "").toLowerCase().includes(q);
+    return matchStatus && matchSearch;
+  });
+  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+  const paginatedOrders = filteredOrders.slice(orderPage * ITEMS_PER_PAGE, (orderPage + 1) * ITEMS_PER_PAGE);
+
+  const paginatedDeals = (deals || []).slice(dealPage * ITEMS_PER_PAGE, (dealPage + 1) * ITEMS_PER_PAGE);
+  const totalDealPages = Math.ceil((deals?.length || 0) / ITEMS_PER_PAGE);
+
+  const paginatedCoupons = (coupons || []).slice(couponPage * ITEMS_PER_PAGE, (couponPage + 1) * ITEMS_PER_PAGE);
+  const totalCouponPages = Math.ceil((coupons?.length || 0) / ITEMS_PER_PAGE);
+
+  const filteredUsers = (allProfiles || []).filter((u: any) => {
+    const q = userSearch.toLowerCase();
+    const matchSearch = !q || (u.full_name || "").toLowerCase().includes(q) || (u.phone || "").toLowerCase().includes(q);
+    const role = getUserRole ? userRoles?.find((r: any) => r.user_id === u.user_id)?.role || "user" : "user";
+    const matchRole = userRoleFilter === "all" || role === userRoleFilter;
+    const matchStatus = userStatusFilter === "all" || (userStatusFilter === "suspended" ? u.is_suspended : !u.is_suspended);
+    return matchSearch && matchRole && matchStatus;
+  });
+  const totalUserPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const paginatedUsers = filteredUsers.slice(userPage * ITEMS_PER_PAGE, (userPage + 1) * ITEMS_PER_PAGE);
+
+  const filteredSmsLogs = (smsLogs || []).filter((l: any) => {
+    const q = smsLogSearch.toLowerCase();
+    return !q || (l.phone || "").includes(q) || (l.message || "").toLowerCase().includes(q) || (l.status || "").includes(q);
+  });
+  const totalSmsLogPages = Math.ceil(filteredSmsLogs.length / ITEMS_PER_PAGE);
+  const paginatedSmsLogs = filteredSmsLogs.slice(smsLogPage * ITEMS_PER_PAGE, (smsLogPage + 1) * ITEMS_PER_PAGE);
+
+  // Reviews derived data
+  const reviewsVisFiltered = (allReviews || []).filter((r: any) => {
+    const matchSearch = !reviewSearch.trim() || (r.products?.name || "").toLowerCase().includes(reviewSearch.toLowerCase()) || (r.comment || "").toLowerCase().includes(reviewSearch.toLowerCase());
+    const matchVis = reviewVisFilter === "all" ? true : reviewVisFilter === "visible" ? r.is_visible !== false : r.is_visible === false;
+    return matchSearch && matchVis;
+  });
+  const paginatedVis = reviewsVisFiltered.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
+  const totalVisPages = Math.ceil(reviewsVisFiltered.length / ITEMS_PER_PAGE);
+  const visibleReviewCount = (allReviews || []).filter((r: any) => r.is_visible !== false).length;
+  const hiddenReviewCount = (allReviews || []).filter((r: any) => r.is_visible === false).length;
+
+  // ── Pagination render helper ──
+  const renderPagination = (page: number, total: number, setPage: (p: number) => void, totalItems?: number) => {
+    if (total <= 1) return null;
+    return (
+      <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+        <p className="text-xs text-muted-foreground">{totalItems !== undefined ? `${totalItems} items` : ""} · Page {page + 1} of {total}</p>
+        <div className="flex gap-1">
+          <Button variant="outline" size="sm" onClick={() => setPage(0)} disabled={page === 0} className="h-7 px-2 text-xs">«</Button>
+          <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page === 0} className="h-7 px-2 text-xs">‹</Button>
+          <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= total - 1} className="h-7 px-2 text-xs">›</Button>
+          <Button variant="outline" size="sm" onClick={() => setPage(total - 1)} disabled={page >= total - 1} className="h-7 px-2 text-xs">»</Button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Product handlers ──
+  const openAddProduct = () => { setEditingProductId(null); setProductForm(emptyProduct); setProductImagePreviews([]); setLcscPartNumber(""); setLcscFailed(false); setProductDialog(true); };
+  const openAddMicroProduct = () => { setEditingProductId(null); setProductForm({ ...emptyProduct, category_id: microElectronicsCategory?.id || "" }); setProductImagePreviews([]); setLcscPartNumber(""); setLcscFailed(false); setProductDialog(true); };
+  const openEditProduct = (p: any) => {
+    setEditingProductId(p.id);
+    setProductForm({ name: p.name, slug: p.slug, description: p.description || "", price: String(p.price), discount_price: String(p.discount_price || ""), cost_price: String((p as any).cost_price || ""), sku: p.sku || "", stock_quantity: String(p.stock_quantity || ""), category_id: p.category_id || "", images: (p.images || []).join(","), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false, video_url: (p as any).video_url || "", datasheet_url: p.datasheet_url || "", shipping_type: (p as any).shipping_type || "local", ships_from: (p as any).ships_from || "", delivery_eta: (p as any).delivery_eta || "" });
+    setProductImagePreviews(p.images || []);
+    setLcscPartNumber("");
+    setLcscFailed(false);
+    setProductDialog(true);
+  };
+  const duplicateProduct = async (p: any) => {
+    const newSlug = p.slug + "-copy-" + Date.now();
+    const { error } = await supabase.from("products").insert({ name: p.name + " (Copy)", slug: newSlug, description: p.description, price: p.price, discount_price: p.discount_price, cost_price: (p as any).cost_price, sku: (p.sku || "") + "-copy", stock_quantity: p.stock_quantity, category_id: p.category_id, images: p.images, is_active: false, is_featured: false, video_url: (p as any).video_url, datasheet_url: p.datasheet_url });
+    if (error) toast({ title: "Error duplicating", description: error.message, variant: "destructive" });
+    else { toast({ title: "Product duplicated" }); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
+  };
+  const deleteProduct = async (id: string) => {
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Product deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); setSelectedProducts(prev => { const s = new Set(prev); s.delete(id); return s; }); }
+  };
+  const toggleProductSelection = (id: string) => setSelectedProducts(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const toggleSelectAllProducts = () => {
+    if (selectedProducts.size === (paginatedProducts?.length || 0)) setSelectedProducts(new Set());
+    else setSelectedProducts(new Set(paginatedProducts?.map(p => p.id) || []));
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploading(true);
+    const urls: string[] = [];
+    for (const file of files) { const url = await uploadFile(file, "products"); if (url) urls.push(url); }
+    setProductForm(prev => ({ ...prev, images: [...prev.images.split(",").filter(Boolean), ...urls].join(",") }));
+    setProductImagePreviews(prev => [...prev, ...urls]);
+    setUploading(false);
+    e.target.value = "";
+  };
+  const removeProductImage = (url: string) => {
+    setProductForm(prev => ({ ...prev, images: prev.images.split(",").filter(u => u !== url).join(",") }));
+    setProductImagePreviews(prev => prev.filter(u => u !== url));
+  };
+
+  const saveProduct = async () => {
+    if (!productForm.name.trim() || !productForm.slug.trim()) return toast({ title: "Name and slug required", variant: "destructive" });
+    const payload: any = { name: productForm.name, slug: productForm.slug, description: productForm.description || null, price: Number(productForm.price) || 0, discount_price: productForm.discount_price ? Number(productForm.discount_price) : null, cost_price: productForm.cost_price ? Number(productForm.cost_price) : null, sku: productForm.sku || null, stock_quantity: productForm.stock_quantity ? Number(productForm.stock_quantity) : 0, category_id: productForm.category_id || null, images: productForm.images ? productForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: productForm.is_active, is_featured: productForm.is_featured, video_url: productForm.video_url || null, datasheet_url: productForm.datasheet_url || null, shipping_type: productForm.shipping_type || null, ships_from: productForm.ships_from || null, delivery_eta: productForm.delivery_eta || null };
+    const { error } = editingProductId ? await supabase.from("products").update(payload).eq("id", editingProductId) : await supabase.from("products").insert(payload);
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: editingProductId ? "Product updated" : "Product created" }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
+  };
+
+  // ── Category handlers ──
+  const openAddCategory = () => { setEditingCategoryId(null); setCategoryForm(emptyCategory); setCategoryDialog(true); };
+  const openEditCategory = (c: any) => { setEditingCategoryId(c.id); setCategoryForm({ name: c.name, slug: c.slug, description: c.description || "", image_url: c.image_url || "", sort_order: String(c.sort_order || 0), is_active: c.is_active ?? true }); setCategoryDialog(true); };
+  const deleteCategory = async (id: string) => {
+    const { error } = await supabase.from("categories").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Category deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-categories"] }); }
+  };
+  const handleCategoryImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true);
+    const url = await uploadFile(file, "categories");
+    if (url) setCategoryForm(prev => ({ ...prev, image_url: url }));
+    setUploading(false); e.target.value = "";
+  };
+  const saveCategory = async () => {
+    if (!categoryForm.name.trim() || !categoryForm.slug.trim()) return toast({ title: "Name and slug required", variant: "destructive" });
+    const payload = { name: categoryForm.name, slug: categoryForm.slug, description: categoryForm.description || null, image_url: categoryForm.image_url || null, sort_order: Number(categoryForm.sort_order) || 0, is_active: categoryForm.is_active };
+    const { error } = editingCategoryId ? await supabase.from("categories").update(payload).eq("id", editingCategoryId) : await supabase.from("categories").insert(payload);
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: editingCategoryId ? "Category updated" : "Category created" }); setCategoryDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-categories"] }); }
+  };
+
+  // ── Banner handlers ──
+  const openAddBanner = () => { setEditingBannerId(null); setBannerForm(emptyBanner); setBannerDialog(true); };
+  const openEditBanner = (b: any) => { setEditingBannerId(b.id); setBannerForm({ title: b.title, subtitle: b.subtitle || "", image_url: b.image_url, link_url: b.link_url || "", sort_order: String(b.sort_order || 0), is_active: b.is_active ?? true }); setBannerDialog(true); };
+  const deleteBanner = async (id: string) => {
+    const { error } = await supabase.from("banners").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Banner deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+  };
+  const handleBannerImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
+    setUploading(true);
+    const url = await uploadFile(file, "banners");
+    if (url) setBannerForm(prev => ({ ...prev, image_url: url }));
+    setUploading(false); e.target.value = "";
+  };
+  const saveBanner = async () => {
+    if (!bannerForm.title.trim()) return toast({ title: "Title required", variant: "destructive" });
+    const payload = { title: bannerForm.title, subtitle: bannerForm.subtitle || null, image_url: bannerForm.image_url, link_url: bannerForm.link_url || null, sort_order: Number(bannerForm.sort_order) || 0, is_active: bannerForm.is_active };
+    const { error } = editingBannerId ? await supabase.from("banners").update(payload).eq("id", editingBannerId) : await supabase.from("banners").insert(payload);
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: editingBannerId ? "Banner updated" : "Banner created" }); setBannerDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+  };
+
+  // ── Promo banner handlers ──
+  const openAddPromo = () => { setEditingPromoId(null); setPromoForm({ title: "", subtitle: "", description: "", badge_text: "", image_url: "", link_url: "", gradient_from: "primary", sort_order: "0", is_active: true }); setPromoDialog(true); };
+  const openEditPromo = (p: any) => { setEditingPromoId(p.id); setPromoForm({ title: p.title, subtitle: p.subtitle || "", description: p.description || "", badge_text: p.badge_text || "", image_url: p.image_url || "", link_url: p.link_url || "", gradient_from: p.gradient_from || "primary", sort_order: String(p.sort_order || 0), is_active: p.is_active ?? true }); setPromoDialog(true); };
+  const deletePromo = async (id: string) => {
+    const { error } = await (supabase as any).from("promo_banners").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Promo banner deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-promo-banners"] }); }
+  };
+
+  // ── Deal handlers ──
+  const openAddDeal = () => { setEditingDealId(null); setDealForm(emptyDeal); setDealDialog(true); };
+  const openEditDeal = (d: any) => { setEditingDealId(d.id); setDealForm({ product_id: d.product_id, discount_percent: String(d.discount_percent), deal_price: String(d.deal_price || ""), starts_at: d.starts_at ? d.starts_at.slice(0, 16) : "", ends_at: d.ends_at ? d.ends_at.slice(0, 16) : "", is_active: d.is_active ?? true }); setDealDialog(true); };
+  const deleteDeal = async (id: string) => {
+    const { error } = await supabase.from("daily_deals").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Deal deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-deals"] }); }
+  };
+  const saveDeal = async () => {
+    if (!dealForm.product_id || !dealForm.ends_at) return toast({ title: "Product and end date required", variant: "destructive" });
+    const payload = { product_id: dealForm.product_id, discount_percent: Number(dealForm.discount_percent) || 0, deal_price: dealForm.deal_price ? Number(dealForm.deal_price) : null, starts_at: dealForm.starts_at || null, ends_at: dealForm.ends_at, is_active: dealForm.is_active };
+    const { error } = editingDealId ? await supabase.from("daily_deals").update(payload).eq("id", editingDealId) : await supabase.from("daily_deals").insert(payload);
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: editingDealId ? "Deal updated" : "Deal created" }); setDealDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-deals"] }); }
+  };
+
+  // ── Combo handlers ──
+  const openAddCombo = () => { setEditingComboId(null); setComboForm(emptyCombo); setComboImagePreviews([]); setComboDialog(true); };
+  const openEditCombo = (c: any) => {
+    setEditingComboId(c.id);
+    setComboForm({ name: c.name, slug: c.slug, description: c.description || "", combo_price: String(c.combo_price), original_price: String(c.original_price), images: (c.images || []).join(","), is_active: c.is_active ?? true, is_featured: c.is_featured ?? false, items: (c.combo_pack_items || []).map((i: any) => ({ product_id: i.product_id, quantity: String(i.quantity) })), shipping_type: (c as any).shipping_type || "local", ships_from: (c as any).ships_from || "", delivery_eta: (c as any).delivery_eta || "" });
+    setComboImagePreviews(c.images || []);
+    setComboDialog(true);
+  };
+  const deleteCombo = async (id: string) => {
+    const { error } = await supabase.from("combo_packs").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Combo deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-combos"] }); }
+  };
+  const handleComboImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    setUploading(true);
+    const urls: string[] = [];
+    for (const file of files) { const url = await uploadFile(file, "combos"); if (url) urls.push(url); }
+    setComboForm(prev => ({ ...prev, images: [...prev.images.split(",").filter(Boolean), ...urls].join(",") }));
+    setComboImagePreviews(prev => [...prev, ...urls]);
+    setUploading(false); e.target.value = "";
+  };
+  const saveCombo = async () => {
+    if (!comboForm.name.trim() || !comboForm.slug.trim()) return toast({ title: "Name and slug required", variant: "destructive" });
+    const payload: any = { name: comboForm.name, slug: comboForm.slug, description: comboForm.description || null, combo_price: Number(comboForm.combo_price) || 0, original_price: Number(comboForm.original_price) || 0, images: comboForm.images ? comboForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: comboForm.is_active, is_featured: comboForm.is_featured };
+    const { data: saved, error } = editingComboId ? await supabase.from("combo_packs").update(payload).eq("id", editingComboId).select().single() : await supabase.from("combo_packs").insert(payload).select().single();
+    if (error) return toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    const comboId = saved.id;
+    if (editingComboId) await supabase.from("combo_pack_items").delete().eq("combo_id", comboId);
+    const validItems = comboForm.items.filter(i => i.product_id);
+    if (validItems.length) await supabase.from("combo_pack_items").insert(validItems.map(i => ({ combo_id: comboId, product_id: i.product_id, quantity: Number(i.quantity) || 1 })));
+    toast({ title: editingComboId ? "Combo updated" : "Combo created" }); setComboDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-combos"] });
+  };
+
+  // ── Page handlers ──
+  const openAddPage = () => { setEditingPageId(null); setPageForm(emptyPage); setPageDialog(true); };
+  const openEditPage = (p: any) => { setEditingPageId(p.id); setPageForm({ title: p.title, slug: p.slug, content: p.content || "", is_published: p.is_published ?? true }); setPageDialog(true); };
+  const deletePage = async (id: string) => {
+    const { error } = await supabase.from("pages").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Page deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-pages"] }); }
+  };
+  const savePage = async () => {
+    if (!pageForm.title.trim() || !pageForm.slug.trim()) return toast({ title: "Title and slug required", variant: "destructive" });
+    const payload = { title: pageForm.title, slug: pageForm.slug, content: pageForm.content || "", is_published: pageForm.is_published };
+    const { error } = editingPageId ? await supabase.from("pages").update(payload).eq("id", editingPageId) : await supabase.from("pages").insert(payload);
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: editingPageId ? "Page updated" : "Page created" }); setPageDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-pages"] }); }
+  };
+
+  // ── Coupon handlers ──
+  const openAddCoupon = () => { setEditingCouponId(null); setCouponForm(emptyCoupon); setCouponDialog(true); };
+  const openEditCoupon = (c: any) => {
+    setEditingCouponId(c.id);
+    const phones = (c as any).assigned_phones || "";
+    setCouponForm({ code: c.code, name: c.name || "", description: c.description || "", discount_type: c.discount_type, discount_value: String(c.discount_value), min_order_amount: String(c.min_order_amount || ""), max_uses: String(c.max_uses || ""), is_active: c.is_active, expires_at: c.expires_at ? c.expires_at.slice(0, 16) : "", coupon_type: c.coupon_type || "public", max_discount_cap: String(c.max_discount_cap || ""), per_user_limit: String(c.per_user_limit || ""), starts_at: c.starts_at ? c.starts_at.slice(0, 16) : "", category_scope: c.category_scope || "all", valid_category_ids: c.valid_category_ids || [], assigned_phones: phones });
+    setCouponDialog(true);
+  };
+  const deleteCoupon = async (id: string) => {
+    const { error } = await supabase.from("coupons").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Coupon deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] }); }
+  };
+  const saveCoupon = async () => {
+    if (!couponForm.code.trim()) return toast({ title: "Code required", variant: "destructive" });
+    const payload: any = { code: couponForm.code.toUpperCase().trim(), name: couponForm.name || null, description: couponForm.description || null, discount_type: couponForm.discount_type, discount_value: Number(couponForm.discount_value) || 0, min_order_amount: couponForm.min_order_amount ? Number(couponForm.min_order_amount) : null, max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : null, is_active: couponForm.is_active, expires_at: couponForm.expires_at || null, coupon_type: couponForm.coupon_type, max_discount_cap: couponForm.max_discount_cap ? Number(couponForm.max_discount_cap) : null, per_user_limit: couponForm.per_user_limit ? Number(couponForm.per_user_limit) : null, starts_at: couponForm.starts_at || null, category_scope: couponForm.category_scope, valid_category_ids: couponForm.valid_category_ids };
+    const { data: saved, error } = editingCouponId ? await (supabase as any).from("coupons").update(payload).eq("id", editingCouponId).select().single() : await (supabase as any).from("coupons").insert(payload).select().single();
+    if (error) return toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    if (couponForm.coupon_type === "assigned" && couponForm.assigned_phones.trim()) {
+      const phones = couponForm.assigned_phones.split(",").map(p => p.trim()).filter(Boolean);
+      if (editingCouponId) await (supabase as any).from("coupon_assignments").delete().eq("coupon_id", saved.id);
+      await (supabase as any).from("coupon_assignments").insert(phones.map((phone: string) => ({ coupon_id: saved.id, phone, used: false })));
+    }
+    toast({ title: editingCouponId ? "Coupon updated" : "Coupon created" }); setCouponDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-coupons"] });
+  };
+
+  // ── Order handlers ──
+  const updateOrderStatus = async (id: string, status: string) => {
+    const { error } = await supabase.from("orders").update({ status }).eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Status updated" }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+  };
+  const updatePaymentStatus = async (id: string, payment_status: string) => {
+    const { error } = await supabase.from("orders").update({ payment_status }).eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Payment status updated" }); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+  };
+  const openOrderDetail = (order: any) => {
+    setSelectedOrder(order);
+    setOrderDeliveryForm({ status: order.status, tracking_number: order.tracking_number || "", courier_name: order.courier_name || "", tracking_link: order.tracking_link || "", expected_delivery: order.expected_delivery ? order.expected_delivery.slice(0, 10) : "", delivery_note: order.delivery_note || "" });
+    setOrderDetailDialog(true);
+    setLoadingHistory(true);
+    supabase.from("order_status_history").select("*").eq("order_id", order.id).order("created_at", { ascending: false })
+      .then(({ data }) => { setOrderStatusHistory(data || []); setLoadingHistory(false); });
+  };
+  const deleteOrder = async (id: string) => {
+    const { error } = await supabase.from("orders").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Order deleted" }); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+  };
+  const bulkUpdateOrderStatus = async (status: string) => {
+    const ids = Array.from(selectedOrders);
+    if (!ids.length) return;
+    const { error } = await supabase.from("orders").update({ status }).in("id", ids);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: `${ids.length} orders updated` }); setSelectedOrders(new Set()); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+  };
+  const bulkDeleteOrders = async () => {
+    const ids = Array.from(selectedOrders);
+    if (!ids.length) return;
+    const { error } = await supabase.from("orders").delete().in("id", ids);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: `${ids.length} orders deleted` }); setSelectedOrders(new Set()); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+  };
+
+  // ── User handlers ──
+  const openEditUser = (u: any) => {
+    setUserEditTarget(u.user_id);
+    setUserEditForm({ full_name: u.full_name || "", phone: u.phone || "", email: "", city: u.city || "", address_line1: u.address_line1 || "", address_line2: u.address_line2 || "", postal_code: u.postal_code || "" });
+    setUserEditDialog(true);
+  };
+  const handleSuspendUser = (u: any) => { setSuspendTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setSuspendReason(""); setSuspendDialog(true); };
+  const handleUnsuspendUser = async (userId: string) => {
+    setUserActionLoading(true);
+    const { error } = await supabase.from("profiles").update({ is_suspended: false, suspended_at: null, suspended_reason: null } as any).eq("user_id", userId);
+    setUserActionLoading(false);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "User unsuspended" }); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+  };
+  const handleDeleteUser = (u: any) => { setDeleteTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setDeleteDialog(true); };
+  const handleRoleChange = async (userId: string, role: string) => {
+    await supabase.from("user_roles").delete().eq("user_id", userId);
+    if (role !== "user") await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+    toast({ title: `Role set to ${role}` }); queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] }); setRoleDialog(false);
+  };
+  const handleSaveEditUser = async () => {
+    if (!userEditTarget) return;
+    setUserActionLoading(true);
+    const { error } = await supabase.from("profiles").update({ full_name: userEditForm.full_name, phone: userEditForm.phone, city: userEditForm.city, address_line1: userEditForm.address_line1, address_line2: userEditForm.address_line2, postal_code: userEditForm.postal_code }).eq("user_id", userEditTarget);
+    setUserActionLoading(false);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "User updated" }); setUserEditDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+  };
+
+  // ── Review handlers ──
+  const deleteReview = async (id: string) => {
+    const { error } = await supabase.from("reviews").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Review deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-reviews"] }); }
+  };
+  const toggleReviewVisibility = async (id: string, current: boolean) => {
+    const { error } = await supabase.from("reviews").update({ is_visible: !current } as any).eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: !current ? "Review shown" : "Review hidden" }); queryClient.invalidateQueries({ queryKey: ["admin-reviews"] }); }
+  };
+
+  // ── Contact handlers ──
+  const markAsRead = async (id: string) => {
+    await supabase.from("contact_messages").update({ is_read: true }).eq("id", id);
+    queryClient.invalidateQueries({ queryKey: ["admin-contacts"] });
+  };
+  const deleteContact = async (id: string) => {
+    const { error } = await supabase.from("contact_messages").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Message deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-contacts"] }); }
+  };
+
+  // ── Admin reply (conversations) ──
+  const sendAdminReply = async () => {
+    if (!adminReplyText.trim() && !adminPendingFile) return;
+    setAdminSendingReply(true);
+    let attachmentUrl: string | null = null;
+    if (adminPendingFile) {
+      setAdminAttachingFile(true);
+      attachmentUrl = await uploadFile(adminPendingFile, "chat-attachments");
+      setAdminAttachingFile(false);
+      setAdminPendingFile(null);
+    }
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { setAdminSendingReply(false); return; }
+    const msgText = attachmentUrl ? (adminReplyText.trim() ? `${adminReplyText.trim()}\n[attachment:${attachmentUrl}]` : `[attachment:${attachmentUrl}]`) : adminReplyText.trim();
+    const { error } = await (supabase as any).from("conversation_messages").insert({ conversation_id: adminSelectedConvo, message: msgText, sender_id: session.user.id, sender_type: "admin", is_read: false });
+    if (!error) await (supabase as any).from("conversations").update({ updated_at: new Date().toISOString(), status: "open" }).eq("id", adminSelectedConvo);
+    setAdminReplyText(""); setAdminSendingReply(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-convo-messages", adminSelectedConvo] });
+    queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
+  };
+
+  // ── Settings handlers ──
+  const saveSeoSettings = async () => {
+    const { error } = await (supabase as any).from("site_settings").upsert({ key: "seo", value: seoForm }, { onConflict: "key" });
+    if (error) toast({ title: "Error saving SEO", description: error.message, variant: "destructive" });
+    else { toast({ title: "SEO settings saved" }); queryClient.invalidateQueries({ queryKey: ["admin-seo"] }); }
+  };
+  const saveCompanySettings = async () => {
+    const { error } = await (supabase as any).from("site_settings").upsert({ key: "company", value: companyForm }, { onConflict: "key" });
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: "Company info saved" }); queryClient.invalidateQueries({ queryKey: ["admin-company"] }); }
+  };
+  const addBankAccount = () => setBankForm((prev: any[]) => [...(prev || []), { bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" }]);
+  const removeBankAccount = (index: number) => setBankForm((prev: any[]) => prev.filter((_: any, i: number) => i !== index));
+  const updateBankAccount = (index: number, field: string, value: string) => setBankForm((prev: any[]) => prev.map((acc: any, i: number) => i === index ? { ...acc, [field]: value } : acc));
+  const saveBankSettings = async () => {
+    const { error } = await (supabase as any).from("site_settings").upsert({ key: "bank_details", value: bankForm }, { onConflict: "key" });
+    if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+    else { toast({ title: "Bank details saved" }); queryClient.invalidateQueries({ queryKey: ["admin-bank"] }); }
+  };
+
+  // ── SMS log handlers ──
+  const deleteSmsLog = async (id: string) => {
+    const { error } = await (supabase as any).from("sms_logs").delete().eq("id", id);
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Log deleted" }); queryClient.invalidateQueries({ queryKey: ["admin-sms-logs"] }); }
+  };
+  const deleteAllSmsLogs = async () => {
+    const { error } = await (supabase as any).from("sms_logs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "All SMS logs cleared" }); queryClient.invalidateQueries({ queryKey: ["admin-sms-logs"] }); }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
