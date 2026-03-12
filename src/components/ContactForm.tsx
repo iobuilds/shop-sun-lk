@@ -84,6 +84,7 @@ const ContactForm = () => {
       }
       
       setSubmitted(true);
+      logSiteAction("contact_message_sent", "contact", undefined, { subject: result.data.subject, logged_in: isLoggedIn });
       toast.success("Message sent successfully!");
     } catch (err: any) {
       toast.error(err.message || "Failed to send message");
