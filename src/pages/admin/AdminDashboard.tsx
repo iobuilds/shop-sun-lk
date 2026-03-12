@@ -72,7 +72,7 @@ const emptyCoupon: CouponForm = { code: "", name: "", description: "", discount_
 const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_type: "local", ships_from: "", delivery_eta: "" };
 
 const AdminDashboard = () => {
-  const { isAdmin, isModerator, userRole, loading } = useAdminAuth();
+  const { isAdmin, isModerator, userRole, moderatorPermissions, loading } = useAdminAuth();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("orders");
   const [search, setSearch] = useState("");
