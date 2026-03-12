@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { CreditCard, Building2, Truck, Shield, Loader2, ArrowLeft, Tag, X, Wallet, CheckCircle, ChevronDown, ChevronUp, Users, Smartphone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/contexts/CartContext";
 import { useQuery } from "@tanstack/react-query";
@@ -19,7 +19,7 @@ const usePaymentMethodSettings = () => useQuery({
   queryFn: async () => {
     const { data, error } = await supabase.from("site_settings" as any).select("*").eq("key", "payment_methods").maybeSingle();
     if (error) throw error;
-    return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+    return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true, payhere_enabled: false, payhere_sandbox: true };
   },
   staleTime: 5 * 60 * 1000,
 });
@@ -28,6 +28,13 @@ const usePaymentMethodSettings = () => useQuery({
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import type { Session } from "@supabase/supabase-js";
+
+// Declare payhere global loaded from CDN
+declare global {
+  interface Window {
+    payhere: any;
+  }
+}
 
 const Checkout = () => {
   const navigate = useNavigate();
@@ -39,7 +46,9 @@ const Checkout = () => {
   const { shipping, shippingNote, freeShippingGap, hasOverseas } = useShippingCalculation(items, subtotal);
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
+  const payhereEnabled = pmSettings?.payhere_enabled === true;
   const [paymentMethod, setPaymentMethod] = useState("");
+  const payhereScriptLoaded = useRef(false);
 
   // Coupon state
   const [couponCode, setCouponCode] = useState("");
