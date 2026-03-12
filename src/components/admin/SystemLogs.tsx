@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Search, Terminal, Download, ChevronRight, ChevronDown } from "lucide-react";
+import { RefreshCw, Search, Terminal, Download, Copy, ChevronRight, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 
 interface LogEntry {
@@ -16,21 +16,12 @@ interface LogEntry {
   status?: string;
   path?: string;
   ip?: string | null;
+  req_id?: string | null;
   source?: string;
   details?: any;
+  execution_ms?: number;
+  function_id?: string;
 }
-
-const STATUS_COLOR: Record<string, string> = {
-  "200": "bg-green-500/10 text-green-600 border-green-500/20",
-  "101": "bg-sky-500/10 text-sky-600 border-sky-500/20",
-  "304": "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
-  "400": "bg-orange-500/10 text-orange-600 border-orange-500/20",
-  "401": "bg-destructive/10 text-destructive border-destructive/20",
-  "403": "bg-destructive/10 text-destructive border-destructive/20",
-  "404": "bg-orange-500/10 text-orange-600 border-orange-500/20",
-  "500": "bg-destructive/10 text-destructive border-destructive/20",
-  LOG:   "bg-sky-500/10 text-sky-600 border-sky-500/20",
-};
 
 const METHOD_COLOR: Record<string, string> = {
   GET:     "text-green-500",
@@ -39,56 +30,105 @@ const METHOD_COLOR: Record<string, string> = {
   PATCH:   "text-orange-400",
   DELETE:  "text-destructive",
   OPTIONS: "text-muted-foreground",
+  SQL:     "text-violet-500",
   LOG:     "text-sky-500",
+};
+
+const STATUS_COLOR: Record<string, string> = {
+  "200": "bg-green-500/10 text-green-600 border-green-500/20",
+  "201": "bg-green-500/10 text-green-600 border-green-500/20",
+  "101": "bg-sky-500/10 text-sky-600 border-sky-500/20",
+  "304": "bg-yellow-500/10 text-yellow-600 border-yellow-500/20",
+  "400": "bg-orange-500/10 text-orange-600 border-orange-500/20",
+  "401": "bg-destructive/10 text-destructive border-destructive/20",
+  "403": "bg-destructive/10 text-destructive border-destructive/20",
+  "404": "bg-orange-500/10 text-orange-600 border-orange-500/20",
+  "500": "bg-destructive/10 text-destructive border-destructive/20",
+  "502": "bg-destructive/10 text-destructive border-destructive/20",
+  LOG:   "bg-sky-500/10 text-sky-500 border-sky-500/20",
 };
 
 function LogRow({ log }: { log: LogEntry }) {
   const [expanded, setExpanded] = useState(false);
-  const statusColor = STATUS_COLOR[log.status || "LOG"] || "bg-muted text-muted-foreground border-border";
+  const statusKey = log.status || "LOG";
+  const statusColor = STATUS_COLOR[statusKey] || "bg-muted text-muted-foreground border-border";
   const methodColor = METHOD_COLOR[log.method || "LOG"] || "text-muted-foreground";
   const hasDetails = log.details && Object.keys(log.details).length > 0;
+
+  const copyJson = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(JSON.stringify(log, null, 2));
+  };
 
   return (
     <>
       <tr
-        className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
-        onClick={() => hasDetails && setExpanded((v) => !v)}
+        className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group"
+        onClick={() => setExpanded((v) => !v)}
       >
-        <td className="px-3 py-2 whitespace-nowrap">
-          {hasDetails ? (
-            expanded
-              ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-              : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-          ) : (
-            <span className="w-3.5 h-3.5 block" />
-          )}
+        <td className="px-3 py-2 w-5">
+          {expanded
+            ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+            : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-50 group-hover:opacity-100" />
+          }
         </td>
+        {/* Timestamp */}
         <td className="px-3 py-2 whitespace-nowrap text-xs font-mono text-muted-foreground">
-          {format(new Date(log.timestamp), "MMM d, HH:mm:ss")}
+          {format(new Date(log.timestamp), "d MMM HH:mm:ss")}
         </td>
+        {/* Level/Source badge */}
         <td className="px-3 py-2 whitespace-nowrap">
-          <Badge variant="outline" className={`text-xs font-mono font-bold ${statusColor}`}>
-            {log.status || "LOG"}
+          <Badge variant="outline" className="text-xs font-mono font-bold bg-sky-500/10 text-sky-500 border-sky-500/20">
+            LOG
           </Badge>
         </td>
-        <td className={`px-3 py-2 whitespace-nowrap text-xs font-mono font-semibold ${methodColor}`}>
+        {/* Method */}
+        <td className={`px-3 py-2 whitespace-nowrap text-xs font-mono font-bold ${methodColor}`}>
           {log.method || "—"}
         </td>
-        <td className="px-3 py-2 text-xs font-mono text-muted-foreground max-w-xs truncate">
-          {log.path || "—"}
+        {/* Status */}
+        <td className="px-3 py-2 whitespace-nowrap">
+          <Badge variant="outline" className={`text-xs font-mono font-bold ${statusColor}`}>
+            {log.status || "—"}
+          </Badge>
         </td>
-        <td className="px-3 py-2 text-xs text-foreground max-w-sm">
-          <span className="line-clamp-1">{log.event_message}</span>
-        </td>
+        {/* IP */}
         <td className="px-3 py-2 whitespace-nowrap text-xs font-mono text-muted-foreground">
           {log.ip || "—"}
         </td>
+        {/* Req ID */}
+        <td className="px-3 py-2 whitespace-nowrap text-xs font-mono text-muted-foreground max-w-[120px] truncate">
+          {log.req_id ? log.req_id.slice(0, 16) : (log.id ? log.id.slice(0, 16) : "—")}
+        </td>
+        {/* Message / URL */}
+        <td className="px-3 py-2 text-xs font-mono text-foreground min-w-0">
+          <span className="line-clamp-1 text-muted-foreground">{log.path || log.event_message}</span>
+        </td>
       </tr>
-      {expanded && hasDetails && (
+      {expanded && (
         <tr className="border-b border-border bg-muted/20">
-          <td colSpan={7} className="px-6 py-3">
-            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all">
-              {JSON.stringify(log.details, null, 2)}
+          <td colSpan={8} className="px-6 py-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Raw log data</span>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={copyJson}>
+                <Copy className="w-3 h-3" />
+                Copy JSON
+              </Button>
+            </div>
+            <pre className="text-xs font-mono text-foreground whitespace-pre-wrap break-all bg-background rounded-md p-4 border border-border">
+              {JSON.stringify({
+                event_message: log.event_message,
+                id: log.id,
+                log_level: log.status ? parseInt(log.status) : 200,
+                method: log.method,
+                path: log.path,
+                status: log.status,
+                ip: log.ip,
+                timestamp: new Date(log.timestamp).getTime() * 1000,
+                ...(log.details || {}),
+                ...(log.execution_ms !== undefined ? { execution_time_ms: log.execution_ms } : {}),
+                ...(log.function_id ? { function_id: log.function_id } : {}),
+              }, null, 2)}
             </pre>
           </td>
         </tr>
@@ -97,13 +137,19 @@ function LogRow({ log }: { log: LogEntry }) {
   );
 }
 
+const LOG_TYPES = [
+  { value: "api", label: "API logs" },
+  { value: "edge", label: "Edge logs" },
+  { value: "postgres", label: "Postgres logs" },
+  { value: "auth", label: "Auth logs" },
+];
+
 const SystemLogs = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [hours, setHours] = useState("1");
   const [logType, setLogType] = useState("api");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -124,6 +170,7 @@ const SystemLogs = () => {
 
   useEffect(() => {
     fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logType, hours]);
 
   useEffect(() => {
@@ -133,25 +180,24 @@ const SystemLogs = () => {
       if (timerRef.current) clearInterval(timerRef.current);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, logType, hours, search]);
 
   const filteredLogs = logs.filter((l) => {
-    if (statusFilter !== "all" && l.status !== statusFilter) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      return (
-        l.event_message?.toLowerCase().includes(s) ||
-        l.path?.toLowerCase().includes(s) ||
-        l.ip?.toLowerCase().includes(s) ||
-        l.method?.toLowerCase().includes(s)
-      );
-    }
-    return true;
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (
+      l.event_message?.toLowerCase().includes(s) ||
+      l.path?.toLowerCase().includes(s) ||
+      l.ip?.toLowerCase().includes(s) ||
+      l.method?.toLowerCase().includes(s) ||
+      l.req_id?.toLowerCase().includes(s)
+    );
   });
 
   const downloadLogs = () => {
     const content = filteredLogs.map((l) =>
-      `[${l.timestamp}] ${l.method || ""} ${l.status || ""} ${l.path || ""} ${l.ip || ""} | ${l.event_message}`
+      `[${l.timestamp}] ${l.method || ""} ${l.status || ""} ${l.ip || ""} ${l.id?.slice(0, 16) || ""} | ${l.path || l.event_message}`
     ).join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const a = document.createElement("a");
@@ -160,6 +206,12 @@ const SystemLogs = () => {
     a.click();
   };
 
+  const copyAll = () => {
+    navigator.clipboard.writeText(JSON.stringify(filteredLogs, null, 2));
+  };
+
+  const currentLogType = LOG_TYPES.find(t => t.value === logType);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -167,48 +219,42 @@ const SystemLogs = () => {
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Terminal className="w-5 h-5 text-primary" />
-            System Logs
+            Logs
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Live backend activity & event stream</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={autoRefresh ? "default" : "outline"}
-            size="sm"
-            onClick={() => setAutoRefresh((v) => !v)}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${autoRefresh ? "animate-spin" : ""}`} />
-            {autoRefresh ? "Live" : "Auto Refresh"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchLogs} disabled={loading}>
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={downloadLogs} disabled={filteredLogs.length === 0}>
-            <Download className="w-3.5 h-3.5 mr-1.5" />
-            Download
-          </Button>
+          <p className="text-sm text-muted-foreground mt-0.5">Debug errors and track activity in your app.</p>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters row - matches Supabase style */}
       <div className="flex gap-2 flex-wrap items-center">
+        <div className="relative flex-1 min-w-52">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search events"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+            onKeyDown={(e) => e.key === "Enter" && fetchLogs()}
+          />
+        </div>
+
         <Select value={logType} onValueChange={(v) => setLogType(v)}>
-          <SelectTrigger className="w-36">
-            <SelectValue />
+          <SelectTrigger className="w-40">
+            <SelectValue>{currentLogType?.label}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="api">API Logs</SelectItem>
-            <SelectItem value="edge">Edge Logs</SelectItem>
+            {LOG_TYPES.map(t => (
+              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
         <Select value={hours} onValueChange={(v) => setHours(v)}>
-          <SelectTrigger className="w-32">
+          <SelectTrigger className="w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">Last 1 hour</SelectItem>
+            <SelectItem value="1">Last hour</SelectItem>
             <SelectItem value="3">Last 3 hours</SelectItem>
             <SelectItem value="6">Last 6 hours</SelectItem>
             <SelectItem value="24">Last 24 hours</SelectItem>
@@ -216,43 +262,26 @@ const SystemLogs = () => {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="200">200 OK</SelectItem>
-            <SelectItem value="304">304 Redirect</SelectItem>
-            <SelectItem value="400">400 Bad Request</SelectItem>
-            <SelectItem value="401">401 Unauthorized</SelectItem>
-            <SelectItem value="500">500 Error</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search events, paths, IPs..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
-          />
-        </div>
+        <Button
+          variant={autoRefresh ? "default" : "outline"}
+          size="icon"
+          onClick={() => setAutoRefresh((v) => !v)}
+          title={autoRefresh ? "Stop auto-refresh" : "Enable auto-refresh"}
+        >
+          <RefreshCw className={`w-4 h-4 ${autoRefresh ? "animate-spin" : ""}`} />
+        </Button>
       </div>
 
-      {/* Stats bar */}
-      <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
-        <span className="font-mono">{filteredLogs.length} events</span>
-        {["200", "500", "400", "401"].map((s) => {
-          const count = filteredLogs.filter((l) => l.status === s).length;
-          if (!count) return null;
-          return (
-            <span key={s} className={`font-mono px-1.5 py-0.5 rounded border ${STATUS_COLOR[s] || ""}`}>
-              {s}: {count}
-            </span>
-          );
-        })}
+      {/* Action bar */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={downloadLogs} disabled={filteredLogs.length === 0} className="gap-1.5">
+          <Download className="w-3.5 h-3.5" />
+          Download
+        </Button>
+        <Button variant="outline" size="sm" onClick={copyAll} disabled={filteredLogs.length === 0} className="gap-1.5">
+          <Copy className="w-3.5 h-3.5" />
+          Copy
+        </Button>
       </div>
 
       {/* Table */}
@@ -261,28 +290,30 @@ const SystemLogs = () => {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-muted/50 border-b border-border">
-                <th className="px-3 py-2 w-6"></th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap text-xs">Time</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap text-xs">Status</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap text-xs">Method</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap text-xs">Path</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground text-xs">Event</th>
-                <th className="text-left px-3 py-2 font-semibold text-muted-foreground whitespace-nowrap text-xs">IP</th>
+                <th className="px-3 py-2 w-5"></th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">Time</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">Level</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">Method</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">Status</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">IP</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground whitespace-nowrap text-xs">ID</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground text-xs">Event</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                  <td colSpan={8} className="text-center py-16 text-muted-foreground">
                     <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2" />
-                    Fetching logs...
+                    <p className="text-sm">Fetching logs...</p>
                   </td>
                 </tr>
               ) : filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-muted-foreground">
-                    <Terminal className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    No log entries found
+                  <td colSpan={8} className="text-center py-16 text-muted-foreground">
+                    <Terminal className="w-8 h-8 mx-auto mb-3 opacity-25" />
+                    <p className="text-sm font-medium">No log entries found</p>
+                    <p className="text-xs mt-1 opacity-70">Try extending the time range or changing the log type</p>
                   </td>
                 </tr>
               ) : (
@@ -291,6 +322,15 @@ const SystemLogs = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Footer count */}
+        {filteredLogs.length > 0 && (
+          <div className="px-4 py-3 border-t border-border bg-muted/30 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground font-mono">
+              {filteredLogs.length} log{filteredLogs.length !== 1 ? "s" : ""} found
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
