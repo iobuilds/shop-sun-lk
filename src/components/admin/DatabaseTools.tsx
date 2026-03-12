@@ -462,31 +462,28 @@ const DatabaseTools = () => {
         </CardContent>
       </Card>
 
-      {/* Confirmation Dialog */}
+      {/* Password Confirmation Dialog */}
       <Dialog open={passwordDialog} onOpenChange={(open) => { if (!open) { setPasswordDialog(false); setPendingAction(null); setPassword(""); setPasswordError(""); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Confirm Action</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Confirm Your Identity</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">You are about to <strong>{getPasswordDialogLabel()}</strong>. This action cannot be undone.</p>
-            <p className="text-sm text-muted-foreground">Type <span className="font-mono font-bold text-foreground">CONFIRM</span> to proceed:</p>
-            <div className="space-y-1.5">
-              <Input
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
-                onKeyDown={(e) => e.key === "Enter" && verifyPasswordAndExecute()}
-                placeholder="Type CONFIRM"
-                autoFocus
-                autoComplete="off"
-                className="font-mono"
-              />
-              {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
-            </div>
+          <p className="text-sm text-muted-foreground">Enter your admin password to {getPasswordDialogLabel()}.</p>
+          <div className="space-y-2">
+            <Label>Password</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && verifyPasswordAndExecute()}
+              placeholder="Enter your password"
+              autoFocus
+            />
+            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPasswordDialog(false); setPendingAction(null); setPassword(""); setPasswordError(""); }}>Cancel</Button>
-            <Button onClick={verifyPasswordAndExecute} disabled={verifying || password.trim().toUpperCase() !== "CONFIRM"} variant={pendingAction?.type === "cleanup" ? "destructive" : "default"}>
+            <Button onClick={verifyPasswordAndExecute} disabled={verifying} variant={pendingAction?.type === "cleanup" ? "destructive" : "default"}>
               {verifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
               Confirm
             </Button>
