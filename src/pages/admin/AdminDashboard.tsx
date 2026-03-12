@@ -4135,7 +4135,13 @@ const AdminDashboard = () => {
             <div className="flex items-center gap-2"><Switch checked={promoForm.is_active} onCheckedChange={(v) => setPromoForm({ ...promoForm, is_active: v })} /><Label>Active</Label></div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setPromoDialog(false)}>Cancel</Button>
-              <Button onClick={savePromo} disabled={!promoForm.title}>Save Promo Banner</Button>
+              <Button onClick={async () => {
+                if (!promoForm.title.trim()) return toast({ title: "Title required", variant: "destructive" });
+                const payload: any = { title: promoForm.title, subtitle: promoForm.subtitle || null, description: promoForm.description || null, badge_text: promoForm.badge_text || null, image_url: promoForm.image_url || "", link_url: promoForm.link_url || null, gradient_from: promoForm.gradient_from, sort_order: Number(promoForm.sort_order) || 0, is_active: promoForm.is_active };
+                const { error } = editingPromoId ? await (supabase as any).from("promo_banners").update(payload).eq("id", editingPromoId) : await (supabase as any).from("promo_banners").insert(payload);
+                if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
+                else { toast({ title: editingPromoId ? "Promo updated" : "Promo created" }); setPromoDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-promo-banners"] }); }
+              }} disabled={!promoForm.title}>Save Promo Banner</Button>
             </div>
           </div>
         </DialogContent>
