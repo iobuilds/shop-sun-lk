@@ -218,7 +218,31 @@ const Checkout = () => {
     setCouponCode("");
   };
 
-  if (loading) {
+  const applyReferral = async () => {
+    if (!referralCode.trim()) return;
+    setValidatingReferral(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-referral-code", {
+        body: { code: referralCode, subtotal },
+      });
+      if (error) throw error;
+      if (!data.valid) throw new Error(data.error);
+      setAppliedReferral({ code: data.code, discount: data.discount, name: data.name });
+      setReferralCode(data.code);
+      toast.success(`Referral code applied! You save Rs. ${data.discount.toLocaleString()}`);
+    } catch (err: any) {
+      toast.error(err.message || "Invalid referral code");
+    } finally {
+      setValidatingReferral(false);
+    }
+  };
+
+  const removeReferral = () => {
+    setAppliedReferral(null);
+    setReferralCode("");
+  };
+
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-secondary" />
