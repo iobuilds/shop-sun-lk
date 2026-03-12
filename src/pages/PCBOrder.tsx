@@ -22,6 +22,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { generatePCBInvoice } from "@/lib/generatePCBInvoice";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: any }> = {
   pending:          { label: "Pending Review",               color: "text-yellow-600 bg-yellow-50 border-yellow-200",      icon: Clock },

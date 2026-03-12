@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useShippingCalculation } from "@/hooks/useShippingCalculation";
+import { logSiteAction } from "@/lib/logSiteAction";
 
 // Fetch payment method settings
 const usePaymentMethodSettings = () => useQuery({
