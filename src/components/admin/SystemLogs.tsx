@@ -162,6 +162,9 @@ const SystemLogs = () => {
       });
       if (error) throw error;
       setLogs(data?.logs || []);
+      if (data?.has_management_token !== undefined) {
+        setHasManagementToken(data.has_management_token);
+      }
     } catch (err: any) {
       console.error("Failed to fetch logs:", err);
     } finally {
