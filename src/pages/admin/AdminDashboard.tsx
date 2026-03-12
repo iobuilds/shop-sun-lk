@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,8 +31,9 @@ import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
 import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
 import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissionsManager";
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
+import ActivityLogs from "@/components/admin/ActivityLogs";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -595,6 +596,7 @@ const AdminDashboard = () => {
       { table: "coupons",               keys: ["admin-coupons"] },
       { table: "reviews",               keys: ["admin-reviews"] },
       { table: "sms_logs",              keys: ["admin-sms-logs"] },
+      { table: "admin_activity_logs",   keys: ["admin-activity-logs"] },
     ];
 
     const channels = WATCHED.map(({ table, keys }) =>
@@ -706,6 +708,7 @@ const AdminDashboard = () => {
       items: [
         { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+        { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
       ],
     },
   ];
@@ -3593,6 +3596,13 @@ const AdminDashboard = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <h2 className="text-xl font-bold font-display text-foreground mb-6">Database Tools</h2>
               <DatabaseTools />
+            </motion.div>
+          )}
+
+          {/* ═══ Activity Logs Tab ═══ */}
+          {tab === "activity_logs" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <ActivityLogs />
             </motion.div>
           )}
 
