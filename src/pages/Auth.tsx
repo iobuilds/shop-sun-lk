@@ -216,6 +216,7 @@ const Auth = () => {
         const isAdminOrMod = roles.includes("admin") || roles.includes("moderator");
         
         toast.success("Welcome back!");
+        logSiteAction("user_login", "user", signInData.user.id, { email: signInData.user.email, role: roles[0] || "user" });
         navigate(isAdminOrMod ? "/admin" : "/");
       }
     } catch (error: any) {
