@@ -121,6 +121,7 @@ const DatabaseTools = () => {
       else if (pendingAction?.type === "upload_restore") await executeUploadRestore();
       else if (pendingAction?.type === "upload_full_restore") await executeUploadFullRestore();
       else if (pendingAction?.type === "cleanup") await executeCleanup();
+      else if (pendingAction?.type === "schedule_backup") await executeScheduleBackup();
     } catch (e: any) {
       setPasswordError(e.message);
     } finally {
