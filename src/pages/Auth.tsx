@@ -8,6 +8,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Eye, EyeOff, Mail, Lock, User, Phone, ShieldCheck, MapPin, ChevronLeft } from "lucide-react";
+import { useBranding } from "@/hooks/useBranding";
 
 type Step = "form" | "otp" | "address";
 
