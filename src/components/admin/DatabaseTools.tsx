@@ -20,7 +20,8 @@ interface BackupLog {
 interface BackupFile {
   name: string;
   created_at: string;
-  metadata: { size?: number };
+  updated_at: string;
+  metadata: { size?: number; contentLength?: number; mimetype?: string };
 }
 
 const DatabaseTools = () => {
@@ -405,7 +406,7 @@ const DatabaseTools = () => {
                       </div>
                       <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 ml-6">
                         <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(b.created_at).toLocaleString()}</span>
-                        {log?.file_size && <span>{formatSize(log.file_size)}</span>}
+                        <span>{formatSize(log?.file_size ?? b.metadata?.size ?? b.metadata?.contentLength)}</span>
                         {log?.created_by_email && <span>by {log.created_by_email}</span>}
                       </div>
                     </div>
