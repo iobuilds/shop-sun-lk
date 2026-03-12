@@ -1220,6 +1220,7 @@ export type Database = {
           comment: string | null
           created_at: string | null
           id: string
+          is_visible: boolean
           product_id: string
           rating: number
           user_id: string
@@ -1228,6 +1229,7 @@ export type Database = {
           comment?: string | null
           created_at?: string | null
           id?: string
+          is_visible?: boolean
           product_id: string
           rating: number
           user_id: string
@@ -1236,6 +1238,7 @@ export type Database = {
           comment?: string | null
           created_at?: string | null
           id?: string
+          is_visible?: boolean
           product_id?: string
           rating?: number
           user_id?: string
