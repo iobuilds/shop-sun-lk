@@ -394,7 +394,13 @@ Deno.serve(async (req) => {
       if (error || !data) {
         return new Response(JSON.stringify({ error: "Could not create signed upload URL: " + error?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ url: data.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // On self-hosted VPS, the signed URL may use the internal kong:8000 address.
+      // Replace it with the public SUPABASE_URL so the browser can reach it.
+      let publicUrl = data.signedUrl;
+      if (publicUrl.includes("kong:8000") || publicUrl.includes("localhost")) {
+        publicUrl = publicUrl.replace(/https?:\/\/(kong:8000|localhost:[0-9]+)/, supabaseUrl);
+      }
+      return new Response(JSON.stringify({ url: publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
