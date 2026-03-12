@@ -2453,103 +2453,81 @@ const AdminDashboard = () => {
           )}
 
           {/* ═══ Reviews Tab ═══ */}
-          {tab === "reviews" && (() => {
-            const [reviewVisFilter, setReviewVisFilter] = useState<"all" | "visible" | "hidden">("all");
-
-            const toggleReviewVisibility = async (id: string, current: boolean) => {
-              const { error } = await supabase.from("reviews").update({ is_visible: !current } as any).eq("id", id);
-              if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-              else { toast({ title: !current ? "Review shown" : "Review hidden" }); queryClient.invalidateQueries({ queryKey: ["admin-reviews"] }); }
-            };
-
-            const visFiltered = (allReviews || []).filter((r: any) => {
-              const matchSearch = !reviewSearch.trim() || (r.products?.name || "").toLowerCase().includes(reviewSearch.toLowerCase()) || (r.comment || "").toLowerCase().includes(reviewSearch.toLowerCase());
-              const matchVis = reviewVisFilter === "all" ? true : reviewVisFilter === "visible" ? r.is_visible !== false : r.is_visible === false;
-              return matchSearch && matchVis;
-            });
-            const paginatedVis = visFiltered.slice(reviewPage * ITEMS_PER_PAGE, (reviewPage + 1) * ITEMS_PER_PAGE);
-            const totalVisPages = Math.ceil(visFiltered.length / ITEMS_PER_PAGE);
-
-            const visibleCount = (allReviews || []).filter((r: any) => r.is_visible !== false).length;
-            const hiddenCount = (allReviews || []).filter((r: any) => r.is_visible === false).length;
-
-            return (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-                  <div>
-                    <h2 className="text-xl font-bold font-display text-foreground">Reviews Moderation</h2>
-                    <p className="text-xs text-muted-foreground mt-0.5">{visibleCount} visible · {hiddenCount} hidden · {(allReviews || []).length} total</p>
+          {tab === "reviews" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
+                <div>
+                  <h2 className="text-xl font-bold font-display text-foreground">Reviews Moderation</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">{visibleReviewCount} visible · {hiddenReviewCount} hidden · {(allReviews || []).length} total</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex rounded-lg border border-border overflow-hidden">
+                    {(["all", "visible", "hidden"] as const).map(f => (
+                      <button key={f} onClick={() => { setReviewVisFilter(f); setReviewPage(0); }}
+                        className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${reviewVisFilter === f ? "bg-secondary text-secondary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+                        {f}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex rounded-lg border border-border overflow-hidden">
-                      {(["all", "visible", "hidden"] as const).map(f => (
-                        <button key={f} onClick={() => { setReviewVisFilter(f); setReviewPage(0); }}
-                          className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${reviewVisFilter === f ? "bg-secondary text-secondary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
-                          {f}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="relative w-48">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                      <Input placeholder="Search…" value={reviewSearch} onChange={(e) => { setReviewSearch(e.target.value); setReviewPage(0); }} className="h-8 text-xs pl-8" />
-                    </div>
+                  <div className="relative w-48">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input placeholder="Search…" value={reviewSearch} onChange={(e) => { setReviewSearch(e.target.value); setReviewPage(0); }} className="h-8 text-xs pl-8" />
                   </div>
                 </div>
-
-                <div className="space-y-3">
-                  {paginatedVis.map((r: any) => (
-                    <div key={r.id} className={`bg-card rounded-xl border p-5 transition-opacity ${r.is_visible === false ? "border-border opacity-60" : "border-border"}`}>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <Link to={`/product/${r.products?.slug}`} className="font-semibold text-foreground hover:text-secondary transition-colors text-sm">
-                              {r.products?.name || "Unknown Product"}
-                            </Link>
-                            <div className="flex items-center gap-0.5">
-                              {[...Array(5)].map((_, i) => (
-                                <Star key={i} className={`w-3 h-3 ${i < r.rating ? "text-accent fill-accent" : "text-border"}`} />
-                              ))}
-                              <span className="text-xs text-muted-foreground ml-1">({r.rating}/5)</span>
-                            </div>
-                            {r.is_visible === false && (
-                              <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium">Hidden</span>
-                            )}
+              </div>
+              <div className="space-y-3">
+                {paginatedVis.map((r: any) => (
+                  <div key={r.id} className={`bg-card rounded-xl border p-5 transition-opacity ${r.is_visible === false ? "border-border opacity-60" : "border-border"}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <Link to={`/product/${r.products?.slug}`} className="font-semibold text-foreground hover:text-secondary transition-colors text-sm">
+                            {r.products?.name || "Unknown Product"}
+                          </Link>
+                          <div className="flex items-center gap-0.5">
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`w-3 h-3 ${i < r.rating ? "text-accent fill-accent" : "text-border"}`} />
+                            ))}
+                            <span className="text-xs text-muted-foreground ml-1">({r.rating}/5)</span>
                           </div>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            User ID: {r.user_id.slice(0, 8)}… · {new Date(r.created_at!).toLocaleDateString()}
-                          </p>
-                          {r.comment ? (
-                            <p className="text-sm text-foreground bg-muted/40 rounded-lg px-3 py-2">"{r.comment}"</p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground italic">No comment left</p>
+                          {r.is_visible === false && (
+                            <span className="text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium">Hidden</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => toggleReviewVisibility(r.id, r.is_visible !== false)}
-                            className={`p-1.5 rounded-md transition-colors text-xs flex items-center gap-1 border ${r.is_visible === false ? "border-secondary/30 text-secondary hover:bg-secondary/10" : "border-border text-muted-foreground hover:bg-muted"}`}
-                            title={r.is_visible === false ? "Show review" : "Hide review"}
-                          >
-                            {r.is_visible === false ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                          </button>
-                          <button onClick={() => deleteReview(r.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors border border-border" title="Delete review">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          User ID: {r.user_id.slice(0, 8)}… · {new Date(r.created_at!).toLocaleDateString()}
+                        </p>
+                        {r.comment ? (
+                          <p className="text-sm text-foreground bg-muted/40 rounded-lg px-3 py-2">"{r.comment}"</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground italic">No comment left</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => toggleReviewVisibility(r.id, r.is_visible !== false)}
+                          className={`p-1.5 rounded-md transition-colors text-xs flex items-center gap-1 border ${r.is_visible === false ? "border-secondary/30 text-secondary hover:bg-secondary/10" : "border-border text-muted-foreground hover:bg-muted"}`}
+                          title={r.is_visible === false ? "Show review" : "Hide review"}
+                        >
+                          {r.is_visible === false ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => deleteReview(r.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors border border-border" title="Delete review">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                  {visFiltered.length === 0 && (
-                    <div className="text-center py-16 text-muted-foreground">
-                      <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                      <p className="text-sm">No reviews found</p>
-                    </div>
-                  )}
-                </div>
-                {renderPagination(reviewPage, totalVisPages, setReviewPage, visFiltered.length)}
-              </motion.div>
-            );
-          })()}
+                  </div>
+                ))}
+                {reviewsVisFiltered.length === 0 && (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <Star className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">No reviews found</p>
+                  </div>
+                )}
+              </div>
+              {renderPagination(reviewPage, totalVisPages, setReviewPage, reviewsVisFiltered.length)}
+            </motion.div>
+          )}
 
           {/* ═══ Contact Messages Tab ═══ */}
           {tab === "contacts" && (() => {
