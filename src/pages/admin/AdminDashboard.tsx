@@ -1139,7 +1139,7 @@ const AdminDashboard = () => {
   const deleteOrder = async (id: string) => {
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Order deleted" }); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+    else { toast({ title: "Order deleted" }); await logAdminAction("order_deleted", "order", id); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
   };
   const bulkUpdateOrderStatus = async (status: string) => {
     const ids = Array.from(selectedOrders);
