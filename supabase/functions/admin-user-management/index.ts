@@ -7,6 +7,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function logAdminAction(supabaseAdmin: any, {
+  adminId, adminEmail, action, targetType, targetId, details, ipAddress,
+}: {
+  adminId: string; adminEmail?: string; action: string;
+  targetType?: string; targetId?: string; details?: Record<string, any>; ipAddress?: string;
+}) {
+  await supabaseAdmin.from("admin_activity_logs").insert({
+    admin_id: adminId,
+    admin_email: adminEmail || null,
+    action,
+    target_type: targetType || null,
+    target_id: targetId || null,
+    details: details || {},
+    ip_address: ipAddress || null,
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -22,12 +39,18 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
+  const ipAddress = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
+
   try {
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization")!;
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
     if (authError || !user) throw new Error("Not authenticated");
+
+    // Get admin email from auth
+    const { data: { user: adminUser } } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const adminEmail = adminUser?.email || user.email || "unknown";
 
     // Check admin role
     const { data: adminRole } = await supabaseAdmin
@@ -51,7 +74,6 @@ serve(async (req) => {
     switch (action) {
       case "suspend": {
         const { reason } = params;
-        // Update profile
         const { error } = await supabaseAdmin
           .from("profiles")
           .update({
@@ -62,12 +84,17 @@ serve(async (req) => {
           .eq("user_id", target_user_id);
         if (error) throw error;
 
-        // Ban user in auth (prevents login)
         const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(
           target_user_id,
-          { ban_duration: "876000h" } // ~100 years
+          { ban_duration: "876000h" }
         );
         if (banError) throw banError;
+
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_suspended",
+          targetType: "user", targetId: target_user_id,
+          details: { reason: reason || "Suspended by admin" }, ipAddress,
+        });
 
         result.message = "User suspended successfully";
         break;
@@ -76,27 +103,27 @@ serve(async (req) => {
       case "unsuspend": {
         const { error } = await supabaseAdmin
           .from("profiles")
-          .update({
-            is_suspended: false,
-            suspended_at: null,
-            suspended_reason: null,
-          })
+          .update({ is_suspended: false, suspended_at: null, suspended_reason: null })
           .eq("user_id", target_user_id);
         if (error) throw error;
 
-        // Unban user
         const { error: unbanError } = await supabaseAdmin.auth.admin.updateUserById(
           target_user_id,
           { ban_duration: "none" }
         );
         if (unbanError) throw unbanError;
 
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_unsuspended",
+          targetType: "user", targetId: target_user_id,
+          details: {}, ipAddress,
+        });
+
         result.message = "User unsuspended successfully";
         break;
       }
 
       case "delete": {
-        // Check if user has orders
         const { count } = await supabaseAdmin
           .from("orders")
           .select("*", { count: "exact", head: true })
@@ -106,15 +133,30 @@ serve(async (req) => {
           throw new Error(`Cannot delete: user has ${count} existing orders. Use suspend/deactivate instead.`);
         }
 
-        // Delete profile first
+        // Get user info before deletion for log
+        const { data: targetProfile } = await supabaseAdmin
+          .from("profiles")
+          .select("full_name, phone")
+          .eq("user_id", target_user_id)
+          .maybeSingle();
+        const { data: { user: targetAuthUser } } = await supabaseAdmin.auth.admin.getUserById(target_user_id);
+
         await supabaseAdmin.from("profiles").delete().eq("user_id", target_user_id);
         await supabaseAdmin.from("user_roles").delete().eq("user_id", target_user_id);
         await supabaseAdmin.from("wallets").delete().eq("user_id", target_user_id);
         await supabaseAdmin.from("wishlists").delete().eq("user_id", target_user_id);
 
-        // Delete auth user
         const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(target_user_id);
         if (deleteError) throw deleteError;
+
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_deleted",
+          targetType: "user", targetId: target_user_id,
+          details: {
+            deleted_user_email: targetAuthUser?.email || "unknown",
+            deleted_user_name: targetProfile?.full_name || "unknown",
+          }, ipAddress,
+        });
 
         result.message = "User deleted successfully";
         break;
@@ -122,8 +164,7 @@ serve(async (req) => {
 
       case "update_profile": {
         const { full_name, phone, city, address_line1, address_line2, postal_code } = params;
-        
-        // Check phone uniqueness if changing
+
         if (phone) {
           const cleanPhone = phone.replace(/\s/g, "");
           const { data: existing } = await supabaseAdmin
@@ -139,7 +180,7 @@ serve(async (req) => {
         if (full_name !== undefined) updateData.full_name = full_name;
         if (phone !== undefined) {
           updateData.phone = phone.replace(/\s/g, "");
-          updateData.phone_verified = false; // Reset verification
+          updateData.phone_verified = false;
         }
         if (city !== undefined) updateData.city = city;
         if (address_line1 !== undefined) updateData.address_line1 = address_line1;
@@ -152,6 +193,12 @@ serve(async (req) => {
           .eq("user_id", target_user_id);
         if (error) throw error;
 
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_profile_updated",
+          targetType: "user", targetId: target_user_id,
+          details: { fields_changed: Object.keys(updateData) }, ipAddress,
+        });
+
         result.message = "Profile updated successfully";
         break;
       }
@@ -160,7 +207,6 @@ serve(async (req) => {
         const { email } = params;
         if (!email) throw new Error("Email is required");
 
-        // Check email uniqueness
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
         const emailTaken = existingUsers?.users?.some(
           (u: any) => u.email === email && u.id !== target_user_id
@@ -173,6 +219,12 @@ serve(async (req) => {
         );
         if (error) throw error;
 
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_email_updated",
+          targetType: "user", targetId: target_user_id,
+          details: { new_email: email }, ipAddress,
+        });
+
         result.message = "Email updated successfully";
         break;
       }
@@ -181,21 +233,31 @@ serve(async (req) => {
         const { role } = params;
         if (!["admin", "moderator", "user"].includes(role)) throw new Error("Invalid role");
 
-        // First, delete ALL existing roles for this user
+        // Get previous role for log
+        const { data: prevRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", target_user_id);
+        const prevRole = prevRoles?.[0]?.role || "user";
+
         const { error: deleteError } = await supabaseAdmin
           .from("user_roles")
           .delete()
           .eq("user_id", target_user_id);
         if (deleteError) throw deleteError;
 
-        // If the new role is not "user", insert the elevated role
-        // "user" is the default when no role entry exists
         if (role !== "user") {
           const { error: insertError } = await supabaseAdmin
             .from("user_roles")
             .insert({ user_id: target_user_id, role });
           if (insertError) throw insertError;
         }
+
+        await logAdminAction(supabaseAdmin, {
+          adminId: user.id, adminEmail, action: "user_role_changed",
+          targetType: "user", targetId: target_user_id,
+          details: { from_role: prevRole, to_role: role }, ipAddress,
+        });
 
         result.message = `Role changed to ${role} successfully`;
         break;
@@ -210,8 +272,6 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    // Always return 200 so supabase-js doesn't throw a FunctionsHttpError.
-    // The caller checks res.data.error to detect failures.
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
