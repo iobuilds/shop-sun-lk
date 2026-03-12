@@ -232,7 +232,7 @@ const SystemLogs = () => {
             </p>
           )}
           {hasManagementToken === true && (
-            <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Connected to Supabase Analytics API — showing real logs.</p>
+            <p className="text-xs text-primary mt-1">✓ Connected to Supabase Analytics API — showing real logs.</p>
           )}
         </div>
       </div>
