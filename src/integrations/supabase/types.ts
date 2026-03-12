@@ -1296,6 +1296,7 @@ export type Database = {
       referral_codes: {
         Row: {
           code: string
+          code_purpose: string
           created_at: string
           created_by: string | null
           description: string | null
@@ -1314,6 +1315,7 @@ export type Database = {
         }
         Insert: {
           code: string
+          code_purpose?: string
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1332,6 +1334,7 @@ export type Database = {
         }
         Update: {
           code?: string
+          code_purpose?: string
           created_at?: string
           created_by?: string | null
           description?: string | null

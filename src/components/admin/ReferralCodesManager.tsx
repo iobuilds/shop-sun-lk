@@ -15,6 +15,7 @@ interface ReferralCodeForm {
   code: string;
   name: string;
   description: string;
+  code_purpose: string;
   discount_type: string;
   discount_value: string;
   max_discount_cap: string;
@@ -27,6 +28,7 @@ interface ReferralCodeForm {
 
 const emptyForm: ReferralCodeForm = {
   code: "", name: "", description: "",
+  code_purpose: "discount",
   discount_type: "percentage", discount_value: "",
   max_discount_cap: "", min_order_amount: "",
   max_uses: "", per_user_limit: "1",
@@ -87,6 +89,7 @@ const ReferralCodesManager = () => {
       code: rc.code,
       name: rc.name || "",
       description: rc.description || "",
+      code_purpose: rc.code_purpose || "discount",
       discount_type: rc.discount_type,
       discount_value: String(rc.discount_value),
       max_discount_cap: rc.max_discount_cap ? String(rc.max_discount_cap) : "",
@@ -100,8 +103,12 @@ const ReferralCodesManager = () => {
   };
 
   const handleSave = async () => {
-    if (!form.code.trim() || !form.discount_value) {
-      toast({ title: "Code and discount value are required", variant: "destructive" });
+    if (!form.code.trim()) {
+      toast({ title: "Code is required", variant: "destructive" });
+      return;
+    }
+    if (form.code_purpose === "discount" && !form.discount_value) {
+      toast({ title: "Discount value is required for discount codes", variant: "destructive" });
       return;
     }
     setSaving(true);
@@ -110,8 +117,9 @@ const ReferralCodesManager = () => {
         code: form.code.toUpperCase().trim(),
         name: form.name || null,
         description: form.description || null,
+        code_purpose: form.code_purpose,
         discount_type: form.discount_type,
-        discount_value: Number(form.discount_value),
+        discount_value: form.code_purpose === "reference" ? 0 : Number(form.discount_value),
         max_discount_cap: form.max_discount_cap ? Number(form.max_discount_cap) : null,
         min_order_amount: form.min_order_amount ? Number(form.min_order_amount) : 0,
         max_uses: form.max_uses ? Number(form.max_uses) : null,
@@ -198,6 +206,11 @@ const ReferralCodesManager = () => {
                     <button onClick={() => copyCode(rc.code)} className="text-muted-foreground hover:text-foreground transition-colors">
                       <Copy className="w-3.5 h-3.5" />
                     </button>
+                    {rc.code_purpose === "reference" ? (
+                      <Badge variant="outline" className="text-xs border-primary text-primary">Reference Only</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs border-secondary text-secondary">Discount</Badge>
+                    )}
                     {rc.is_active && !isExpired ? (
                       <Badge variant="secondary" className="text-xs">Active</Badge>
                     ) : isExpired ? (
@@ -208,15 +221,20 @@ const ReferralCodesManager = () => {
                   </div>
                   {rc.name && <p className="text-sm font-medium text-foreground mt-1">{rc.name}</p>}
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap text-xs text-muted-foreground">
-                    <span className="font-semibold text-secondary">
-                      {rc.discount_type === "percentage" ? `${rc.discount_value}% off` : `Rs. ${Number(rc.discount_value).toLocaleString()} off`}
-                      {rc.max_discount_cap ? ` (max Rs. ${Number(rc.max_discount_cap).toLocaleString()})` : ""}
-                    </span>
+                    {rc.code_purpose !== "reference" && (
+                      <span className="font-semibold text-secondary">
+                        {rc.discount_type === "percentage" ? `${rc.discount_value}% off` : `Rs. ${Number(rc.discount_value).toLocaleString()} off`}
+                        {rc.max_discount_cap ? ` (max Rs. ${Number(rc.max_discount_cap).toLocaleString()})` : ""}
+                      </span>
+                    )}
+                    {rc.code_purpose === "reference" && (
+                      <span className="text-muted-foreground italic">Tracking / reference use — no discount applied</span>
+                    )}
                     {rc.min_order_amount > 0 && <span>Min: Rs. {Number(rc.min_order_amount).toLocaleString()}</span>}
                     {rc.expires_at && <span>Expires: {new Date(rc.expires_at).toLocaleDateString()}</span>}
                     {rc.max_uses && <span>Max uses: {rc.max_uses}</span>}
                     <span className="flex items-center gap-1">
-                      <Users className="w-3 h-3" /> {stats.count} uses · Rs. {stats.total.toLocaleString()} saved
+                      <Users className="w-3 h-3" /> {stats.count} uses · Rs. {stats.total.toLocaleString()} tracked
                     </span>
                   </div>
                 </div>
@@ -267,43 +285,57 @@ const ReferralCodesManager = () => {
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Summer Sale Referral" />
             </div>
 
+            {/* Code Purpose */}
             <div>
-              <Label>Description (optional)</Label>
-              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Brief description..." />
+              <Label>Code Purpose *</Label>
+              <Select value={form.code_purpose} onValueChange={(v) => setForm({ ...form, code_purpose: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="discount">Discount — applies a discount at checkout</SelectItem>
+                  <SelectItem value="reference">Reference Only — tracking/referral, no discount</SelectItem>
+                </SelectContent>
+              </Select>
+              {form.code_purpose === "reference" && (
+                <p className="text-xs text-muted-foreground mt-1">Users can enter this code but no discount will be applied. Useful for tracking referrals.</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Discount Type *</Label>
-                <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="percentage">Percentage (%)</SelectItem>
-                    <SelectItem value="fixed">Fixed Amount (Rs.)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Discount Value *</Label>
-                <Input
-                  type="number" min="0"
-                  value={form.discount_value}
-                  onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
-                  placeholder={form.discount_type === "percentage" ? "10" : "500"}
-                />
-              </div>
-            </div>
+            {form.code_purpose === "discount" && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Discount Type *</Label>
+                    <Select value={form.discount_type} onValueChange={(v) => setForm({ ...form, discount_type: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount (Rs.)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Discount Value *</Label>
+                    <Input
+                      type="number" min="0"
+                      value={form.discount_value}
+                      onChange={(e) => setForm({ ...form, discount_value: e.target.value })}
+                      placeholder={form.discount_type === "percentage" ? "10" : "500"}
+                    />
+                  </div>
+                </div>
 
-            {form.discount_type === "percentage" && (
-              <div>
-                <Label>Max Discount Cap (Rs.)</Label>
-                <Input
-                  type="number" min="0"
-                  value={form.max_discount_cap}
-                  onChange={(e) => setForm({ ...form, max_discount_cap: e.target.value })}
-                  placeholder="Leave blank for no cap"
-                />
-              </div>
+                {form.discount_type === "percentage" && (
+                  <div>
+                    <Label>Max Discount Cap (Rs.)</Label>
+                    <Input
+                      type="number" min="0"
+                      value={form.max_discount_cap}
+                      onChange={(e) => setForm({ ...form, max_discount_cap: e.target.value })}
+                      placeholder="Leave blank for no cap"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="grid grid-cols-2 gap-3">
