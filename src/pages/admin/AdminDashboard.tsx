@@ -4137,6 +4137,13 @@ const CouponUserPicker = ({ allProfiles, selectedPhones, onChange }: {
           )}
 
 
+          {/* ═══ Moderator Permissions Tab ═══ */}
+          {tab === "moderator_permissions" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <ModeratorPermissionsManager />
+            </motion.div>
+          )}
+
           {/* ═══ DB Tools Tab ═══ */}
           {tab === "db_tools" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
