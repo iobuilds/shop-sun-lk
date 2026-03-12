@@ -1013,7 +1013,7 @@ const AdminDashboard = () => {
     const payload = { title: bannerForm.title, subtitle: bannerForm.subtitle || null, image_url: bannerForm.image_url, link_url: bannerForm.link_url || null, sort_order: Number(bannerForm.sort_order) || 0, is_active: bannerForm.is_active };
     const { error } = editingBannerId ? await supabase.from("banners").update(payload).eq("id", editingBannerId) : await supabase.from("banners").insert(payload);
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
-    else { toast({ title: editingBannerId ? "Banner updated" : "Banner created" }); setBannerDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
+    else { toast({ title: editingBannerId ? "Banner updated" : "Banner created" }); await logAdminAction(editingBannerId ? "banner_updated" : "banner_created", "banner", editingBannerId ?? undefined, { title: payload.title }); setBannerDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-banners"] }); }
   };
 
   // ── Promo banner handlers ──
