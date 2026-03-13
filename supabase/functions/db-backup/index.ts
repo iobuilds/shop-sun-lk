@@ -373,7 +373,7 @@ Deno.serve(async (req) => {
 
       const deleteOrder = [...TABLES].reverse();
       for (const table of deleteOrder) {
-        if (backupData[table] !== undefined) {
+        if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
           const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
           if (error) console.error(`Delete ${table}:`, error.message);
         }
@@ -382,8 +382,13 @@ Deno.serve(async (req) => {
         const rows = backupData[table];
         if (rows && rows.length > 0) {
           for (let i = 0; i < rows.length; i += 100) {
-            const { error } = await adminClient.from(table).insert(rows.slice(i, i + 100));
-            if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+            if (UPSERT_TABLES[table]) {
+              const { error } = await adminClient.from(table).upsert(rows.slice(i, i + 100), { onConflict: UPSERT_TABLES[table] });
+              if (error) console.error(`Upsert ${table} batch ${i}:`, error.message);
+            } else {
+              const { error } = await adminClient.from(table).insert(rows.slice(i, i + 100));
+              if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+            }
           }
         }
       }
