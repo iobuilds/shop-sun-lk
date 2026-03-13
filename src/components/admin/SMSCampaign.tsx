@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,21 @@ import {
   UserCheck, Filter, CreditCard, ChevronDown, ChevronUp, Clock,
   History, CalendarDays, Trash2, Ban, RefreshCw, AlertCircle,
 } from "lucide-react";
+
+// All available placeholders for SMS campaigns
+const ALL_PLACEHOLDERS = [
+  { key: "{{customer_name}}", label: "Customer Name" },
+  { key: "{{order_id}}", label: "Order ID" },
+  { key: "{{total}}", label: "Total" },
+  { key: "{{status}}", label: "Status" },
+  { key: "{{tracking_number}}", label: "Tracking No." },
+  { key: "{{tracking_link}}", label: "Tracking Link" },
+  { key: "{{courier_name}}", label: "Courier" },
+  { key: "{{expected_delivery}}", label: "Delivery Date" },
+  { key: "{{phone}}", label: "Phone" },
+  { key: "{{shop_name}}", label: "Shop Name" },
+  { key: "{{OTP5}}", label: "OTP (5-digit)" },
+];
 
 const SL_DISTRICTS = [
   "Colombo", "Gampaha", "Kalutara", "Kandy", "Matale", "Nuwara Eliya",
