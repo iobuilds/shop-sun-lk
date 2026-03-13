@@ -20,9 +20,15 @@ Deno.serve(async (req) => {
 
   const urls: string[] = [];
 
-  // Static pages
+  // Static pages — high-value
   const staticPages = [
     { loc: "/", priority: "1.0", changefreq: "daily" },
+    { loc: "/deals", priority: "0.9", changefreq: "daily" },
+    { loc: "/pcb-order", priority: "0.8", changefreq: "weekly" },
+    { loc: "/pre-order", priority: "0.7", changefreq: "weekly" },
+    { loc: "/search", priority: "0.5", changefreq: "daily" },
+    { loc: "/track-order", priority: "0.4", changefreq: "monthly" },
+    { loc: "/contact", priority: "0.4", changefreq: "monthly" },
     { loc: "/auth", priority: "0.3", changefreq: "monthly" },
     { loc: "/cart", priority: "0.3", changefreq: "monthly" },
     { loc: "/wishlist", priority: "0.3", changefreq: "monthly" },
@@ -33,16 +39,20 @@ Deno.serve(async (req) => {
   });
 
   // Categories
-  const { data: categories } = await supabase.from("categories").select("slug, updated_at").eq("is_active", true);
+  const { data: categories } = await supabase.from("categories").select("slug, updated_at, name").eq("is_active", true);
   categories?.forEach((c) => {
     urls.push(`<url><loc>${baseUrl}/category/${c.slug}</loc><lastmod>${c.updated_at?.split("T")[0] || today}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
   });
 
   // Products
-  const { data: products } = await supabase.from("products").select("slug, updated_at").eq("is_active", true);
+  const { data: products } = await supabase.from("products").select("slug, updated_at, name, images").eq("is_active", true);
   products?.forEach((p) => {
-    urls.push(`<url><loc>${baseUrl}/product/${p.slug}</loc><lastmod>${p.updated_at?.split("T")[0] || today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+    const imgTag = p.images?.[0] ? `<image:image><image:loc>${p.images[0]}</image:loc><image:title>${escapeXml(p.name)}</image:title></image:image>` : "";
+    urls.push(`<url><loc>${baseUrl}/product/${p.slug}</loc><lastmod>${p.updated_at?.split("T")[0] || today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority>${imgTag}</url>`);
   });
+
+  // Combo packs page
+  urls.push(`<url><loc>${baseUrl}/category/combo-packs</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
 
   // Static CMS pages
   const { data: pages } = await supabase.from("pages").select("slug, updated_at").eq("is_published", true);
@@ -51,9 +61,13 @@ Deno.serve(async (req) => {
   });
 
   const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
 ${urls.join("\n")}
 </urlset>`;
 
   return new Response(sitemap, { headers: corsHeaders });
 });
+
+function escapeXml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
