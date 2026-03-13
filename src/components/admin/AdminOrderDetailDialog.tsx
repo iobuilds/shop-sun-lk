@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { generateAdminInvoice } from "@/lib/generateAdminInvoice";
 import {
   Clock, Truck, Save, StickyNote, CalendarDays, FileDown, Loader2,
-  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag
+  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag, CheckCircle2
 } from "lucide-react";
 
 interface Props {
