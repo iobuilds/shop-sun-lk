@@ -26,6 +26,7 @@ const CategoryPage = () => {
   const { slug } = useParams<{ slug: string }>();
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { storeName } = useBranding();
   const isComboPage = slug === "combo-packs";
 
   const isMicroElectronics = slug === "micro-electronics";
