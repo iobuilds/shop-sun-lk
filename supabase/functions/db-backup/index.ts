@@ -14,13 +14,20 @@ const TABLES = [
   "orders", "order_items", "order_status_history",
   "preorder_requests", "preorder_items", "pcb_order_requests",
   "stock_receipts",
-  "reviews", "wishlists", "contact_messages", "sms_logs",
+  "reviews", "wishlists", "contact_messages", "sms_logs", "search_logs",
   "product_external_links", "product_similar_items",
   "otp_verifications", "user_notifications",
   "coupon_assignments", "coupon_usage", "wallets", "wallet_transactions",
   "referral_codes", "referral_code_usage",
   "conversations", "conversation_messages", "db_backup_logs",
+  "admin_activity_logs",
 ];
+
+// Tables that should use upsert (conflict on unique key) instead of insert during restore
+const UPSERT_TABLES: Record<string, string> = {
+  site_settings: "key",
+  sms_templates: "template_key",
+};
 
 const STORAGE_BUCKETS = ["images"];
 
@@ -285,7 +292,7 @@ Deno.serve(async (req) => {
         const backupData: Record<string, any[]> = JSON.parse(tablesJson);
         const deleteOrder = [...TABLES].reverse();
         for (const table of deleteOrder) {
-          if (backupData[table] !== undefined) {
+          if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
             const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
             if (error) console.error(`Delete ${table}:`, error.message);
           }
@@ -295,8 +302,13 @@ Deno.serve(async (req) => {
           if (rows && rows.length > 0) {
             for (let i = 0; i < rows.length; i += 100) {
               const batch = rows.slice(i, i + 100);
-              const { error } = await adminClient.from(table).insert(batch);
-              if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+              if (UPSERT_TABLES[table]) {
+                const { error } = await adminClient.from(table).upsert(batch, { onConflict: UPSERT_TABLES[table] });
+                if (error) console.error(`Upsert ${table} batch ${i}:`, error.message);
+              } else {
+                const { error } = await adminClient.from(table).insert(batch);
+                if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+              }
             }
           }
         }
@@ -361,7 +373,7 @@ Deno.serve(async (req) => {
 
       const deleteOrder = [...TABLES].reverse();
       for (const table of deleteOrder) {
-        if (backupData[table] !== undefined) {
+        if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
           const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
           if (error) console.error(`Delete ${table}:`, error.message);
         }
@@ -370,8 +382,13 @@ Deno.serve(async (req) => {
         const rows = backupData[table];
         if (rows && rows.length > 0) {
           for (let i = 0; i < rows.length; i += 100) {
-            const { error } = await adminClient.from(table).insert(rows.slice(i, i + 100));
-            if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+            if (UPSERT_TABLES[table]) {
+              const { error } = await adminClient.from(table).upsert(rows.slice(i, i + 100), { onConflict: UPSERT_TABLES[table] });
+              if (error) console.error(`Upsert ${table} batch ${i}:`, error.message);
+            } else {
+              const { error } = await adminClient.from(table).insert(rows.slice(i, i + 100));
+              if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
+            }
           }
         }
       }
