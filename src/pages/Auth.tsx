@@ -300,7 +300,7 @@ const Auth = () => {
               ? "Enter your email to receive a reset link"
               : isLogin
               ? "Sign in to access your account"
-              : "Join TechLK for exclusive deals"}
+              : "Join NanoCircuit.lk for exclusive deals"}
           </p>
         </div>
 

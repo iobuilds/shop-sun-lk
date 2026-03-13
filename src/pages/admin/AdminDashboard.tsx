@@ -3067,7 +3067,7 @@ const AdminDashboard = () => {
                         )}
                       </div>
                       <div><Label>බැංකුවේ නම / Bank Name *</Label><Input value={acc.bank_name || ""} onChange={(e) => updateBankAccount(idx, "bank_name", e.target.value)} placeholder="Commercial Bank of Ceylon" /></div>
-                      <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={acc.account_name || ""} onChange={(e) => updateBankAccount(idx, "account_name", e.target.value)} placeholder="TechLK (Pvt) Ltd" /></div>
+                      <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={acc.account_name || ""} onChange={(e) => updateBankAccount(idx, "account_name", e.target.value)} placeholder="NanoCircuit (Pvt) Ltd" /></div>
                       <div><Label>ගිණුම් අංකය / Account Number *</Label><Input value={acc.account_number || ""} onChange={(e) => updateBankAccount(idx, "account_number", e.target.value)} placeholder="8012345678" /></div>
                       <div><Label>ශාඛාව / Branch *</Label><Input value={acc.branch || ""} onChange={(e) => updateBankAccount(idx, "branch", e.target.value)} placeholder="Colombo Fort" /></div>
                       <div><Label>අමතර තොරතුරු / Additional Info</Label><Textarea value={acc.additional_info || ""} onChange={(e) => updateBankAccount(idx, "additional_info", e.target.value)} rows={2} placeholder="SWIFT code, special instructions, etc." /></div>
