@@ -30,4 +30,4 @@ Disallow: /order-success
 Disallow: /reset-password
 Disallow: /profile
 
-Sitemap: https://shop-sun-lk.lovable.app/sitemap.xml
+Sitemap: https://nanocircuit.lk/sitemap.xml
