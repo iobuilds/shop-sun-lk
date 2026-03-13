@@ -478,6 +478,16 @@ const Checkout = () => {
                         </div>
                       </label>
                     )}
+                    {codEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "cod" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="cod" />
+                        <Truck className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Cash on Delivery</p>
+                          <p className="text-xs text-muted-foreground">Pay when your order arrives at your door</p>
+                        </div>
+                      </label>
+                    )}
                   </RadioGroup>
 
                   {/* Bank Details Preview when bank_transfer selected */}
