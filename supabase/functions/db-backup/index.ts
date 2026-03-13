@@ -14,13 +14,20 @@ const TABLES = [
   "orders", "order_items", "order_status_history",
   "preorder_requests", "preorder_items", "pcb_order_requests",
   "stock_receipts",
-  "reviews", "wishlists", "contact_messages", "sms_logs",
+  "reviews", "wishlists", "contact_messages", "sms_logs", "search_logs",
   "product_external_links", "product_similar_items",
   "otp_verifications", "user_notifications",
   "coupon_assignments", "coupon_usage", "wallets", "wallet_transactions",
   "referral_codes", "referral_code_usage",
   "conversations", "conversation_messages", "db_backup_logs",
+  "admin_activity_logs",
 ];
+
+// Tables that should use upsert (conflict on unique key) instead of insert during restore
+const UPSERT_TABLES: Record<string, string> = {
+  site_settings: "key",
+  sms_templates: "template_key",
+};
 
 const STORAGE_BUCKETS = ["images"];
 
