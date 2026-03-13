@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Tables to clean - excludes profiles, user_roles, moderator_permissions, db_backup_logs
+// Tables to clean - excludes profiles, user_roles, moderator_permissions, db_backup_logs, sms_templates, site_settings
 const CLEANUP_TABLES = [
   // Child tables first (reverse dependency order)
   "combo_pack_items",
@@ -26,6 +26,7 @@ const CLEANUP_TABLES = [
   "stock_receipts",
   "daily_deals",
   "contact_messages",
+  "search_logs",
   // Parent tables
   "preorder_requests",
   "pcb_order_requests",
@@ -39,7 +40,9 @@ const CLEANUP_TABLES = [
   "promo_banners",
   "pages",
   "coupons",
-  "site_settings",
+  "referral_codes",
+  "referral_code_usage",
+  // site_settings and sms_templates are intentionally preserved
 ];
 
 Deno.serve(async (req) => {
