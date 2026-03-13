@@ -47,8 +47,8 @@ Deno.serve(async (req) => {
   // Products
   const { data: products } = await supabase.from("products").select("slug, updated_at, name, images").eq("is_active", true);
   products?.forEach((p) => {
-    const imgTag = p.images?.[0] ? `<image:image><image:loc>${p.images[0]}</image:loc><image:title>${escapeXml(p.name)}</image:title></image:image>` : "";
-    urls.push(`<url><loc>${baseUrl}/product/${p.slug}</loc><lastmod>${p.updated_at?.split("T")[0] || today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority>${imgTag}</url>`);
+    const imgTag = p.images?.[0] ? `<image:image><image:loc>${escapeXml(p.images[0])}</image:loc><image:title>${escapeXml(p.name)}</image:title></image:image>` : "";
+    urls.push(`<url><loc>${baseUrl}/product/${escapeXml(p.slug)}</loc><lastmod>${p.updated_at?.split("T")[0] || today}</lastmod><changefreq>weekly</changefreq><priority>0.7</priority>${imgTag}</url>`);
   });
 
   // Combo packs page
