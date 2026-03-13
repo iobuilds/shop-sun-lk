@@ -31,6 +31,7 @@ import QRStockScanner from "@/components/admin/QRStockScanner";
 import AdminPreOrders from "@/components/admin/AdminPreOrders";
 import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
 import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
+import SMSCampaign from "@/components/admin/SMSCampaign";
 import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissionsManager";
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
 import ActivityLogs from "@/components/admin/ActivityLogs";
@@ -39,7 +40,7 @@ import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -704,6 +705,7 @@ const AdminDashboard = () => {
     {
       label: "SMS Center", icon: Send, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "sms_campaign" as Tab, label: "SMS Campaign", icon: Megaphone, count: 0 },
         { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
         { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
       ],
@@ -3870,6 +3872,13 @@ const AdminDashboard = () => {
             <div className="animate-in fade-in duration-200">
               <AdminDocumentation />
             </div>
+          )}
+
+          {/* ═══ SMS Campaign Tab ═══ */}
+          {tab === "sms_campaign" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <SMSCampaign />
+            </motion.div>
           )}
 
           {/* ═══ SMS Templates Tab ═══ */}
