@@ -114,14 +114,22 @@ const Footer = () => {
                 </li>
               ))}
             </ul>
-            {/* Payment badges */}
+            {/* Payment badges — dynamic based on admin settings */}
             <div className="mt-6">
               <p className="text-xs text-primary-foreground/40 mb-2">We accept</p>
-              <div className="flex items-center gap-2">
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">VISA</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">MC</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">Bank</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">COD</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {(showStripe || showPayhere) && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">VISA</span>
+                )}
+                {(showStripe || showPayhere) && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">MC</span>
+                )}
+                {showBank && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">Bank</span>
+                )}
+                {showCod && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">COD</span>
+                )}
               </div>
             </div>
           </div>
