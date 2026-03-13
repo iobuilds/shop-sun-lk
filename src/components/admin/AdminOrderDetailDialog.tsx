@@ -32,6 +32,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
+  const [markingCodPaid, setMarkingCodPaid] = useState(false);
 
   useEffect(() => {
     if (!order || !open) return;
