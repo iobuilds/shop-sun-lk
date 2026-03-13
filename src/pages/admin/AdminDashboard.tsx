@@ -3680,6 +3680,13 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Search Analytics Tab ═══ */}
+          {tab === "search_analytics" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <SearchAnalytics />
+            </motion.div>
+          )}
+
           {/* ═══ Documentation Tab ═══ */}
           {tab === "documentation" && (
             <div className="animate-in fade-in duration-200">
