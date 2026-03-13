@@ -156,18 +156,20 @@ const CategoryPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title={`${category?.name || "Category"} — Buy Online | NanoCircuit.lk Sri Lanka`}
-        description={category?.description || `Browse ${category?.name || "products"} at NanoCircuit.lk — Sri Lanka's leading electronics supplier. Best prices, island-wide delivery.`}
-        keywords={`${category?.name || ""}, buy ${category?.name || "electronics"} Sri Lanka, electronics, components, NanoCircuit, best price, online store`}
+        title={`${category?.name || "Category"} — Buy Online | ${storeName} Sri Lanka`}
+        description={category?.description || `Browse ${category?.name || "products"} at ${storeName} — Sri Lanka's leading electronics supplier. Best prices, island-wide delivery.`}
+        keywords={`${category?.name || ""}, buy ${category?.name || "electronics"} Sri Lanka, electronics, components, ${storeName}, best price, online store`}
         canonical={`${window.location.origin}/category/${slug}`}
+        ogImage={category?.image_url || undefined}
         jsonLd={{
           "@context": "https://schema.org",
           "@graph": [
             {
               "@type": "CollectionPage",
-              name: `${category?.name || "Category"} — NanoCircuit.lk`,
-              description: category?.description || `Browse ${category?.name || "products"} at NanoCircuit.lk Sri Lanka`,
+              name: `${category?.name || "Category"} — ${storeName}`,
+              description: category?.description || `Browse ${category?.name || "products"} at ${storeName} Sri Lanka`,
               url: `${window.location.origin}/category/${slug}`,
+              isPartOf: { "@id": `${window.location.origin}/#website` },
             },
             ...(filtered && filtered.length > 0 ? [{
               "@type": "ItemList",
