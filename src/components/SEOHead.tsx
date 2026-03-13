@@ -59,6 +59,7 @@ const SEOHead = ({
   const faviconUrl = seoSettings?.favicon_url || "/favicon.ico";
   const sitePhone = company?.phone || company?.whatsapp || "";
   const siteEmail = company?.email || "";
+  const googleSiteVerification = seoSettings?.google_site_verification || "";
 
   const finalTitle = title
     ? (title.includes(storeName) ? title : `${title} | ${storeName}`)
