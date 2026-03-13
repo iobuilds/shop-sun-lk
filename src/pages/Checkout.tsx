@@ -401,6 +401,8 @@ const Checkout = () => {
         window.location.href = data.url;
       } else if (data.type === "bank_transfer") {
         navigate(`/order-success?order_id=${data.order_id}&method=bank${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
+      } else if (data.type === "cod") {
+        navigate(`/order-success?order_id=${data.order_id}&method=cod${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
       }
     } catch (err: any) {
       toast.error(err.message || "Checkout failed");
