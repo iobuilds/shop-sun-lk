@@ -21,6 +21,7 @@ const ProductDetail = () => {
   const [activeTab, setActiveTab] = useState<"description" | "specs" | "reviews" | "documents">("description");
   const { addItem } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
+  const { storeName } = useBranding();
 
   const { data: product, isLoading } = useQuery({
     queryKey: ["product", slug],
