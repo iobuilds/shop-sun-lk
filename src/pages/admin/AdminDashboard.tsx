@@ -82,6 +82,7 @@ const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price
 
 const AdminDashboard = () => {
   const { isAdmin, isModerator, userRole, moderatorPermissions, loading } = useAdminAuth();
+  useInactivityLogout(!loading && (isAdmin || isModerator));
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("orders");
   const [search, setSearch] = useState("");
