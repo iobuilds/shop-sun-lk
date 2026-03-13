@@ -7,6 +7,20 @@ import { supabase } from "@/integrations/supabase/client";
 const Footer = () => {
   const { storeName, logoUrl, company } = useBranding();
 
+  const { data: pmSettings } = useQuery({
+    queryKey: ["payment-methods-settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings" as any).select("value").eq("key", "payment_methods").maybeSingle();
+      return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const showStripe = pmSettings?.stripe_enabled !== false;
+  const showPayhere = pmSettings?.payhere_enabled === true;
+  const showBank = pmSettings?.bank_transfer_enabled !== false;
+  const showCod = pmSettings?.cod_enabled === true;
+
   const description = company?.description || "Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing supplies and more.";
   const address = company?.address || "No. 42, Galle Road, Colombo 03, Sri Lanka";
   const phone = company?.phone || "+94 77 123 4567";
