@@ -192,7 +192,17 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const logSearch = async (q: string, resultCount: number) => {
+    if (!q.trim() || q.trim().length < 2) return;
+    await supabase.from("search_logs" as any).insert({
+      query: q.trim().toLowerCase(),
+      result_count: resultCount,
+      user_id: session?.user?.id || null,
+    });
+  };
+
   const handleSearchSelect = (slug: string) => {
+    logSearch(searchQuery, searchResults?.length || 0);
     setSearchQuery("");
     setShowResults(false);
     setSearchOpen(false);
@@ -202,6 +212,7 @@ const Navbar = () => {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      logSearch(searchQuery, searchResults?.length || 0);
       navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
       setShowResults(false);
       setSearchOpen(false);

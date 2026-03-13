@@ -36,8 +36,9 @@ import ActivityLogs from "@/components/admin/ActivityLogs";
 import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
+import SearchAnalytics from "@/components/admin/SearchAnalytics";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "documentation";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -716,6 +717,7 @@ const AdminDashboard = () => {
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
         { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
         { id: "system_logs" as Tab, label: "System Logs", icon: Terminal, count: 0 },
+        { id: "search_analytics" as Tab, label: "Search Analytics", icon: Search, count: 0 },
         { id: "documentation" as Tab, label: "Documentation", icon: BookOpen, count: 0 },
       ],
     },
@@ -3675,6 +3677,13 @@ const AdminDashboard = () => {
           {tab === "system_logs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <SystemLogs />
+            </motion.div>
+          )}
+
+          {/* ═══ Search Analytics Tab ═══ */}
+          {tab === "search_analytics" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <SearchAnalytics />
             </motion.div>
           )}
 
