@@ -1,9 +1,25 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, Youtube, Mail, Phone, MapPin, ArrowRight } from "lucide-react";
 import { useBranding } from "@/hooks/useBranding";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const Footer = () => {
   const { storeName, logoUrl, company } = useBranding();
+
+  const { data: pmSettings } = useQuery({
+    queryKey: ["payment-methods-settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("site_settings" as any).select("value").eq("key", "payment_methods").maybeSingle();
+      return (data as any)?.value as any || { stripe_enabled: true, bank_transfer_enabled: true };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const showStripe = pmSettings?.stripe_enabled !== false;
+  const showPayhere = pmSettings?.payhere_enabled === true;
+  const showBank = pmSettings?.bank_transfer_enabled !== false;
+  const showCod = pmSettings?.cod_enabled === true;
 
   const description = company?.description || "Sri Lanka's trusted electronics & components store. Arduino, sensors, 3D printing supplies and more.";
   const address = company?.address || "No. 42, Galle Road, Colombo 03, Sri Lanka";
@@ -98,14 +114,22 @@ const Footer = () => {
                 </li>
               ))}
             </ul>
-            {/* Payment badges */}
+            {/* Payment badges — dynamic based on admin settings */}
             <div className="mt-6">
               <p className="text-xs text-primary-foreground/40 mb-2">We accept</p>
-              <div className="flex items-center gap-2">
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">VISA</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">MC</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">Bank</span>
-                <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">COD</span>
+              <div className="flex flex-wrap items-center gap-2">
+                {(showStripe || showPayhere) && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">VISA</span>
+                )}
+                {(showStripe || showPayhere) && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">MC</span>
+                )}
+                {showBank && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">Bank</span>
+                )}
+                {showCod && (
+                  <span className="bg-primary-foreground/10 text-primary-foreground/60 text-[10px] font-semibold px-2 py-1 rounded border border-primary-foreground/15">COD</span>
+                )}
               </div>
             </div>
           </div>
