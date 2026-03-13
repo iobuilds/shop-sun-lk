@@ -153,12 +153,12 @@ const ProductDetail = () => {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title={`${product.name} — Buy Online | TechLK Sri Lanka`}
+        title={`${product.name} — Buy Online | ${storeName} Sri Lanka`}
         description={
           product.description?.slice(0, 155) ||
-          `Buy ${product.name} online at TechLK Sri Lanka. ${category?.name || "Electronics"} at best prices. Island-wide delivery. Rs. ${product.price.toLocaleString()}.`
+          `Buy ${product.name} online at ${storeName} Sri Lanka. ${category?.name || "Electronics"} at best prices. Island-wide delivery. Rs. ${product.price.toLocaleString()}.`
         }
-        keywords={`${product.name}, buy ${product.name}, ${category?.name || "electronics"}, ${product.sku || ""}, online store Sri Lanka, TechLK, best price, ${category?.name || ""} Sri Lanka`.replace(/, ,/g, ",")}
+        keywords={`${product.name}, buy ${product.name}, ${category?.name || "electronics"}, ${product.sku || ""}, online store Sri Lanka, ${storeName}, best price, ${category?.name || ""} Sri Lanka`.replace(/, ,/g, ",")}
         canonical={`${window.location.origin}/product/${product.slug}`}
         ogImage={images[0] !== "/placeholder.svg" ? images[0] : undefined}
         ogType="product"
@@ -169,13 +169,13 @@ const ProductDetail = () => {
               "@type": "Product",
               "@id": `${window.location.origin}/product/${product.slug}#product`,
               name: product.name,
-              description: product.description || `Buy ${product.name} online at TechLK Sri Lanka`,
+              description: product.description || `Buy ${product.name} online at ${storeName} Sri Lanka`,
               image: images.filter((img: string) => img !== "/placeholder.svg"),
               sku: product.sku || product.id,
               url: `${window.location.origin}/product/${product.slug}`,
               brand: {
                 "@type": "Brand",
-                name: specs?.Brand || specs?.brand || "TechLK",
+                name: specs?.Brand || specs?.brand || storeName,
               },
               category: category?.name || "Electronics",
               offers: {
@@ -187,7 +187,7 @@ const ProductDetail = () => {
                   : "https://schema.org/OutOfStock",
                 seller: {
                   "@type": "Organization",
-                  name: "TechLK",
+                  name: storeName,
                   url: window.location.origin,
                 },
                 url: `${window.location.origin}/product/${product.slug}`,
