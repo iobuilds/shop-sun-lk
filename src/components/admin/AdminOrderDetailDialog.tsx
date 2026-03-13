@@ -162,9 +162,9 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
 
           {/* COD Payment Action */}
           {order.payment_method === "cod" && order.payment_status !== "paid" && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center justify-between gap-4">
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <Truck className="w-5 h-5 text-amber-600 shrink-0" />
+                <Truck className="w-5 h-5 text-destructive shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-foreground">Cash on Delivery — Awaiting Payment</p>
                   <p className="text-xs text-muted-foreground">Confirm once the delivery person has collected payment from the customer.</p>
@@ -173,7 +173,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
               <Button
                 onClick={markCodPaid}
                 disabled={markingCodPaid}
-                className="shrink-0 gap-1.5 bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                className="shrink-0 gap-1.5"
                 size="sm"
               >
                 {markingCodPaid ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
