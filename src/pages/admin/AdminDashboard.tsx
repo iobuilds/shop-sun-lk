@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useInactivityLogout } from "@/hooks/useInactivityLogout";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
