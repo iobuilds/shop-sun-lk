@@ -148,10 +148,16 @@ export default function SMSCampaign() {
     toast({ title: `Added ${newOnes.length} recipients` });
   };
 
+  const normalizePhone = (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    if (digits.startsWith("0") && digits.length === 10) return "94" + digits.slice(1);
+    return digits || raw;
+  };
+
   const addManualPhone = () => {
     const trimmed = manualPhone.trim().replace(/\s+/g, "");
     if (!trimmed) return;
-    const nums = trimmed.split(",").map((n) => n.trim()).filter(Boolean);
+    const nums = trimmed.split(",").map((n) => normalizePhone(n.trim())).filter(Boolean);
     const added: string[] = [];
     nums.forEach((num) => {
       if (!isAdded(num)) {

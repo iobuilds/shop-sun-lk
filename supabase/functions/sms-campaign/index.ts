@@ -60,17 +60,26 @@ serve(async (req) => {
 
     const SENDER_ID = Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit";
 
+    // Normalize phone numbers: 07XXXXXXXX → 947XXXXXXXX
+    const normalizedPhones = phones.map((p: string) => {
+      const digits = p.replace(/\D/g, "");
+      if (digits.startsWith("0") && digits.length === 10) {
+        return "94" + digits.slice(1);
+      }
+      return digits || p;
+    });
+
     // text.lk supports comma-separated recipients in a single call
-    const recipient = phones.join(",");
+    const recipient = normalizedPhones.join(",");
 
     const smsResponse = await fetch(TEXTLK_API_URL, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${TEXTLK_API_KEY}`,
         "Content-Type": "application/json",
         "Accept": "application/json",
       },
       body: JSON.stringify({
+        api_token: TEXTLK_API_KEY,
         recipient,
         sender_id: SENDER_ID,
         type: "plain",
