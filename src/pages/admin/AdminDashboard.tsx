@@ -2827,16 +2827,89 @@ const AdminDashboard = () => {
               </div>
               {seoForm ? (
                 <div className="space-y-6">
+
+                  {/* ── Google Search Preview ── */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2"><Globe className="w-4 h-4 text-primary" /> Google Search Preview</h3>
+                    <p className="text-xs text-muted-foreground">This is how your site will appear in Google search results when someone searches for your store name.</p>
+                    <div className="bg-background rounded-lg p-5 border border-border space-y-4">
+                      {/* Main result */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          {seoForm.favicon_url && <img src={seoForm.favicon_url} alt="" className="w-7 h-7 rounded-full border border-border" />}
+                          <div>
+                            <p className="text-xs text-muted-foreground">{companyForm?.store_name || seoForm.store_name || "NanoCircuit.lk"}</p>
+                            <p className="text-xs text-muted-foreground">https://nanocircuit.lk</p>
+                          </div>
+                        </div>
+                        <p className="text-[#1a0dab] text-xl font-normal cursor-pointer hover:underline">
+                          {companyForm?.store_name || seoForm.store_name || "NanoCircuit.lk"} | {seoForm.tagline || "The Biggest Electronics Online Store in Sri Lanka"}
+                        </p>
+                        <p className="text-sm text-[#4d5156] leading-relaxed line-clamp-2">
+                          {seoForm.meta_description || "Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing supplies, PCB design services, tools & components online. Best prices, island-wide delivery."}
+                        </p>
+                      </div>
+
+                      {/* Sitelinks preview */}
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-3 pt-2 border-t border-border">
+                        {[
+                          { name: "Store", desc: "Browse all electronics, Arduino boards, sensors, and components.", url: "nanocircuit.lk" },
+                          { name: "PCB Design", desc: "Custom PCB manufacturing service. Upload Gerber files and get your boards.", url: "nanocircuit.lk/pcb-order" },
+                          { name: "3D Print", desc: "Custom 3D printing service for your projects. Upload your design.", url: "3dprint.iobuilds.com" },
+                          { name: "Daily Deals", desc: "Today's best deals and discounts on electronics components.", url: "nanocircuit.lk/deals" },
+                        ].map((link) => (
+                          <div key={link.name} className="space-y-0.5">
+                            <p className="text-[#1a0dab] text-sm font-normal cursor-pointer hover:underline">{link.name}</p>
+                            <p className="text-xs text-[#4d5156] line-clamp-1">{link.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-muted-foreground italic pt-1">More results from nanocircuit.lk »</p>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">⚠ This is an approximate preview. Actual Google results depend on indexing, ranking, and Google's own formatting.</p>
+                  </div>
+
+                  {/* ── Product & Category SEO Summary ── */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2"><BarChart3 className="w-4 h-4 text-primary" /> SEO Coverage</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {[
+                        { label: "Products Indexed", value: products?.filter((p: any) => p.is_active)?.length || 0, icon: Package, color: "text-secondary" },
+                        { label: "Categories Active", value: categories?.filter((c: any) => c.is_active)?.length || 0, icon: FolderTree, color: "text-primary" },
+                        { label: "Pages Published", value: 0, icon: FileText, color: "text-accent" },
+                        { label: "Sitemap URLs", value: (products?.filter((p: any) => p.is_active)?.length || 0) + (categories?.filter((c: any) => c.is_active)?.length || 0) + 10, icon: Globe, color: "text-secondary" },
+                      ].map((stat) => (
+                        <div key={stat.label} className="bg-muted/50 rounded-lg p-4 text-center">
+                          <stat.icon className={`w-5 h-5 mx-auto mb-2 ${stat.color}`} />
+                          <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                          <p className="text-xs text-muted-foreground">{stat.label}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="bg-muted/30 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
+                      <p>✅ All active products automatically include <strong>Product</strong> schema (name, price, availability, reviews)</p>
+                      <p>✅ All categories include <strong>CollectionPage</strong> + <strong>ItemList</strong> schema</p>
+                      <p>✅ Homepage includes <strong>Store</strong>, <strong>Organization</strong>, <strong>WebSite</strong> + <strong>SearchAction</strong> schema</p>
+                      <p>✅ <strong>SiteNavigationElement</strong> schema added for Google Sitelinks (Store, PCB Design, 3D Print)</p>
+                      <p>✅ Sitemap auto-generated with all products, categories, deals, and pages</p>
+                    </div>
+                  </div>
+
+                  {/* ── Store SEO Fields ── */}
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Store Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div><Label>Store Name</Label><Input value={seoForm.store_name || ""} onChange={(e) => setSeoForm({ ...seoForm, store_name: e.target.value })} placeholder="NanoCircuit.lk" /></div>
-                      <div><Label>Tagline</Label><Input value={seoForm.tagline || ""} onChange={(e) => setSeoForm({ ...seoForm, tagline: e.target.value })} placeholder="Sri Lanka's #1 Electronics Store" /></div>
+                      <div><Label>Tagline</Label><Input value={seoForm.tagline || ""} onChange={(e) => setSeoForm({ ...seoForm, tagline: e.target.value })} placeholder="The Biggest Electronics Online Store in Sri Lanka" /></div>
                     </div>
-                    <div><Label>Meta Description</Label><Textarea value={seoForm.meta_description || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_description: e.target.value })} rows={3} placeholder="Brief description for search engines (max 160 chars)" /></div>
-                    <p className="text-xs text-muted-foreground">{(seoForm.meta_description || "").length}/160 characters</p>
-                    <div><Label>Meta Keywords</Label><Input value={seoForm.meta_keywords || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_keywords: e.target.value })} placeholder="electronics, arduino, sensors, Sri Lanka" /></div>
-                    <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://example.com/og-image.jpg" /></div>
+                    <div>
+                      <Label>Meta Description</Label>
+                      <Textarea value={seoForm.meta_description || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_description: e.target.value })} rows={3} placeholder="NanoCircuit.lk — Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing, PCB design & more. Island-wide delivery." />
+                      <p className={`text-xs mt-1 ${(seoForm.meta_description || "").length > 160 ? "text-destructive" : "text-muted-foreground"}`}>{(seoForm.meta_description || "").length}/160 characters {(seoForm.meta_description || "").length > 160 ? "⚠ Too long" : ""}</p>
+                    </div>
+                    <div><Label>Meta Keywords</Label><Input value={seoForm.meta_keywords || ""} onChange={(e) => setSeoForm({ ...seoForm, meta_keywords: e.target.value })} placeholder="electronics, arduino, sensors, Sri Lanka, NanoCircuit, PCB design, 3D printing" /></div>
+                    <div><Label>OG Image URL</Label><Input value={seoForm.og_image || ""} onChange={(e) => setSeoForm({ ...seoForm, og_image: e.target.value })} placeholder="https://nanocircuit.lk/og-image.jpg" /></div>
                     <div>
                       <Label>Favicon (Site Icon)</Label>
                       <div className="flex items-center gap-3 mt-1 flex-wrap">
@@ -2872,21 +2945,26 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
+                  {/* ── Analytics & Tracking ── */}
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Analytics & Tracking</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div><Label>Google Analytics ID</Label><Input value={seoForm.google_analytics_id || ""} onChange={(e) => setSeoForm({ ...seoForm, google_analytics_id: e.target.value })} placeholder="G-XXXXXXXXXX" /></div>
                       <div><Label>Facebook Pixel ID</Label><Input value={seoForm.facebook_pixel_id || ""} onChange={(e) => setSeoForm({ ...seoForm, facebook_pixel_id: e.target.value })} placeholder="123456789" /></div>
                     </div>
-                    <p className="text-xs text-muted-foreground">Add your tracking IDs to enable analytics on the storefront.</p>
+                    <div><Label>Google Site Verification</Label><Input value={seoForm.google_site_verification || ""} onChange={(e) => setSeoForm({ ...seoForm, google_site_verification: e.target.value })} placeholder="Paste verification meta tag content" /></div>
+                    <p className="text-xs text-muted-foreground">Add your tracking IDs and verification codes to enable analytics and Search Console.</p>
                   </div>
 
-                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
-                    <h3 className="font-semibold text-foreground">SEO Preview</h3>
-                    <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-                      <p className="text-secondary text-lg font-medium truncate">{seoForm.store_name || "Store Name"} — {seoForm.tagline || "Tagline"}</p>
-                      <p className="text-xs text-secondary">https://shop-sun-lk.lovable.app</p>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{seoForm.meta_description || "Add a meta description to improve search visibility."}</p>
+                  {/* ── Quick Links ── */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-3">
+                    <h3 className="font-semibold text-foreground">SEO Quick Links</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <a href="/sitemap.xml" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"><Globe className="w-3.5 h-3.5" /> View Sitemap</a>
+                      <a href="/robots.txt" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"><FileText className="w-3.5 h-3.5" /> View robots.txt</a>
+                      <a href="https://search.google.com/search-console" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"><ExternalLink className="w-3.5 h-3.5" /> Google Search Console</a>
+                      <a href="https://pagespeed.web.dev/analysis?url=https%3A%2F%2Fnanocircuit.lk" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"><TrendingUp className="w-3.5 h-3.5" /> PageSpeed Test</a>
+                      <a href="https://search.google.com/test/rich-results?url=https%3A%2F%2Fnanocircuit.lk" target="_blank" rel="noopener" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-lg text-xs font-medium text-foreground hover:bg-muted/80 transition-colors"><Check className="w-3.5 h-3.5" /> Rich Results Test</a>
                     </div>
                   </div>
                 </div>
@@ -3067,7 +3145,7 @@ const AdminDashboard = () => {
                         )}
                       </div>
                       <div><Label>බැංකුවේ නම / Bank Name *</Label><Input value={acc.bank_name || ""} onChange={(e) => updateBankAccount(idx, "bank_name", e.target.value)} placeholder="Commercial Bank of Ceylon" /></div>
-                      <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={acc.account_name || ""} onChange={(e) => updateBankAccount(idx, "account_name", e.target.value)} placeholder="TechLK (Pvt) Ltd" /></div>
+                      <div><Label>ගිණුම් හිමියාගේ නම / Account Name *</Label><Input value={acc.account_name || ""} onChange={(e) => updateBankAccount(idx, "account_name", e.target.value)} placeholder="NanoCircuit (Pvt) Ltd" /></div>
                       <div><Label>ගිණුම් අංකය / Account Number *</Label><Input value={acc.account_number || ""} onChange={(e) => updateBankAccount(idx, "account_number", e.target.value)} placeholder="8012345678" /></div>
                       <div><Label>ශාඛාව / Branch *</Label><Input value={acc.branch || ""} onChange={(e) => updateBankAccount(idx, "branch", e.target.value)} placeholder="Colombo Fort" /></div>
                       <div><Label>අමතර තොරතුරු / Additional Info</Label><Textarea value={acc.additional_info || ""} onChange={(e) => updateBankAccount(idx, "additional_info", e.target.value)} rows={2} placeholder="SWIFT code, special instructions, etc." /></div>

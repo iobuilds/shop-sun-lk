@@ -59,6 +59,7 @@ const SEOHead = ({
   const faviconUrl = seoSettings?.favicon_url || "/favicon.ico";
   const sitePhone = company?.phone || company?.whatsapp || "";
   const siteEmail = company?.email || "";
+  const googleSiteVerification = seoSettings?.google_site_verification || "";
 
   const finalTitle = title
     ? (title.includes(storeName) ? title : `${title} | ${storeName}`)
@@ -139,6 +140,7 @@ const SEOHead = ({
       <link rel="icon" href={faviconUrl} />
       <meta name="description" content={finalDescription} />
       <meta name="keywords" content={finalKeywords} />
+      {googleSiteVerification && <meta name="google-site-verification" content={googleSiteVerification} />}
       {noindex ? (
         <meta name="robots" content="noindex, nofollow" />
       ) : (

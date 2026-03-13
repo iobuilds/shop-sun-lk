@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
   const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const baseUrl = req.headers.get("origin") || "https://techlk.lk";
+  const baseUrl = req.headers.get("origin") || "https://nanocircuit.lk";
   const today = new Date().toISOString().split("T")[0];
 
   const urls: string[] = [];
