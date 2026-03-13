@@ -98,6 +98,23 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
+  const markCodPaid = async () => {
+    if (!order) return;
+    setMarkingCodPaid(true);
+    const { error } = await supabase.from("orders").update({ payment_status: "paid" } as any).eq("id", order.id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); setMarkingCodPaid(false); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("order_status_history" as any).insert({
+      order_id: order.id, status: order.status,
+      note: "COD payment collected — marked as paid by admin",
+      changed_by: session?.user?.id || null,
+    } as any);
+    toast({ title: "COD payment marked as received", description: "Order payment status updated to Paid." });
+    setMarkingCodPaid(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    onOpenChange(false);
+  };
+
   const handleDownloadInvoice = () => {
     if (!order) return;
     generateAdminInvoice({
