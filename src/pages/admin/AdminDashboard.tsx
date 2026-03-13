@@ -2896,6 +2896,86 @@ const AdminDashboard = () => {
                     </div>
                   </div>
 
+                  {/* ── Product Search Preview ── */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2"><Package className="w-4 h-4 text-primary" /> Product Search Preview</h3>
+                    <p className="text-xs text-muted-foreground">Search for a product to see how it appears in Google search results.</p>
+                    <Input placeholder="Search products..." value={seoProductSearch || ""} onChange={(e) => setSeoProductSearch(e.target.value)} className="max-w-md" />
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                      {(products || [])
+                        .filter((p: any) => p.is_active && seoProductSearch && (p.name?.toLowerCase().includes(seoProductSearch.toLowerCase()) || p.slug?.toLowerCase().includes(seoProductSearch.toLowerCase())))
+                        .slice(0, 5)
+                        .map((p: any) => {
+                          const title = `${p.name} | ${companyForm?.store_name || seoForm?.store_name || "NanoCircuit.lk"}`;
+                          const desc = p.description || "Buy online at NanoCircuit.lk — Sri Lanka's #1 electronics store.";
+                          const price = p.discount_price && p.discount_price < p.price ? p.discount_price : p.price;
+                          const imgUrl = p.images?.[0] || "";
+                          return (
+                            <div key={p.id} className="bg-background rounded-lg p-4 border border-border space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                {seoForm?.favicon_url && <img src={seoForm.favicon_url} alt="" className="w-5 h-5 rounded-full border border-border" />}
+                                <div>
+                                  <p className="text-xs text-muted-foreground">{companyForm?.store_name || "NanoCircuit.lk"}</p>
+                                  <p className="text-xs text-muted-foreground">https://nanocircuit.lk/product/{p.slug}</p>
+                                </div>
+                              </div>
+                              <p className="text-[#1a0dab] text-lg font-normal cursor-pointer hover:underline line-clamp-1">{title.length > 60 ? title.slice(0, 57) + "..." : title}</p>
+                              <p className="text-sm text-[#4d5156] leading-relaxed line-clamp-2">{desc.length > 160 ? desc.slice(0, 157) + "..." : desc}</p>
+                              {price > 0 && <p className="text-xs text-[#70757a]">Rs. {price.toLocaleString()} — {p.stock_quantity > 0 ? "✅ In stock" : "❌ Out of stock"}</p>}
+                              {imgUrl && <img src={imgUrl} alt={p.name} className="w-16 h-16 rounded object-cover border border-border mt-1" />}
+                              <div className="flex gap-2 pt-1">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${title.length <= 60 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Title: {title.length}/60</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${desc.length <= 160 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Desc: {desc.length}/160</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {seoProductSearch && !(products || []).some((p: any) => p.is_active && (p.name?.toLowerCase().includes(seoProductSearch.toLowerCase()) || p.slug?.toLowerCase().includes(seoProductSearch.toLowerCase()))) && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No products match "{seoProductSearch}"</p>
+                      )}
+                      {!seoProductSearch && <p className="text-sm text-muted-foreground text-center py-4">Type to search products and preview their Google appearance</p>}
+                    </div>
+                  </div>
+
+                  {/* ── Category Search Preview ── */}
+                  <div className="bg-card rounded-xl border border-border p-6 space-y-4">
+                    <h3 className="font-semibold text-foreground flex items-center gap-2"><FolderTree className="w-4 h-4 text-primary" /> Category Search Preview</h3>
+                    <p className="text-xs text-muted-foreground">Search for a category to see how it appears in Google search results.</p>
+                    <Input placeholder="Search categories..." value={seoCategorySearch || ""} onChange={(e) => setSeoCategorySearch(e.target.value)} className="max-w-md" />
+                    <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                      {(categories || [])
+                        .filter((c: any) => c.is_active && seoCategorySearch && (c.name?.toLowerCase().includes(seoCategorySearch.toLowerCase()) || c.slug?.toLowerCase().includes(seoCategorySearch.toLowerCase())))
+                        .slice(0, 5)
+                        .map((c: any) => {
+                          const title = `${c.name} | ${companyForm?.store_name || seoForm?.store_name || "NanoCircuit.lk"}`;
+                          const desc = c.description || `Browse ${c.name} at NanoCircuit.lk — Sri Lanka's #1 electronics store.`;
+                          const productCount = (products || []).filter((p: any) => p.is_active && p.category_id === c.id).length;
+                          return (
+                            <div key={c.id} className="bg-background rounded-lg p-4 border border-border space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                {seoForm?.favicon_url && <img src={seoForm.favicon_url} alt="" className="w-5 h-5 rounded-full border border-border" />}
+                                <div>
+                                  <p className="text-xs text-muted-foreground">{companyForm?.store_name || "NanoCircuit.lk"}</p>
+                                  <p className="text-xs text-muted-foreground">https://nanocircuit.lk/category/{c.slug}</p>
+                                </div>
+                              </div>
+                              <p className="text-[#1a0dab] text-lg font-normal cursor-pointer hover:underline line-clamp-1">{title.length > 60 ? title.slice(0, 57) + "..." : title}</p>
+                              <p className="text-sm text-[#4d5156] leading-relaxed line-clamp-2">{desc.length > 160 ? desc.slice(0, 157) + "..." : desc}</p>
+                              <p className="text-xs text-[#70757a]">{productCount} product{productCount !== 1 ? "s" : ""} in this category</p>
+                              <div className="flex gap-2 pt-1">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${title.length <= 60 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Title: {title.length}/60</span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${desc.length <= 160 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Desc: {desc.length}/160</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {seoCategorySearch && !(categories || []).some((c: any) => c.is_active && (c.name?.toLowerCase().includes(seoCategorySearch.toLowerCase()) || c.slug?.toLowerCase().includes(seoCategorySearch.toLowerCase()))) && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No categories match "{seoCategorySearch}"</p>
+                      )}
+                      {!seoCategorySearch && <p className="text-sm text-muted-foreground text-center py-4">Type to search categories and preview their Google appearance</p>}
+                    </div>
+                  </div>
+
                   {/* ── Store SEO Fields ── */}
                   <div className="bg-card rounded-xl border border-border p-6 space-y-4">
                     <h3 className="font-semibold text-foreground">Store Information</h3>
