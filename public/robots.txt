@@ -14,9 +14,17 @@ Allow: /
 
 User-agent: *
 Allow: /
+Allow: /category/
+Allow: /product/
+Allow: /deals
+Allow: /pcb-order
+Allow: /pre-order
+Allow: /search
+Allow: /page/
+Allow: /track-order
+Allow: /contact
 
 Disallow: /admin
-Disallow: /auth
 Disallow: /checkout
 Disallow: /order-success
 Disallow: /reset-password
