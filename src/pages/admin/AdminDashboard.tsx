@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useInactivityLogout } from "@/hooks/useInactivityLogout";
 import { Link } from "react-router-dom";
 import ProductLinksManager from "@/components/admin/ProductLinksManager";
 import SalesAnalytics from "@/components/admin/SalesAnalytics";
@@ -81,6 +82,7 @@ const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price
 
 const AdminDashboard = () => {
   const { isAdmin, isModerator, userRole, moderatorPermissions, loading } = useAdminAuth();
+  useInactivityLogout(!loading && (isAdmin || isModerator));
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("orders");
   const [search, setSearch] = useState("");
