@@ -48,6 +48,7 @@ const Checkout = () => {
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
   const payhereEnabled = pmSettings?.payhere_enabled === true;
+  const codEnabled = pmSettings?.cod_enabled === true;
   const [paymentMethod, setPaymentMethod] = useState("");
   const payhereScriptLoaded = useRef(false);
 
