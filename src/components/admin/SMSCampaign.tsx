@@ -58,6 +58,7 @@ export default function SMSCampaign() {
   const [sending, setSending] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("none");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Schedule state
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
