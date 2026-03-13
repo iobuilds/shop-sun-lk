@@ -140,6 +140,7 @@ const SEOHead = ({
       <link rel="icon" href={faviconUrl} />
       <meta name="description" content={finalDescription} />
       <meta name="keywords" content={finalKeywords} />
+      {googleSiteVerification && <meta name="google-site-verification" content={googleSiteVerification} />}
       {noindex ? (
         <meta name="robots" content="noindex, nofollow" />
       ) : (
