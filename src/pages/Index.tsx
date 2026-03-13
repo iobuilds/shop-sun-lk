@@ -11,6 +11,7 @@ import Testimonials from "@/components/Testimonials";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { useBranding } from "@/hooks/useBranding";
 import { Printer } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
@@ -72,6 +73,8 @@ const SECTION_COMPONENTS: Record<string, JSX.Element> = {
 };
 
 const Index = () => {
+  const { storeName, company } = useBranding();
+
   const { data: sectionsData } = useQuery({
     queryKey: ["homepage-sections-config"],
     queryFn: async () => {
@@ -82,7 +85,6 @@ const Index = () => {
         .maybeSingle();
       if (!data?.value) return DEFAULT_SECTIONS;
       const saved = data.value as unknown as HomepageSection[];
-      // Merge with defaults so new sections appear even if not yet saved
       const merged = DEFAULT_SECTIONS.map((def) => {
         const found = saved.find((s) => s.id === def.id);
         return found ? { ...def, ...found } : def;
@@ -94,48 +96,79 @@ const Index = () => {
   });
 
   const sections = sectionsData ?? DEFAULT_SECTIONS;
+  const origin = window.location.origin;
 
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="NanoCircuit.lk — Sri Lanka's Leading Electronics & Components Store"
-        description="NanoCircuit.lk is Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing supplies, tools & components online. Best prices, island-wide delivery."
-        keywords="electronics Sri Lanka, buy electronics online, Arduino Sri Lanka, sensors, components, NanoCircuit, Colombo, online electronics store, 3D printing, IoT, microcontrollers"
-        canonical={window.location.origin}
+        title={`${storeName} — Sri Lanka's Leading Electronics & Components Store`}
+        description={`${storeName} is Sri Lanka's #1 electronics supplier. Buy Arduino, sensors, 3D printing supplies, PCB design services, tools & components online. Best prices, island-wide delivery.`}
+        keywords={`electronics Sri Lanka, buy electronics online, Arduino Sri Lanka, sensors, components, ${storeName}, Colombo, online electronics store, 3D printing, PCB design, IoT, microcontrollers`}
+        canonical={origin}
         jsonLd={{
           "@context": "https://schema.org",
           "@graph": [
             {
               "@type": "WebSite",
-              "@id": `${window.location.origin}/#website`,
-              name: "NanoCircuit.lk",
-              url: window.location.origin,
+              "@id": `${origin}/#website`,
+              name: storeName,
+              url: origin,
+              description: `${storeName} — Sri Lanka's #1 electronics & components store`,
               potentialAction: {
                 "@type": "SearchAction",
                 target: {
                   "@type": "EntryPoint",
-                  urlTemplate: `${window.location.origin}/search?q={search_term_string}`,
+                  urlTemplate: `${origin}/search?q={search_term_string}`,
                 },
                 "query-input": "required name=search_term_string",
               },
             },
             {
-              "@type": "Store",
-              "@id": `${window.location.origin}/#store`,
-              name: "NanoCircuit.lk",
-              url: window.location.origin,
-              telephone: "+94771234567",
+              "@type": ["Store", "ElectronicsStore"],
+              "@id": `${origin}/#store`,
+              name: storeName,
+              url: origin,
+              description: `${storeName} — Buy Arduino, sensors, 3D printing, PCB design services & components online in Sri Lanka`,
+              ...(company?.phone ? { telephone: company.phone } : {}),
+              ...(company?.email ? { email: company.email } : {}),
               address: {
                 "@type": "PostalAddress",
                 addressCountry: "LK",
-                addressLocality: "Colombo",
+                ...(company?.address ? { streetAddress: company.address } : {}),
               },
               priceRange: "$$",
-              sameAs: [],
+              sameAs: [
+                ...(company?.facebook ? [company.facebook] : []),
+                ...(company?.instagram ? [company.instagram] : []),
+                ...(company?.youtube ? [company.youtube] : []),
+                ...(company?.tiktok ? [company.tiktok] : []),
+              ],
             },
             {
               "@type": "Organization",
-              name: "NanoCircuit.lk",
+              "@id": `${origin}/#organization`,
+              name: storeName,
+              url: origin,
+              ...(company?.logo_url ? { logo: company.logo_url } : {}),
+            },
+            // SiteNavigationElement — helps Google show sitelinks
+            {
+              "@type": "SiteNavigationElement",
+              "@id": `${origin}/#navigation`,
+              name: "Main Navigation",
+              hasPart: [
+                { "@type": "SiteNavigationElement", name: "Store", url: `${origin}/` },
+                { "@type": "SiteNavigationElement", name: "PCB Design", url: `${origin}/pcb-order` },
+                { "@type": "SiteNavigationElement", name: "3D Print", url: "https://3dprint.iobuilds.com" },
+                { "@type": "SiteNavigationElement", name: "Daily Deals", url: `${origin}/deals` },
+                { "@type": "SiteNavigationElement", name: "Pre-Order", url: `${origin}/pre-order` },
+              ],
+            },
+            {
+              "@type": "BreadcrumbList",
+              itemListElement: [
+                { "@type": "ListItem", position: 1, name: "Home", item: origin },
+              ],
             },
           ],
         }}
