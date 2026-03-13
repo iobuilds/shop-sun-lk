@@ -1480,6 +1480,45 @@ export type Database = {
           },
         ]
       }
+      sms_scheduled_campaigns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          message: string
+          phones: Json
+          provider_response: Json | null
+          recipient_count: number
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message: string
+          phones?: Json
+          provider_response?: Json | null
+          recipient_count?: number
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          message?: string
+          phones?: Json
+          provider_response?: Json | null
+          recipient_count?: number
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       sms_templates: {
         Row: {
           created_at: string
