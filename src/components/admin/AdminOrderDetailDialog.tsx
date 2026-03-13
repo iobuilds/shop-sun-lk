@@ -12,7 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { generateAdminInvoice } from "@/lib/generateAdminInvoice";
 import {
   Clock, Truck, Save, StickyNote, CalendarDays, FileDown, Loader2,
-  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag
+  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag, CheckCircle2
 } from "lucide-react";
 
 interface Props {
@@ -32,6 +32,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
+  const [markingCodPaid, setMarkingCodPaid] = useState(false);
 
   useEffect(() => {
     if (!order || !open) return;
@@ -97,6 +98,23 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
 
+  const markCodPaid = async () => {
+    if (!order) return;
+    setMarkingCodPaid(true);
+    const { error } = await supabase.from("orders").update({ payment_status: "paid" } as any).eq("id", order.id);
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); setMarkingCodPaid(false); return; }
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from("order_status_history" as any).insert({
+      order_id: order.id, status: order.status,
+      note: "COD payment collected — marked as paid by admin",
+      changed_by: session?.user?.id || null,
+    } as any);
+    toast({ title: "COD payment marked as received", description: "Order payment status updated to Paid." });
+    setMarkingCodPaid(false);
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    onOpenChange(false);
+  };
+
   const handleDownloadInvoice = () => {
     if (!order) return;
     generateAdminInvoice({
@@ -137,10 +155,32 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
             <div>
               <p className="text-xs text-muted-foreground">Payment</p>
               <p className={`text-sm font-medium capitalize ${order.payment_status === "paid" ? "text-secondary" : order.payment_status === "rejected" ? "text-destructive" : "text-foreground"}`}>
-                {order.payment_status} ({order.payment_method === "stripe" ? "Card" : order.payment_method === "free" ? "Free (Wallet/Coupon)" : "Bank Transfer"})
+                {order.payment_status} ({order.payment_method === "stripe" ? "Card" : order.payment_method === "cod" ? "COD" : order.payment_method === "free" ? "Free (Wallet/Coupon)" : "Bank Transfer"})
               </p>
             </div>
           </div>
+
+          {/* COD Payment Action */}
+          {order.payment_method === "cod" && order.payment_status !== "paid" && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Truck className="w-5 h-5 text-destructive shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Cash on Delivery — Awaiting Payment</p>
+                  <p className="text-xs text-muted-foreground">Confirm once the delivery person has collected payment from the customer.</p>
+                </div>
+              </div>
+              <Button
+                onClick={markCodPaid}
+                disabled={markingCodPaid}
+                className="shrink-0 gap-1.5"
+                size="sm"
+              >
+                {markingCodPaid ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Mark as Paid
+              </Button>
+            </div>
+          )}
 
           {/* Customer + Shipping in 2 columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
