@@ -204,6 +204,25 @@ export default function SMSCampaign() {
     setSelectedTemplate(templateId);
   };
 
+  // Insert placeholder at cursor position
+  const insertPlaceholder = (placeholder: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setMessage((prev) => prev + placeholder);
+      return;
+    }
+    const start = el.selectionStart ?? message.length;
+    const end = el.selectionEnd ?? message.length;
+    const newMsg = message.slice(0, start) + placeholder + message.slice(end);
+    setMessage(newMsg);
+    // Restore cursor after placeholder
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + placeholder.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
   // Send or schedule campaign
   const sendCampaign = async () => {
     if (!message.trim()) {
