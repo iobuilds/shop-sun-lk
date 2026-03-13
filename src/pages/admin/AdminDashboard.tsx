@@ -31,6 +31,7 @@ import QRStockScanner from "@/components/admin/QRStockScanner";
 import AdminPreOrders from "@/components/admin/AdminPreOrders";
 import AdminPCBOrders from "@/components/admin/AdminPCBOrders";
 import SMSTemplatesManager from "@/components/admin/SMSTemplatesManager";
+import SMSCampaign from "@/components/admin/SMSCampaign";
 import ModeratorPermissionsManager from "@/components/admin/ModeratorPermissionsManager";
 import CouponUserPicker from "@/components/admin/CouponUserPicker";
 import ActivityLogs from "@/components/admin/ActivityLogs";
