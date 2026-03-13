@@ -527,16 +527,35 @@ export default function SMSCampaign() {
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Message *</Label>
                   <Textarea
+                    ref={textareaRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your SMS message here…"
                     className="min-h-[140px] text-sm font-mono"
                   />
-                  <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                    <span>Placeholders: <span className="font-mono">{"{{customer_name}}"}</span></span>
-                    <span className={charCount > 160 ? "text-destructive" : ""}>
+                  {/* Char counter */}
+                  <div className="flex items-center justify-end mt-1 text-xs text-muted-foreground">
+                    <span className={charCount > 160 ? "text-destructive font-medium" : ""}>
                       {charCount} chars · {smsCount} SMS part{smsCount > 1 ? "s" : ""}
                     </span>
+                  </div>
+                  {/* Clickable placeholder chips */}
+                  <div className="mt-2">
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">Insert placeholder:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALL_PLACEHOLDERS.map((ph) => (
+                        <button
+                          key={ph.key}
+                          type="button"
+                          onClick={() => insertPlaceholder(ph.key)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary border border-border hover:border-primary/30 text-[11px] font-mono text-muted-foreground transition-colors cursor-pointer"
+                          title={`Insert ${ph.key}`}
+                        >
+                          <span className="text-[10px] opacity-60">+</span>
+                          {ph.key}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
