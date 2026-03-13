@@ -155,10 +155,32 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
             <div>
               <p className="text-xs text-muted-foreground">Payment</p>
               <p className={`text-sm font-medium capitalize ${order.payment_status === "paid" ? "text-secondary" : order.payment_status === "rejected" ? "text-destructive" : "text-foreground"}`}>
-                {order.payment_status} ({order.payment_method === "stripe" ? "Card" : order.payment_method === "free" ? "Free (Wallet/Coupon)" : "Bank Transfer"})
+                {order.payment_status} ({order.payment_method === "stripe" ? "Card" : order.payment_method === "cod" ? "COD" : order.payment_method === "free" ? "Free (Wallet/Coupon)" : "Bank Transfer"})
               </p>
             </div>
           </div>
+
+          {/* COD Payment Action */}
+          {order.payment_method === "cod" && order.payment_status !== "paid" && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <Truck className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Cash on Delivery — Awaiting Payment</p>
+                  <p className="text-xs text-muted-foreground">Confirm once the delivery person has collected payment from the customer.</p>
+                </div>
+              </div>
+              <Button
+                onClick={markCodPaid}
+                disabled={markingCodPaid}
+                className="shrink-0 gap-1.5 bg-secondary text-secondary-foreground hover:bg-secondary/90"
+                size="sm"
+              >
+                {markingCodPaid ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Mark as Paid
+              </Button>
+            </div>
+          )}
 
           {/* Customer + Shipping in 2 columns */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
