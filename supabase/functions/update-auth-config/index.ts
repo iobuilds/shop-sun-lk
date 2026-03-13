@@ -11,8 +11,11 @@ serve(async (req) => {
   }
 
   try {
-    const projectRef = Deno.env.get("VITE_SUPABASE_PROJECT_ID") || "rcefmfiqqqsfurkdljup";
+    const projectRef = "rcefmfiqqqsfurkdljup";
     const managementToken = Deno.env.get("MANAGEMENT_API_TOKEN");
+
+    console.log("Management token present:", !!managementToken);
+    console.log("Token prefix:", managementToken?.substring(0, 10));
 
     if (!managementToken) {
       return new Response(JSON.stringify({ error: "MANAGEMENT_API_TOKEN not set" }), {
@@ -21,8 +24,7 @@ serve(async (req) => {
       });
     }
 
-    // Set JWT expiry to 604800 seconds (7 days)
-    // Set refresh token reuse interval to 0 (always valid until explicitly revoked)
+    // Set JWT expiry to 604800 seconds (7 days) so users stay logged in longer
     const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/config/auth`, {
       method: "PATCH",
       headers: {
@@ -36,13 +38,19 @@ serve(async (req) => {
       }),
     });
 
-    const data = await res.json();
+    const responseText = await res.text();
+    console.log("Management API response status:", res.status);
+    console.log("Management API response:", responseText);
 
-    return new Response(JSON.stringify({ success: res.ok, data }), {
-      status: res.ok ? 200 : 400,
+    let data;
+    try { data = JSON.parse(responseText); } catch { data = responseText; }
+
+    return new Response(JSON.stringify({ success: res.ok, status: res.status, data }), {
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
+    console.error("Error:", err);
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
