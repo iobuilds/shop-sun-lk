@@ -354,6 +354,14 @@ serve(async (req) => {
       );
     }
 
+    if (payment_method === "cod") {
+      const order = await createOrder("cod");
+      return new Response(
+        JSON.stringify({ type: "cod", order_id: order.id, coupon_wallet_credit }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     // Stripe payment
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",

@@ -48,6 +48,7 @@ const Checkout = () => {
   const stripeEnabled = pmSettings?.stripe_enabled !== false;
   const bankEnabled = pmSettings?.bank_transfer_enabled !== false;
   const payhereEnabled = pmSettings?.payhere_enabled === true;
+  const codEnabled = pmSettings?.cod_enabled === true;
   const [paymentMethod, setPaymentMethod] = useState("");
   const payhereScriptLoaded = useRef(false);
 
@@ -400,6 +401,8 @@ const Checkout = () => {
         window.location.href = data.url;
       } else if (data.type === "bank_transfer") {
         navigate(`/order-success?order_id=${data.order_id}&method=bank${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
+      } else if (data.type === "cod") {
+        navigate(`/order-success?order_id=${data.order_id}&method=cod${data.coupon_wallet_credit > 0 ? `&wallet_credit=${data.coupon_wallet_credit}` : ""}`);
       }
     } catch (err: any) {
       toast.error(err.message || "Checkout failed");
@@ -474,6 +477,16 @@ const Checkout = () => {
                         <div>
                           <p className="text-sm font-medium text-foreground">Direct Bank Transfer</p>
                           <p className="text-xs text-muted-foreground">Transfer to bank account & upload receipt</p>
+                        </div>
+                      </label>
+                    )}
+                    {codEnabled && (
+                      <label className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${paymentMethod === "cod" ? "border-secondary bg-secondary/5" : "border-border hover:border-secondary/50"}`}>
+                        <RadioGroupItem value="cod" />
+                        <Truck className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Cash on Delivery</p>
+                          <p className="text-xs text-muted-foreground">Pay when your order arrives at your door</p>
                         </div>
                       </label>
                     )}
