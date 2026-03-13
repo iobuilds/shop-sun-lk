@@ -711,7 +711,7 @@ export default function SMSCampaign() {
                         <td className="px-4 py-2.5 text-muted-foreground max-w-xs truncate">{log.message}</td>
                         <td className="px-4 py-2.5">
                           {log.status === "sent" ? (
-                            <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                            <span className="inline-flex items-center gap-1 text-secondary">
                               <CheckCircle2 className="w-3.5 h-3.5" /> sent
                             </span>
                           ) : (
