@@ -1391,6 +1391,30 @@ export type Database = {
           },
         ]
       }
+      search_logs: {
+        Row: {
+          created_at: string
+          id: string
+          query: string
+          result_count: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          query: string
+          result_count?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          query?: string
+          result_count?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       site_settings: {
         Row: {
           id: string
