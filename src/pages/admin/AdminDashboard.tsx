@@ -3188,6 +3188,22 @@ const AdminDashboard = () => {
                     )}
                   </div>
 
+                  <div className="bg-card rounded-xl border border-border p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Truck className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Cash on Delivery (COD)</p>
+                          <p className="text-xs text-muted-foreground">Pay when your order is delivered</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={!!paymentMethodSettings.cod_enabled}
+                        onCheckedChange={(v) => setPaymentMethodSettings({ ...paymentMethodSettings, cod_enabled: v })}
+                      />
+                    </div>
+                  </div>
+
                   <p className="text-xs text-muted-foreground">⚠️ At least one payment method must remain enabled. Disabled methods will not be shown on the checkout page.</p>
                 </div>
               ) : (
