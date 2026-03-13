@@ -84,8 +84,11 @@ export const useAdminAuth = () => {
       setLoading(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      check();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      // Only re-check on actual sign-in/out events, not token refresh
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        check();
+      }
     });
 
     check();

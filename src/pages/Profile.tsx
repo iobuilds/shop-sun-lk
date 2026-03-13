@@ -260,15 +260,19 @@ const Profile = () => {
   });
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (!session) navigate("/auth");
-      setLoading(false);
-    });
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) navigate("/auth");
       setLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        navigate("/auth");
+      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        setSession(session);
+        setLoading(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
