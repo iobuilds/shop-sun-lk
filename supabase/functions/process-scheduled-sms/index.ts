@@ -54,11 +54,11 @@ serve(async (req) => {
         const smsResponse = await fetch(TEXTLK_API_URL, {
           method: "POST",
           headers: {
-            "Authorization": `Bearer ${TEXTLK_API_KEY}`,
             "Content-Type": "application/json",
             "Accept": "application/json",
           },
           body: JSON.stringify({
+            api_token: TEXTLK_API_KEY,
             recipient,
             sender_id: SENDER_ID,
             type: "plain",
