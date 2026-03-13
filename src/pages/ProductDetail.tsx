@@ -12,6 +12,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useCart } from "@/contexts/CartContext";
 import { useWishlist } from "@/hooks/useWishlist";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
+import { useBranding } from "@/hooks/useBranding";
 
 const ProductDetail = () => {
   const { slug } = useParams<{ slug: string }>();
