@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, Link } from "react-router-dom";
@@ -14,6 +14,7 @@ const SearchPage = () => {
   const initialQ = params.get("q") || "";
   const [query, setQuery] = useState(initialQ);
   const { addItem } = useCart();
+  const loggedRef = useRef<string>("");
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["search-results", query],
@@ -30,6 +31,18 @@ const SearchPage = () => {
     },
     enabled: query.length >= 2,
   });
+
+  // Log search once per unique query
+  useEffect(() => {
+    if (query.length >= 2 && products !== undefined && loggedRef.current !== query) {
+      loggedRef.current = query;
+      supabase.from("search_logs" as any).insert({
+        query: query.trim().toLowerCase(),
+        result_count: products?.length || 0,
+        user_id: null,
+      });
+    }
+  }, [query, products]);
 
   return (
     <div className="min-h-screen bg-background">
