@@ -162,8 +162,6 @@ export const generatePCBInvoice = async (
   // Board specs table
   const specsData: [string, string][] = [
     ["Quantity", `${order.quantity} pcs`],
-    ["Layer Count", `${order.layer_count} Layer${order.layer_count > 1 ? "s" : ""}`],
-    ["Surface Finish", order.surface_finish],
     ["Board Thickness", order.board_thickness],
     ["Solder Mask Color", order.pcb_color],
   ];
