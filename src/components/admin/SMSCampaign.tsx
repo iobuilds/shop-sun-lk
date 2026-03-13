@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,21 @@ import {
   UserCheck, Filter, CreditCard, ChevronDown, ChevronUp, Clock,
   History, CalendarDays, Trash2, Ban, RefreshCw, AlertCircle,
 } from "lucide-react";
+
+// All available placeholders for SMS campaigns
+const ALL_PLACEHOLDERS = [
+  { key: "{{customer_name}}", label: "Customer Name" },
+  { key: "{{order_id}}", label: "Order ID" },
+  { key: "{{total}}", label: "Total" },
+  { key: "{{status}}", label: "Status" },
+  { key: "{{tracking_number}}", label: "Tracking No." },
+  { key: "{{tracking_link}}", label: "Tracking Link" },
+  { key: "{{courier_name}}", label: "Courier" },
+  { key: "{{expected_delivery}}", label: "Delivery Date" },
+  { key: "{{phone}}", label: "Phone" },
+  { key: "{{shop_name}}", label: "Shop Name" },
+  { key: "{{OTP5}}", label: "OTP (5-digit)" },
+];
 
 const SL_DISTRICTS = [
   "Colombo", "Gampaha", "Kalutara", "Kandy", "Matale", "Nuwara Eliya",
@@ -43,6 +58,7 @@ export default function SMSCampaign() {
   const [sending, setSending] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("none");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Schedule state
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
@@ -186,6 +202,25 @@ export default function SMSCampaign() {
     const tmpl = smsTemplates.find((t) => t.id === templateId);
     if (tmpl) setMessage(tmpl.message_template);
     setSelectedTemplate(templateId);
+  };
+
+  // Insert placeholder at cursor position
+  const insertPlaceholder = (placeholder: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      setMessage((prev) => prev + placeholder);
+      return;
+    }
+    const start = el.selectionStart ?? message.length;
+    const end = el.selectionEnd ?? message.length;
+    const newMsg = message.slice(0, start) + placeholder + message.slice(end);
+    setMessage(newMsg);
+    // Restore cursor after placeholder
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + placeholder.length;
+      el.setSelectionRange(pos, pos);
+    });
   };
 
   // Send or schedule campaign
@@ -492,16 +527,35 @@ export default function SMSCampaign() {
                 <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Message *</Label>
                   <Textarea
+                    ref={textareaRef}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your SMS message here…"
                     className="min-h-[140px] text-sm font-mono"
                   />
-                  <div className="flex items-center justify-between mt-1 text-xs text-muted-foreground">
-                    <span>Placeholders: <span className="font-mono">{"{{customer_name}}"}</span></span>
-                    <span className={charCount > 160 ? "text-destructive" : ""}>
+                  {/* Char counter */}
+                  <div className="flex items-center justify-end mt-1 text-xs text-muted-foreground">
+                    <span className={charCount > 160 ? "text-destructive font-medium" : ""}>
                       {charCount} chars · {smsCount} SMS part{smsCount > 1 ? "s" : ""}
                     </span>
+                  </div>
+                  {/* Clickable placeholder chips */}
+                  <div className="mt-2">
+                    <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">Insert placeholder:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {ALL_PLACEHOLDERS.map((ph) => (
+                        <button
+                          key={ph.key}
+                          type="button"
+                          onClick={() => insertPlaceholder(ph.key)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted hover:bg-primary/10 hover:text-primary border border-border hover:border-primary/30 text-[11px] font-mono text-muted-foreground transition-colors cursor-pointer"
+                          title={`Insert ${ph.key}`}
+                        >
+                          <span className="text-[10px] opacity-60">+</span>
+                          {ph.key}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
