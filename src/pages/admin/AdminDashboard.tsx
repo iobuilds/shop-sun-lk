@@ -531,6 +531,8 @@ const AdminDashboard = () => {
   }, [shippingSettings]);
 
   const [seoForm, setSeoForm] = useState<any>(null);
+  const [seoProductSearch, setSeoProductSearch] = useState("");
+  const [seoCategorySearch, setSeoCategorySearch] = useState("");
   const [lowStockThreshold, setLowStockThreshold] = useState(5);
   const [bankForm, setBankForm] = useState<any>(null);
   const [companyForm, setCompanyForm] = useState<any>(null);
