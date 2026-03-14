@@ -381,7 +381,10 @@ const DatabaseTools = () => {
       setProgress(p => ({ ...p, step: 2, currentStepLabel: UPLOAD_RESTORE_STEPS[2] }));
       const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": "application/zip" },
+        headers: {
+          "Content-Type": "application/zip",
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
+        },
         body: uploadedZipFile,
       });
       if (!uploadRes.ok) {
