@@ -304,15 +304,16 @@ export default function ImageEditor() {
   const addImageFromUrl = (url: string) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    fabric.FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((img) => {
+    fabric.FabricImage.fromURL(url).then((img) => {
+      img.set({ crossOrigin: "anonymous" } as any);
       const maxSide = 300;
-      const scale = Math.min(maxSide / (img.width || 1), maxSide / (img.height || 1));
-      img.set({ left: 80, top: 80, scaleX: scale, scaleY: scale });
+      const sc = Math.min(maxSide / (img.width || 1), maxSide / (img.height || 1));
+      img.set({ left: 80, top: 80, scaleX: sc, scaleY: sc });
       (img as any).id = `img-${Date.now()}`;
       canvas.add(img);
       canvas.setActiveObject(img);
       canvas.renderAll();
-    });
+    }).catch(() => toast({ title: "Could not load image", variant: "destructive" }));
   };
 
   const handleImageUpload = async (file: File) => {
