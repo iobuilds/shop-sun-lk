@@ -365,7 +365,10 @@ const DatabaseTools = () => {
       try {
         // If relative URL (edge function on VPS may return path-only), prepend the base URL
         if (!uploadUrl.startsWith("http://") && !uploadUrl.startsWith("https://")) {
-          uploadUrl = supabasePublicUrl + (uploadUrl.startsWith("/") ? uploadUrl : "/" + uploadUrl);
+          // Strip any leading "db/" prefix (Lovable Cloud returns "db/storage/v1/...")
+          let path = uploadUrl.startsWith("/") ? uploadUrl : "/" + uploadUrl;
+          path = path.replace(/^\/db\//, "/");
+          uploadUrl = supabasePublicUrl + path;
         } else {
           // Replace internal host (kong:8000, localhost, etc.) with public URL
           const parsed = new URL(uploadUrl);
@@ -375,6 +378,8 @@ const DatabaseTools = () => {
             parsed.host = publicParsed.host;
             uploadUrl = parsed.toString();
           }
+          // Also strip /db/ prefix after host on absolute URLs
+          uploadUrl = uploadUrl.replace(/(https?:\/\/[^/]+)\/db\//, "$1/");
         }
       } catch (_) { /* keep original */ }
 
