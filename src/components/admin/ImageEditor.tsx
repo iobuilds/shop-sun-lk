@@ -359,7 +359,7 @@ export default function ImageEditor() {
     const canvas = fabricRef.current;
     if (!canvas) return;
     setCanvasW(w); setCanvasH(h);
-    canvas.setWidth(w); canvas.setHeight(h);
+    canvas.setDimensions({ width: w, height: h });
     canvas.renderAll();
   };
 
