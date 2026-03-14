@@ -447,6 +447,29 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Get recent logs (backup activity + any console errors recorded) ──
+  if (action === "get_logs") {
+    try {
+      const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { data: backupLogs } = await adminClient
+        .from("db_backup_logs")
+        .select("*")
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const logs = (backupLogs || []).map((l: any) => ({
+        event_message: `[${(l.action || "").toUpperCase()}] ${l.file_name}${l.note ? " — " + l.note : ""}${l.file_size ? ` (${(l.file_size / 1024).toFixed(1)} KB)` : ""}`,
+        level: "info",
+        timestamp: new Date(l.created_at).getTime(),
+      }));
+
+      return new Response(JSON.stringify({ logs }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   if (action === "list") {
     const { data: files, error } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
     if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
