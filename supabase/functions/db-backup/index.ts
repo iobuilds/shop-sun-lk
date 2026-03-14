@@ -464,16 +464,17 @@ Deno.serve(async (req) => {
 
   if (action === "download_url") {
     const { file_name } = body;
-    if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!file_name) {
+      return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     const { data, error } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 600);
-    if (error || !data) return new Response(JSON.stringify({ error: error?.message || "Could not create signed URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (error || !data) {
+      return new Response(JSON.stringify({ error: error?.message || "Could not create signed URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
-    const normalizedPublicBase = publicSupabaseUrl.replace(/\/$/, "");
-    const publicUrl = data.signedUrl.replace(
-      /^https?:\/\/[^/]+(?::\d+)?/,
-      normalizedPublicBase
-    );
+    // Replace internal host (kong:8000, localhost, etc.) with the public URL
+    const publicUrl = data.signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, publicSupabaseUrl);
 
     return new Response(JSON.stringify({ url: publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
