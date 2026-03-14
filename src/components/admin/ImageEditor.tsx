@@ -368,7 +368,7 @@ export default function ImageEditor() {
     const canvas = fabricRef.current;
     if (!canvas) return;
     setSaving(true);
-    const canvasJson = canvas.toJSON(["id", "locked"]);
+    const canvasJson = (canvas.toJSON as (ps?: string[]) => any)(["id", "locked"]);
     const thumbnail = canvas.toDataURL({ format: "jpeg", quality: 0.5, multiplier: 0.2 });
     // Upload thumbnail
     let thumbUrl: string | null = null;
