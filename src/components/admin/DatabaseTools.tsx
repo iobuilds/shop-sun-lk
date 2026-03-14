@@ -1,16 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock, ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame, FileArchive, CalendarDays, X } from "lucide-react";
+import {
+  Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock,
+  ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame, FileArchive, CalendarDays,
+  X, Terminal, ChevronDown, ChevronUp, AlertCircle, CheckCircle2,
+} from "lucide-react";
 
 interface BackupLog {
   id: string;
@@ -29,6 +34,50 @@ interface BackupFile {
   metadata: { size?: number; contentLength?: number; mimetype?: string };
 }
 
+interface ProgressState {
+  active: boolean;
+  label: string;
+  step: number;
+  totalSteps: number;
+  steps: string[];
+  currentStepLabel: string;
+  isError: boolean;
+  errorMessage?: string;
+}
+
+interface FnLogEntry {
+  event_message: string;
+  level: string;
+  timestamp: number;
+}
+
+const BACKUP_STEPS = [
+  "Authenticating...",
+  "Reading database tables...",
+  "Compressing data...",
+  "Uploading to storage...",
+  "Finalizing...",
+];
+
+const RESTORE_STEPS = [
+  "Authenticating...",
+  "Downloading backup file...",
+  "Clearing existing data...",
+  "Restoring tables...",
+  "Restoring storage files...",
+  "Finalizing...",
+];
+
+const UPLOAD_RESTORE_STEPS = [
+  "Authenticating...",
+  "Getting upload URL...",
+  "Uploading ZIP to storage...",
+  "Clearing existing data...",
+  "Restoring tables...",
+  "Restoring storage files...",
+  "Finalizing...",
+];
+
 const DatabaseTools = () => {
   const [backups, setBackups] = useState<BackupFile[]>([]);
   const [logs, setLogs] = useState<BackupLog[]>([]);
@@ -39,6 +88,18 @@ const DatabaseTools = () => {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [scheduling, setScheduling] = useState(false);
+
+  // Progress state
+  const [progress, setProgress] = useState<ProgressState>({
+    active: false, label: "", step: 0, totalSteps: 1, steps: [], currentStepLabel: "", isError: false,
+  });
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Function logs panel
+  const [fnLogs, setFnLogs] = useState<FnLogEntry[]>([]);
+  const [fnLogsOpen, setFnLogsOpen] = useState(false);
+  const [loadingFnLogs, setLoadingFnLogs] = useState(false);
+  const fnLogsRef = useRef<HTMLDivElement>(null);
 
   // Schedule state
   const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
@@ -62,11 +123,85 @@ const DatabaseTools = () => {
   const [uploadedZipFile, setUploadedZipFile] = useState<File | null>(null);
   const [confirmCleanup, setConfirmCleanup] = useState(false);
 
+  // ── Progress helpers ──
+  const startProgress = (label: string, steps: string[]) => {
+    setProgress({ active: true, label, step: 0, totalSteps: steps.length, steps, currentStepLabel: steps[0], isError: false });
+    let i = 0;
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    progressIntervalRef.current = setInterval(() => {
+      i++;
+      setProgress(p => {
+        const next = Math.min(i, steps.length - 2); // stop at second-to-last; final step set manually
+        return { ...p, step: next, currentStepLabel: steps[next] };
+      });
+      if (i >= steps.length - 2) clearInterval(progressIntervalRef.current!);
+    }, 1800);
+  };
+
+  const finishProgress = (success: boolean, errorMessage?: string) => {
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setProgress(p => ({
+      ...p,
+      step: success ? p.totalSteps : p.step,
+      currentStepLabel: success ? "Done!" : (errorMessage || "Failed"),
+      isError: !success,
+      errorMessage,
+    }));
+    if (success) {
+      setTimeout(() => setProgress(pp => ({ ...pp, active: false })), 2000);
+    }
+    // On error, fetch and show function logs automatically
+    if (!success) {
+      fetchFnLogs();
+      setFnLogsOpen(true);
+    }
+  };
+
+  const fetchFnLogs = async () => {
+    setLoadingFnLogs(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await supabase.functions.invoke("fetch-logs", {
+        body: { log_type: "edge", hours: 1, limit: 50, search: "db-backup" },
+      });
+      if (res.data?.logs) {
+        setFnLogs(res.data.logs);
+      } else {
+        // Fallback: fetch from db-backup edge function logs via activity
+        const { data } = await supabase
+          .from("admin_activity_logs")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(30);
+        setFnLogs((data || []).map((l: any) => ({
+          event_message: `[${l.action}] ${JSON.stringify(l.details || {})}`,
+          level: "info",
+          timestamp: new Date(l.created_at).getTime(),
+        })));
+      }
+    } catch (e) {
+      console.error("Failed to fetch fn logs:", e);
+    } finally {
+      setLoadingFnLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (fnLogsOpen && fnLogsRef.current) {
+      fnLogsRef.current.scrollTop = fnLogsRef.current.scrollHeight;
+    }
+  }, [fnLogs, fnLogsOpen]);
+
+  useEffect(() => () => { if (progressIntervalRef.current) clearInterval(progressIntervalRef.current); }, []);
+
+  // ── Core ──
   const callBackupFn = async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Not authenticated");
     const res = await supabase.functions.invoke("db-backup", { body });
     if (res.error) throw new Error(res.error.message);
+    if (res.data?.error) throw new Error(res.data.error);
     return res.data;
   };
 
@@ -85,7 +220,7 @@ const DatabaseTools = () => {
 
   useEffect(() => { fetchBackups(); fetchScheduled(); }, []);
 
-  const requestPasswordConfirmation = (actionType: typeof pendingAction extends null ? never : NonNullable<typeof pendingAction>["type"], payload?: any) => {
+  const requestPasswordConfirmation = (actionType: NonNullable<typeof pendingAction>["type"], payload?: any) => {
     setPendingAction({ type: actionType, payload });
     setPassword("");
     setPasswordError("");
@@ -132,11 +267,14 @@ const DatabaseTools = () => {
 
   const executeCreateBackup = async () => {
     setCreating(true);
+    startProgress("Creating DB Snapshot", BACKUP_STEPS);
     try {
       const data = await callBackupFn({ action: "backup" });
+      finishProgress(true);
       toast({ title: "Backup created", description: `File: ${data.file_name} (${formatSize(data.size)})` });
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Backup failed", description: e.message, variant: "destructive" });
     } finally {
       setCreating(false);
@@ -145,13 +283,15 @@ const DatabaseTools = () => {
 
   const executeFullBackup = async () => {
     setCreatingFull(true);
+    startProgress("Creating Full ZIP Backup", [...BACKUP_STEPS.slice(0, 2), "Downloading all storage files...", "Compressing ZIP...", "Uploading to storage...", "Finalizing..."]);
     try {
       const data = await callBackupFn({ action: "full_backup" });
+      finishProgress(true);
       toast({ title: "Full ZIP backup created", description: `${data.file_name} (${formatSize(data.size)}) — ${data.total_files} files included` });
-      // Auto-download the ZIP
       await downloadBackup(data.file_name);
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Full backup failed", description: e.message, variant: "destructive" });
     } finally {
       setCreatingFull(false);
@@ -161,11 +301,14 @@ const DatabaseTools = () => {
   const executeFullRestore = async (fileName: string) => {
     setRestoring(true);
     setConfirmFullRestore(null);
+    startProgress("Restoring Full Site from ZIP", RESTORE_STEPS);
     try {
       const data = await callBackupFn({ action: "full_restore", file_name: fileName });
+      finishProgress(true);
       toast({ title: "Full site restored", description: `Database + ${data.restored_files} storage files restored.` });
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Full restore failed", description: e.message, variant: "destructive" });
     } finally {
       setRestoring(false);
@@ -176,14 +319,13 @@ const DatabaseTools = () => {
     if (!uploadedZipFile) return;
     setRestoring(true);
     setConfirmUploadFullRestore(false);
+    startProgress("Restoring from Uploaded ZIP", UPLOAD_RESTORE_STEPS);
     try {
       const tempName = `upload-restore-${Date.now()}.zip`;
 
-      // Step 1: Get a signed upload URL from the edge function
+      setProgress(p => ({ ...p, step: 1, currentStepLabel: UPLOAD_RESTORE_STEPS[1] }));
       const { url: signedUploadUrl } = await callBackupFn({ action: "get_upload_url", file_name: tempName });
 
-      // Step 2: Replace any internal host (kong:8000, localhost) with the real public Supabase URL.
-      // On self-hosted VPS the signed URL uses the internal kong address which browsers can't reach.
       const supabasePublicUrl = import.meta.env.VITE_SUPABASE_URL as string;
       let uploadUrl = signedUploadUrl;
       try {
@@ -194,9 +336,9 @@ const DatabaseTools = () => {
           parsed.host = publicParsed.host;
           uploadUrl = parsed.toString();
         }
-      } catch (_) { /* keep original if URL parsing fails */ }
+      } catch (_) { /* keep original */ }
 
-      // Step 3: Upload the ZIP directly to storage via signed URL
+      setProgress(p => ({ ...p, step: 2, currentStepLabel: UPLOAD_RESTORE_STEPS[2] }));
       const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": "application/zip" },
@@ -207,11 +349,13 @@ const DatabaseTools = () => {
         throw new Error(`Storage upload failed: ${errText}`);
       }
 
-      // Step 4: Trigger the restore
+      setProgress(p => ({ ...p, step: 3, currentStepLabel: UPLOAD_RESTORE_STEPS[3] }));
       const data = await callBackupFn({ action: "full_restore", file_name: tempName });
+      finishProgress(true);
       toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${data.restored_files} storage files restored.` });
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Full restore failed", description: e.message, variant: "destructive" });
     } finally {
       setRestoring(false);
@@ -255,11 +399,14 @@ const DatabaseTools = () => {
   const executeRestore = async (fileName: string) => {
     setRestoring(true);
     setConfirmRestore(null);
+    startProgress("Restoring Database from Snapshot", RESTORE_STEPS.slice(0, 5));
     try {
       await callBackupFn({ action: "restore", file_name: fileName });
+      finishProgress(true);
       toast({ title: "Database restored", description: `Restored from ${fileName}` });
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Restore failed", description: e.message, variant: "destructive" });
     } finally {
       setRestoring(false);
@@ -296,11 +443,14 @@ const DatabaseTools = () => {
     if (!confirmUploadRestore) return;
     setRestoring(true);
     setConfirmUploadRestore(null);
+    startProgress("Restoring from JSON File", RESTORE_STEPS.slice(0, 5));
     try {
       await callBackupFn({ action: "restore", data: confirmUploadRestore });
+      finishProgress(true);
       toast({ title: "Database restored from uploaded file" });
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Restore failed", description: e.message, variant: "destructive" });
     } finally {
       setRestoring(false);
@@ -310,11 +460,13 @@ const DatabaseTools = () => {
   const executeCleanup = async () => {
     setCleaning(true);
     setConfirmCleanup(false);
+    startProgress("Cleaning Database", ["Authenticating...", "Deleting table data...", "Preserving settings...", "Finalizing..."]);
     try {
       const res = await supabase.functions.invoke("db-cleanup", {});
       if (res.error) throw new Error(res.error.message);
       const data = res.data;
       const failed = data.results?.filter((r: any) => r.status === "failed") || [];
+      finishProgress(true);
       if (failed.length > 0) {
         toast({ title: "Cleanup completed with errors", description: `${data.results.length - failed.length} tables cleared, ${failed.length} failed`, variant: "destructive" });
       } else {
@@ -322,6 +474,7 @@ const DatabaseTools = () => {
       }
       fetchBackups();
     } catch (e: any) {
+      finishProgress(false, e.message);
       toast({ title: "Cleanup failed", description: e.message, variant: "destructive" });
     } finally {
       setCleaning(false);
@@ -373,6 +526,10 @@ const DatabaseTools = () => {
     }
   };
 
+  const progressPercent = progress.totalSteps > 0
+    ? Math.round((progress.step / progress.totalSteps) * 100)
+    : 0;
+
   const isBusy = creating || creatingFull || restoring || cleaning || scheduling;
 
   return (
@@ -385,6 +542,150 @@ const DatabaseTools = () => {
           <p>A snapshot is automatically created every day at 2:00 AM. All backup and restore actions require password confirmation for security.</p>
         </div>
       </div>
+
+      {/* ── Progress Bar Panel ── */}
+      {progress.active && (
+        <Card className={cn(
+          "border-2 transition-all",
+          progress.isError ? "border-destructive/50 bg-destructive/5" : "border-primary/30 bg-primary/5"
+        )}>
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {progress.isError
+                  ? <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                  : progressPercent === 100
+                    ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                    : <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
+                <span className="text-sm font-semibold">
+                  {progress.isError ? "Operation Failed" : progressPercent === 100 ? progress.label + " — Done!" : progress.label}
+                </span>
+              </div>
+              <span className={cn("text-xs font-mono font-medium", progress.isError ? "text-destructive" : "text-primary")}>
+                {progress.isError ? "ERROR" : `${progressPercent}%`}
+              </span>
+            </div>
+
+            <Progress
+              value={progressPercent}
+              className={cn("h-2", progress.isError && "[&>div]:bg-destructive")}
+            />
+
+            {/* Step breadcrumb */}
+            <div className="flex flex-wrap gap-1.5">
+              {progress.steps.map((step, i) => {
+                const done = i < progress.step;
+                const active = i === progress.step && !progress.isError;
+                const failed = progress.isError && i === progress.step;
+                return (
+                  <span key={i} className={cn(
+                    "text-[11px] px-2 py-0.5 rounded-full border transition-all",
+                    done ? "bg-green-500/10 text-green-600 border-green-500/20" :
+                    failed ? "bg-destructive/10 text-destructive border-destructive/20" :
+                    active ? "bg-primary/10 text-primary border-primary/30 font-medium" :
+                    "bg-muted text-muted-foreground border-border opacity-50"
+                  )}>
+                    {done ? "✓ " : active ? "▶ " : ""}{step}
+                  </span>
+                );
+              })}
+            </div>
+
+            {progress.isError && progress.errorMessage && (
+              <p className="text-xs text-destructive font-mono bg-destructive/10 rounded p-2 break-all">
+                {progress.errorMessage}
+              </p>
+            )}
+
+            {progress.isError && (
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-xs text-muted-foreground">Check function logs below for details</p>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={() => fetchFnLogs()} disabled={loadingFnLogs} className="h-7 text-xs gap-1">
+                    {loadingFnLogs ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                    Refresh Logs
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setProgress(p => ({ ...p, active: false }))} className="h-7 text-xs">
+                    Dismiss
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Edge Function Logs Panel ── */}
+      <Card className={cn("border transition-all", fnLogsOpen ? "border-border" : "border-border/50")}>
+        <CardHeader className="pb-2 cursor-pointer" onClick={() => {
+          setFnLogsOpen(o => !o);
+          if (!fnLogsOpen && fnLogs.length === 0) fetchFnLogs();
+        }}>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-muted-foreground" />
+              Function Logs
+              <span className="text-xs text-muted-foreground font-normal">(db-backup · last 1 hour)</span>
+              {fnLogs.some(l => l.level === "error") && (
+                <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full font-medium">
+                  {fnLogs.filter(l => l.level === "error").length} error{fnLogs.filter(l => l.level === "error").length !== 1 ? "s" : ""}
+                </span>
+              )}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); fetchFnLogs(); setFnLogsOpen(true); }} disabled={loadingFnLogs}>
+                {loadingFnLogs ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                Refresh
+              </Button>
+              {fnLogsOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </div>
+          </div>
+        </CardHeader>
+        {fnLogsOpen && (
+          <CardContent className="pt-0">
+            {loadingFnLogs ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : fnLogs.length === 0 ? (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                <Terminal className="w-6 h-6 mx-auto mb-2 opacity-30" />
+                No logs in the last hour. Try refreshing after running an operation.
+              </div>
+            ) : (
+              <div
+                ref={fnLogsRef}
+                className="font-mono text-[11px] bg-zinc-950 dark:bg-zinc-900 rounded-lg p-3 max-h-72 overflow-y-auto space-y-0.5"
+              >
+                {fnLogs.map((log, i) => {
+                  const ts = log.timestamp > 1e12 ? new Date(log.timestamp / 1000) : new Date(log.timestamp);
+                  const isErr = log.level === "error" || log.event_message?.toLowerCase().includes("error");
+                  const isWarn = log.level === "warning" || log.event_message?.toLowerCase().includes("failed");
+                  return (
+                    <div key={i} className={cn(
+                      "flex gap-2 leading-5 py-0.5 px-1 rounded",
+                      isErr ? "bg-red-950/50 text-red-400" :
+                      isWarn ? "bg-yellow-950/50 text-yellow-400" :
+                      "text-zinc-300"
+                    )}>
+                      <span className="text-zinc-500 shrink-0 select-none">
+                        {format(ts, "HH:mm:ss")}
+                      </span>
+                      <span className={cn(
+                        "shrink-0 font-bold uppercase text-[10px] mt-0.5",
+                        isErr ? "text-red-400" : isWarn ? "text-yellow-400" : "text-zinc-500"
+                      )}>
+                        [{isErr ? "ERR" : isWarn ? "WARN" : "LOG"}]
+                      </span>
+                      <span className="break-all whitespace-pre-wrap">{log.event_message}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* Quick Snapshot Actions */}
       <div className="flex flex-wrap gap-3">
@@ -416,7 +717,7 @@ const DatabaseTools = () => {
         <CardContent className="flex flex-wrap gap-3">
           <Button onClick={() => requestPasswordConfirmation("full_backup")} disabled={isBusy} className="gap-2">
             {creatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
-            {creatingFull ? "Creating ZIP... (this may take a while)" : "Create & Download Full Backup"}
+            {creatingFull ? "Creating ZIP..." : "Create & Download Full Backup"}
           </Button>
           <div className="relative">
             <Button variant="outline" disabled={isBusy} className="gap-2">
@@ -426,6 +727,7 @@ const DatabaseTools = () => {
           </div>
         </CardContent>
       </Card>
+
       {/* Schedule Backup Card */}
       <Card className="border-secondary/30">
         <CardHeader>
@@ -438,7 +740,6 @@ const DatabaseTools = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-end gap-3">
-            {/* Date picker */}
             <div className="space-y-1.5">
               <Label>Date</Label>
               <Popover>
@@ -460,12 +761,10 @@ const DatabaseTools = () => {
                 </PopoverContent>
               </Popover>
             </div>
-            {/* Time input */}
             <div className="space-y-1.5">
               <Label>Time (24h)</Label>
               <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-32" />
             </div>
-            {/* Label */}
             <div className="space-y-1.5 flex-1 min-w-36">
               <Label>Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
               <Input value={scheduleLabel} onChange={(e) => setScheduleLabel(e.target.value)} placeholder="e.g. Pre-launch backup" />
@@ -480,7 +779,6 @@ const DatabaseTools = () => {
             </Button>
           </div>
 
-          {/* Upcoming scheduled jobs */}
           {scheduledJobs.length > 0 && (
             <div className="space-y-1.5 pt-1">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Scheduled Backups</p>
@@ -525,13 +823,6 @@ const DatabaseTools = () => {
           </Button>
         </CardContent>
       </Card>
-
-      {restoring && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 border border-border">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Restoring... This may take several minutes for full backups.
-        </div>
-      )}
 
       {/* Backup List */}
       <Card>
@@ -601,8 +892,8 @@ const DatabaseTools = () => {
               {logs.slice(0, 20).map((l) => (
                 <div key={l.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-border last:border-0">
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                    l.action.includes("backup") ? "bg-secondary/10 text-secondary" : 
-                    l.action === "cleanup" ? "bg-destructive/10 text-destructive" : 
+                    l.action.includes("backup") ? "bg-secondary/10 text-secondary" :
+                    l.action === "cleanup" ? "bg-destructive/10 text-destructive" :
                     "bg-accent/10 text-accent-foreground"
                   }`}>
                     {l.action.replace("_", " ")}
