@@ -371,15 +371,21 @@ const DatabaseTools = () => {
       setProgress(p => ({ ...p, step: 1, currentStepLabel: UPLOAD_RESTORE_STEPS[1] }));
       const { url: signedUploadUrl } = await callBackupFn({ action: "get_upload_url", file_name: tempName });
 
-      const supabasePublicUrl = import.meta.env.VITE_SUPABASE_URL as string;
-      let uploadUrl = signedUploadUrl;
+      const supabasePublicUrl = (import.meta.env.VITE_SUPABASE_URL as string || "").replace(/\/$/, "");
+      let uploadUrl: string = signedUploadUrl;
       try {
-        const parsed = new URL(signedUploadUrl);
-        if (parsed.hostname === "kong" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-          const publicParsed = new URL(supabasePublicUrl);
-          parsed.protocol = publicParsed.protocol;
-          parsed.host = publicParsed.host;
-          uploadUrl = parsed.toString();
+        // If relative URL (edge function on VPS may return path-only), prepend the base URL
+        if (!uploadUrl.startsWith("http://") && !uploadUrl.startsWith("https://")) {
+          uploadUrl = supabasePublicUrl + (uploadUrl.startsWith("/") ? uploadUrl : "/" + uploadUrl);
+        } else {
+          // Replace internal host (kong:8000, localhost, etc.) with public URL
+          const parsed = new URL(uploadUrl);
+          if (parsed.hostname === "kong" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+            const publicParsed = new URL(supabasePublicUrl);
+            parsed.protocol = publicParsed.protocol;
+            parsed.host = publicParsed.host;
+            uploadUrl = parsed.toString();
+          }
         }
       } catch (_) { /* keep original */ }
 
