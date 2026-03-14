@@ -339,8 +339,8 @@ export default function ImageEditor() {
   const setBgImage = (url: string) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    fabric.FabricImage.fromURL(url, { crossOrigin: "anonymous" }).then((img) => {
-      img.set({ scaleX: canvas.width! / (img.width || 1), scaleY: canvas.height! / (img.height || 1) });
+    fabric.FabricImage.fromURL(url).then((img) => {
+      img.set({ scaleX: canvas.width! / (img.width || 1), scaleY: canvas.height! / (img.height || 1) } as any);
       canvas.backgroundImage = img;
       canvas.renderAll();
     });
