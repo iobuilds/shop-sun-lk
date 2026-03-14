@@ -169,28 +169,26 @@ export default function ImageEditor() {
     });
   }, [historyIdx]);
 
-  const undo = useCallback(() => {
+  const undo = useCallback(async () => {
     if (!fabricRef.current || historyIdx <= 0) return;
     const idx = historyIdx - 1;
     historyPaused.current = true;
-    fabricRef.current.loadFromJSON(JSON.parse(history[idx]), () => {
-      fabricRef.current?.renderAll();
-      refreshLayers(fabricRef.current!);
-      historyPaused.current = false;
-      setHistoryIdx(idx);
-    });
+    await fabricRef.current.loadFromJSON(JSON.parse(history[idx]));
+    fabricRef.current.renderAll();
+    refreshLayers(fabricRef.current);
+    historyPaused.current = false;
+    setHistoryIdx(idx);
   }, [history, historyIdx]);
 
-  const redo = useCallback(() => {
+  const redo = useCallback(async () => {
     if (!fabricRef.current || historyIdx >= history.length - 1) return;
     const idx = historyIdx + 1;
     historyPaused.current = true;
-    fabricRef.current.loadFromJSON(JSON.parse(history[idx]), () => {
-      fabricRef.current?.renderAll();
-      refreshLayers(fabricRef.current!);
-      historyPaused.current = false;
-      setHistoryIdx(idx);
-    });
+    await fabricRef.current.loadFromJSON(JSON.parse(history[idx]));
+    fabricRef.current.renderAll();
+    refreshLayers(fabricRef.current);
+    historyPaused.current = false;
+    setHistoryIdx(idx);
   }, [history, historyIdx]);
 
   // ── Layers ────────────────────────────────────────────────────────────────
