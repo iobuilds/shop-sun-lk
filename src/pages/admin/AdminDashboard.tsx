@@ -3876,6 +3876,22 @@ const AdminDashboard = () => {
             </div>
           )}
 
+          {/* ═══ Site Modes Tab ═══ */}
+          {tab === "site_modes" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Globe className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold font-display text-foreground">Site Modes</h2>
+                  <p className="text-xs text-muted-foreground">Control Coming Soon & Maintenance pages — admin only</p>
+                </div>
+              </div>
+              <SiteModesManager />
+            </motion.div>
+          )}
+
           {/* ═══ SMS Campaign Tab ═══ */}
           {tab === "sms_campaign" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
