@@ -161,7 +161,7 @@ export default function ImageEditor() {
   // ── History helpers ───────────────────────────────────────────────────────
   const pushHistory = useCallback((canvas: fabric.Canvas) => {
     if (historyPaused.current) return;
-    const json = JSON.stringify(canvas.toJSON(["id", "locked"]));
+    const json = JSON.stringify((canvas.toJSON as (ps?: string[]) => any)(["id", "locked"]));
     setHistory(prev => {
       const next = [...prev.slice(0, historyIdx + 1), json];
       setHistoryIdx(next.length - 1);
