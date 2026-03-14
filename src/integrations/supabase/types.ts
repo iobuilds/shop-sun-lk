@@ -520,6 +520,42 @@ export type Database = {
         }
         Relationships: []
       }
+      image_designs: {
+        Row: {
+          canvas_height: number
+          canvas_json: Json
+          canvas_width: number
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          thumbnail_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          canvas_height?: number
+          canvas_json?: Json
+          canvas_width?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          canvas_height?: number
+          canvas_json?: Json
+          canvas_width?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          thumbnail_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       moderator_permissions: {
         Row: {
           can_manage_orders: boolean
