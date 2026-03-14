@@ -424,7 +424,7 @@ export default function ImageEditor() {
   const download = (format: "png" | "jpeg") => {
     const canvas = fabricRef.current;
     if (!canvas) return;
-    const url = canvas.toDataURL({ format, quality: 1, multiplier: 1 });
+    const url = canvas.toDataURL({ format, quality: 1 } as any);
     const a = document.createElement("a");
     a.href = url; a.download = `${designName}.${format}`; a.click();
   };
