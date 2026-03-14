@@ -655,7 +655,7 @@ const DatabaseTools = () => {
             ) : (
               <div
                 ref={fnLogsRef}
-                className="font-mono text-[11px] bg-zinc-950 dark:bg-zinc-900 rounded-lg p-3 max-h-72 overflow-y-auto space-y-0.5"
+                className="font-mono text-[11px] bg-background border border-border rounded-lg p-3 max-h-72 overflow-y-auto space-y-0.5"
               >
                 {fnLogs.map((log, i) => {
                   const ts = log.timestamp > 1e12 ? new Date(log.timestamp / 1000) : new Date(log.timestamp);
@@ -664,16 +664,16 @@ const DatabaseTools = () => {
                   return (
                     <div key={i} className={cn(
                       "flex gap-2 leading-5 py-0.5 px-1 rounded",
-                      isErr ? "bg-red-950/50 text-red-400" :
-                      isWarn ? "bg-yellow-950/50 text-yellow-400" :
-                      "text-zinc-300"
+                      isErr ? "bg-destructive/10 text-destructive" :
+                      isWarn ? "bg-yellow-500/10 text-yellow-600" :
+                      "text-foreground"
                     )}>
-                      <span className="text-zinc-500 shrink-0 select-none">
+                      <span className="text-muted-foreground shrink-0 select-none">
                         {format(ts, "HH:mm:ss")}
                       </span>
                       <span className={cn(
                         "shrink-0 font-bold uppercase text-[10px] mt-0.5",
-                        isErr ? "text-red-400" : isWarn ? "text-yellow-400" : "text-zinc-500"
+                        isErr ? "text-destructive" : isWarn ? "text-yellow-600" : "text-muted-foreground"
                       )}>
                         [{isErr ? "ERR" : isWarn ? "WARN" : "LOG"}]
                       </span>
