@@ -402,21 +402,20 @@ export default function ImageEditor() {
   };
 
   // ── Load design ───────────────────────────────────────────────────────────
-  const loadDesign = (d: any) => {
+  const loadDesign = async (d: any) => {
     const canvas = fabricRef.current;
     if (!canvas) return;
     historyPaused.current = true;
-    canvas.loadFromJSON(d.canvas_json, () => {
-      canvas.setWidth(d.canvas_width); canvas.setHeight(d.canvas_height);
-      canvas.renderAll();
-      refreshLayers(canvas);
-      setCanvasW(d.canvas_width); setCanvasH(d.canvas_height);
-      setDesignName(d.name);
-      setEditingDesignId(d.id);
-      setHistory([JSON.stringify(d.canvas_json)]);
-      setHistoryIdx(0);
-      historyPaused.current = false;
-    });
+    await canvas.loadFromJSON(d.canvas_json);
+    canvas.setDimensions({ width: d.canvas_width, height: d.canvas_height });
+    canvas.renderAll();
+    refreshLayers(canvas);
+    setCanvasW(d.canvas_width); setCanvasH(d.canvas_height);
+    setDesignName(d.name);
+    setEditingDesignId(d.id);
+    setHistory([JSON.stringify(d.canvas_json)]);
+    setHistoryIdx(0);
+    historyPaused.current = false;
     setLoadDialog(false);
   };
 
