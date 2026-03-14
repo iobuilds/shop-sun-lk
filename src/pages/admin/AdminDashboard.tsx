@@ -38,10 +38,9 @@ import ActivityLogs from "@/components/admin/ActivityLogs";
 import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
-import SiteModesManager from "@/components/admin/SiteModesManager";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "site_modes";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -720,7 +719,6 @@ const AdminDashboard = () => {
     {
       label: "System Tools", icon: Wrench, defaultOpen: false, adminOnly: true,
       items: [
-        { id: "site_modes" as Tab, label: "Site Modes", icon: Globe, count: 0 },
         { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
         { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
@@ -3874,22 +3872,6 @@ const AdminDashboard = () => {
             <div className="animate-in fade-in duration-200">
               <AdminDocumentation />
             </div>
-          )}
-
-          {/* ═══ Site Modes Tab ═══ */}
-          {tab === "site_modes" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Globe className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold font-display text-foreground">Site Modes</h2>
-                  <p className="text-xs text-muted-foreground">Control Coming Soon & Maintenance pages — admin only</p>
-                </div>
-              </div>
-              <SiteModesManager />
-            </motion.div>
           )}
 
           {/* ═══ SMS Campaign Tab ═══ */}
