@@ -159,9 +159,11 @@ const DatabaseTools = () => {
 
   const fetchFnLogs = async () => {
     setLoadingFnLogs(true);
+    // Safety: always clear loading after 15s max
+    const safetyTimer = setTimeout(() => setLoadingFnLogs(false), 15000);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session) { clearTimeout(safetyTimer); setLoadingFnLogs(false); return; }
 
       // Primary: try the management API logs (works on Lovable Cloud)
       let gotLogs = false;
@@ -175,8 +177,8 @@ const DatabaseTools = () => {
         }
       } catch (_) { /* fall through */ }
 
+      // Fallback 1: ask db-backup function itself for its recent activity logs
       if (!gotLogs) {
-        // Fallback 1: ask db-backup function itself for its recent logs
         try {
           const res2 = await supabase.functions.invoke("db-backup", {
             body: { action: "get_logs" },
@@ -188,8 +190,8 @@ const DatabaseTools = () => {
         } catch (_) { /* fall through */ }
       }
 
+      // Fallback 2: direct db query
       if (!gotLogs) {
-        // Fallback 2: db_backup_logs table
         const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
         const { data: backupLogs } = await supabase
           .from("db_backup_logs")
@@ -198,26 +200,11 @@ const DatabaseTools = () => {
           .order("created_at", { ascending: false })
           .limit(40);
 
-        const { data: activityLogs } = await (supabase as any)
-          .from("admin_activity_logs")
-          .select("*")
-          .gte("created_at", since)
-          .in("action", ["db_backup", "db_cleanup", "backup", "full_backup", "restore", "full_restore"])
-          .order("created_at", { ascending: false })
-          .limit(20);
-
-        const combined = [
-          ...(backupLogs || []).map((l: any) => ({
-            event_message: `[${l.action.toUpperCase()}] ${l.file_name}${l.note ? " — " + l.note : ""}${l.file_size ? " (" + formatSize(l.file_size) + ")" : ""}`,
-            level: "info",
-            timestamp: new Date(l.created_at).getTime(),
-          })),
-          ...(activityLogs || []).map((l: any) => ({
-            event_message: `[${l.action.toUpperCase()}] actor: ${l.admin_email || l.admin_id?.slice(0, 8)} ${JSON.stringify(l.details || {})}`,
-            level: "info",
-            timestamp: new Date(l.created_at).getTime(),
-          })),
-        ].sort((a, b) => b.timestamp - a.timestamp);
+        const combined = (backupLogs || []).map((l: any) => ({
+          event_message: `[${(l.action || "").toUpperCase()}] ${l.file_name}${l.note ? " — " + l.note : ""}${l.file_size ? " (" + formatSize(l.file_size) + ")" : ""}`,
+          level: "info",
+          timestamp: new Date(l.created_at).getTime(),
+        }));
 
         setFnLogs(combined.length > 0 ? combined : [{
           event_message: "No recent backup/restore activity found in the last 2 hours.",
@@ -227,7 +214,9 @@ const DatabaseTools = () => {
       }
     } catch (e) {
       console.error("Failed to fetch fn logs:", e);
+      setFnLogs([{ event_message: `Failed to load logs: ${(e as Error).message}`, level: "error", timestamp: Date.now() }]);
     } finally {
+      clearTimeout(safetyTimer);
       setLoadingFnLogs(false);
     }
   };
