@@ -696,6 +696,7 @@ const AdminDashboard = () => {
     {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "image_editor" as Tab, label: "Image Editor", icon: Palette, count: 0 },
         { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
         { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
