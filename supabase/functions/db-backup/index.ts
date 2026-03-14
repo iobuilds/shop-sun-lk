@@ -417,22 +417,14 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "Could not create signed upload URL: " + error?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // Build the upload URL from scratch using the token.
+      // We NEVER use data.signedUrl directly because on Lovable Cloud it returns a
+      // relative path like "db/storage/v1/..." which is invalid for browser fetch.
       const normalizedPublicBase = publicSupabaseUrl.replace(/\/$/, "");
-      let rawUrl = data.signedUrl as string;
-      // If the URL is relative (no protocol), prepend the public base URL
-      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
-        // Normalize path: strip any leading "db/" prefix (Lovable Cloud returns "db/storage/v1/...")
-        let path = rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl;
-        path = path.replace(/^\/db\//, "/");
-        rawUrl = normalizedPublicBase + path;
-      } else {
-        // Replace internal host (kong:8000, localhost, etc.) with the public URL
-        rawUrl = rawUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, normalizedPublicBase);
-        // Also strip any /db/ prefix after the host
-        rawUrl = rawUrl.replace(/(https?:\/\/[^/]+)\/db\//, "$1/");
-      }
+      const uploadToken = (data as any).token as string;
+      const uploadUrl = `${normalizedPublicBase}/storage/v1/object/upload/sign/db-backups/${encodeURIComponent(file_name)}?token=${uploadToken}`;
 
-      return new Response(JSON.stringify({ url: rawUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ url: uploadUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }

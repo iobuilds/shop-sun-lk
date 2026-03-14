@@ -357,40 +357,13 @@ const DatabaseTools = () => {
     try {
       const tempName = `upload-restore-${Date.now()}.zip`;
 
-      setProgress(p => ({ ...p, step: 1, currentStepLabel: UPLOAD_RESTORE_STEPS[1] }));
-      const { url: signedUploadUrl } = await callBackupFn({ action: "get_upload_url", file_name: tempName });
-
-      const supabasePublicUrl = (import.meta.env.VITE_SUPABASE_URL as string || "").replace(/\/$/, "");
-      let uploadUrl: string = signedUploadUrl;
-      try {
-        // If relative URL (edge function on VPS may return path-only), prepend the base URL
-        if (!uploadUrl.startsWith("http://") && !uploadUrl.startsWith("https://")) {
-          uploadUrl = supabasePublicUrl + (uploadUrl.startsWith("/") ? uploadUrl : "/" + uploadUrl);
-        } else {
-          // Replace internal host (kong:8000, localhost, etc.) with public URL
-          const parsed = new URL(uploadUrl);
-          if (parsed.hostname === "kong" || parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-            const publicParsed = new URL(supabasePublicUrl);
-            parsed.protocol = publicParsed.protocol;
-            parsed.host = publicParsed.host;
-            uploadUrl = parsed.toString();
-          }
-        }
-      } catch (_) { /* keep original */ }
-
+      // Upload directly via Supabase JS client — avoids all signed URL / host issues
       setProgress(p => ({ ...p, step: 2, currentStepLabel: UPLOAD_RESTORE_STEPS[2] }));
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/zip",
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string,
-        },
-        body: uploadedZipFile,
-      });
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text();
-        throw new Error(`Storage upload failed: ${errText}`);
-      }
+      const { error: uploadError } = await supabase.storage
+        .from("db-backups")
+        .upload(tempName, uploadedZipFile, { contentType: "application/zip", upsert: true });
+
+      if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
 
       setProgress(p => ({ ...p, step: 3, currentStepLabel: UPLOAD_RESTORE_STEPS[3] }));
       const data = await callBackupFn({ action: "full_restore", file_name: tempName });
