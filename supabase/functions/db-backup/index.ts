@@ -418,12 +418,16 @@ Deno.serve(async (req) => {
       }
 
       const normalizedPublicBase = publicSupabaseUrl.replace(/\/$/, "");
-      const publicUrl = data.signedUrl.replace(
-        /^https?:\/\/[^/]+(?::\d+)?/,
-        normalizedPublicBase
-      );
+      let rawUrl = data.signedUrl as string;
+      // If the URL is relative (no protocol), prepend the public base URL
+      if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
+        rawUrl = normalizedPublicBase + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
+      } else {
+        // Replace internal host (kong:8000, localhost, etc.) with the public URL
+        rawUrl = rawUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, normalizedPublicBase);
+      }
 
-      return new Response(JSON.stringify({ url: publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ url: rawUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
