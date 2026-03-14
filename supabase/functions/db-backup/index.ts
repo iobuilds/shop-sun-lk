@@ -71,7 +71,10 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const publicSupabaseUrl = Deno.env.get("SUPABASE_PUBLIC_URL")!;
+  // PUBLIC_SUPABASE_URL = the externally-reachable base URL of this Supabase instance
+  // e.g. https://your-vps-domain.com  (no trailing slash)
+  // Falls back to supabaseUrl so cloud-hosted deployments work without setting it
+  const publicSupabaseUrl = (Deno.env.get("PUBLIC_SUPABASE_URL") || supabaseUrl).replace(/\/$/, "");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const adminClient = createClient(supabaseUrl, serviceKey);
