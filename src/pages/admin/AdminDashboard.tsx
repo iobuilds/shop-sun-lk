@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logAdminAction } from "@/lib/logAdminAction";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone, BookOpen, Terminal } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone, BookOpen, Terminal, Palette } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,8 +39,9 @@ import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
+import ImageEditor from "@/components/admin/ImageEditor";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -695,6 +696,7 @@ const AdminDashboard = () => {
     {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "image_editor" as Tab, label: "Image Editor", icon: Palette, count: 0 },
         { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
         { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
@@ -3871,6 +3873,13 @@ const AdminDashboard = () => {
           {tab === "documentation" && (
             <div className="animate-in fade-in duration-200">
               <AdminDocumentation />
+            </div>
+          )}
+
+          {/* ═══ Image Editor Tab ═══ */}
+          {tab === "image_editor" && (
+            <div className="animate-in fade-in duration-200 -mx-4 -mt-2 h-[calc(100vh-8rem)]">
+              <ImageEditor />
             </div>
           )}
 
