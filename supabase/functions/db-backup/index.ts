@@ -421,10 +421,15 @@ Deno.serve(async (req) => {
       let rawUrl = data.signedUrl as string;
       // If the URL is relative (no protocol), prepend the public base URL
       if (!rawUrl.startsWith("http://") && !rawUrl.startsWith("https://")) {
-        rawUrl = normalizedPublicBase + (rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl);
+        // Normalize path: strip any leading "db/" prefix (Lovable Cloud returns "db/storage/v1/...")
+        let path = rawUrl.startsWith("/") ? rawUrl : "/" + rawUrl;
+        path = path.replace(/^\/db\//, "/");
+        rawUrl = normalizedPublicBase + path;
       } else {
         // Replace internal host (kong:8000, localhost, etc.) with the public URL
         rawUrl = rawUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, normalizedPublicBase);
+        // Also strip any /db/ prefix after the host
+        rawUrl = rawUrl.replace(/(https?:\/\/[^/]+)\/db\//, "$1/");
       }
 
       return new Response(JSON.stringify({ url: rawUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
