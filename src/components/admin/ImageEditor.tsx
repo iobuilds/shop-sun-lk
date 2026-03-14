@@ -370,7 +370,7 @@ export default function ImageEditor() {
     if (!canvas) return;
     setSaving(true);
     const canvasJson = (canvas.toJSON as (ps?: string[]) => any)(["id", "locked"]);
-    const thumbnail = canvas.toDataURL({ format: "jpeg", quality: 0.5, multiplier: 0.2 });
+    const thumbnail = canvas.toDataURL({ format: "jpeg", quality: 0.5 } as any);
     // Upload thumbnail
     let thumbUrl: string | null = null;
     try {
