@@ -519,8 +519,8 @@ const MicroElectronicsPage = () => {
                           <div>
                             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                               variant.mount_type === "SMD"
-                                ? "bg-blue-100 text-blue-700"
-                                : "bg-green-100 text-green-700"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-secondary/10 text-secondary"
                             }`}>
                               {variant.mount_type}
                             </span>
