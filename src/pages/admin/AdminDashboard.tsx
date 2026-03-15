@@ -3842,6 +3842,13 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
+          {/* ═══ Email Templates Tab ═══ */}
+          {tab === "email_templates" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <EmailTemplatesManager />
+            </motion.div>
+          )}
+
           {/* ═══ SMS Logs Tab ═══ */}
           {tab === "sms_logs" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
