@@ -382,15 +382,25 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      // Use Supabase JS client directly to get a proper absolute signed URL,
-      // bypassing the edge function which may return relative/internal paths.
-      const { data, error } = await supabase.storage
-        .from("db-backups")
-        .createSignedUrl(fileName, 600);
-      if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create download URL");
+      // Stream the file directly through the edge function to avoid signed URL hostname issues on Lovable Cloud
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-      const response = await fetch(data.signedUrl);
-      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const fnUrl = `https://${projectId}.supabase.co/functions/v1/db-backup`;
+      const response = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ action: "download_url", file_name: fileName }),
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Download failed: ${response.status} — ${errText}`);
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
