@@ -462,6 +462,13 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Log restore complete (called after storage batches are done) ──
+  if (action === "log_restore_complete") {
+    const { file_name, restored_files } = body;
+    await adminClient.from("db_backup_logs").insert({ action: "full_restore", file_name: file_name || "unknown", created_by: user.id, created_by_email: user.email, note: `${restored_files ?? 0} storage files restored.` });
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
   // ── Get a signed upload URL so the browser can PUT the ZIP directly (no base64 / size limit) ──
   if (action === "get_upload_url") {
     try {
