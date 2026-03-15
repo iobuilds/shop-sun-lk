@@ -708,18 +708,18 @@ const AdminDashboard = () => {
       ],
     },
     {
+      label: "Email Center", icon: Mail, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "email_inbox" as Tab, label: "Inbox", icon: Inbox, count: 0 },
+        { id: "email_templates" as Tab, label: "Email Templates", icon: Mail, count: 0 },
+      ],
+    },
+    {
       label: "SMS Center", icon: Send, defaultOpen: false, adminOnly: true,
       items: [
         { id: "sms_campaign" as Tab, label: "SMS Campaign", icon: Megaphone, count: 0 },
         { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
         { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
-      ],
-    },
-    {
-      label: "Email Center", icon: Mail, defaultOpen: false, adminOnly: true,
-      items: [
-        { id: "email_inbox" as Tab, label: "Inbox", icon: Inbox, count: 0 },
-        { id: "email_templates" as Tab, label: "Email Templates", icon: Mail, count: 0 },
       ],
     },
     {
