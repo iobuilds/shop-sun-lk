@@ -286,8 +286,14 @@ Deno.serve(async (req) => {
       const { file_name } = body;
       if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Use a signed URL via publicSupabaseUrl to avoid internal-hostname issues on Lovable Cloud
+      const { data: signedData, error: signError } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 300);
+      if (signError || !signedData) return new Response(JSON.stringify({ error: "Could not create signed URL: " + signError?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const publicSignedUrl = signedData.signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, publicSupabaseUrl);
+      const fetchRes = await fetch(publicSignedUrl);
+      if (!fetchRes.ok) return new Response(JSON.stringify({ error: `File download failed: ${fetchRes.status} ${fetchRes.statusText}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const fileData = await fetchRes.blob();
 
       const arrayBuffer = await fileData.arrayBuffer();
       const zip = await JSZip.loadAsync(arrayBuffer);
