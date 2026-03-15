@@ -303,7 +303,7 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           <Link to="/" className="flex items-center gap-2">
             {(() => {
-              const mode = company?.navbar_brand_mode || "logo_text";
+              const mode = company?.navbar_brand_mode || "logo_only";
               const height = company?.navbar_logo_height || 36;
               return (
                 <>
