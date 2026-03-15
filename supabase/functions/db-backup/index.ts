@@ -515,12 +515,24 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data, error } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 600);
-    if (error || !data) {
-      return new Response(JSON.stringify({ error: error?.message || "Could not create signed URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Download the file server-side and stream it back — avoids all signed URL hostname issues on Lovable Cloud
+    const { data: fileBlob, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
+    if (dlError || !fileBlob) {
+      return new Response(JSON.stringify({ error: dlError?.message || "Could not download file" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    return new Response(JSON.stringify({ url: resolvePublicUrl(data.signedUrl, publicSupabaseUrl) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const isZip = file_name.endsWith(".zip");
+    const contentType = isZip ? "application/zip" : "application/json";
+    const arrayBuffer = await fileBlob.arrayBuffer();
+
+    return new Response(arrayBuffer, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename="${file_name}"`,
+        "Content-Length": String(arrayBuffer.byteLength),
+      },
+    });
   }
 
   return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
