@@ -100,7 +100,7 @@ const UserDetailDialog = ({ open, onOpenChange, userId, userRole, initialProfile
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
   });
 
   if (!userId) return null;
