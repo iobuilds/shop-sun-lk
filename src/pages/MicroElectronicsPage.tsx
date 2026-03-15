@@ -3,19 +3,13 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronRight, ShoppingCart, FileText, Search, X,
-  AlertCircle, Check, ArrowLeft, Zap, Package2, ExternalLink,
+  ChevronRight, Search, X, ArrowLeft, Package2, ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { useCart } from "@/contexts/CartContext";
 import { useBranding } from "@/hooks/useBranding";
-import { toast } from "@/hooks/use-toast";
 
 // ── Component type config ──────────────────────────────────────────────────────
 const COMPONENT_TYPES = [
