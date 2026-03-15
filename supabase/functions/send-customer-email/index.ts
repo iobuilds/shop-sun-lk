@@ -88,7 +88,13 @@ serve(async (req) => {
       to: recipients.join(", "),
       subject,
       text: textBody,
-      html: htmlBody,
+      html: injectLogo(htmlBody),
+      headers: {
+        "X-Mailer": "NanoCircuit Mailer",
+        "X-Entity-Ref-ID": `nanocircuit-${Date.now()}`,
+        "Precedence": "transactional",
+        "Auto-Submitted": "auto-generated",
+      },
     });
 
     console.log(`✅ Email [${template_key}] sent: ${info.messageId}`);
