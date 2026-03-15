@@ -3898,21 +3898,53 @@ const AdminDashboard = () => {
 
       {/* ═══ Product Dialog ═══ */}
       <Dialog open={productDialog} onOpenChange={setProductDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingProductId ? "Edit Product" : "Add Product"}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Name *</Label><Input value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} placeholder="Product name" /></div>
-            <div><Label>Slug</Label><Input value={productForm.slug} onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })} placeholder="auto-generated-from-name" /></div>
+        <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-0">
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-card border-b border-border px-6 py-4 flex items-center justify-between">
             <div>
-              <Label>Category</Label>
-              <Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>{categories?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
-              </Select>
+              <h2 className="text-lg font-bold text-foreground">{editingProductId ? "✏️ Edit Product" : "➕ Add New Product"}</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">{editingProductId ? "Update product details below" : "Fill in product details to add to catalog"}</p>
             </div>
-            {/* LCSC Auto-Import — only for Micro Electronics category */}
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* ── Section 1: Basic Info ── */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border pb-2">
+                <Package className="w-4 h-4 text-primary" />
+                Basic Information
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <Label className="text-xs font-semibold mb-1.5 block">Product Name *</Label>
+                  <Input
+                    value={productForm.name}
+                    onChange={(e) => setProductForm({ ...productForm, name: e.target.value, slug: productForm.slug || e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") })}
+                    placeholder="e.g. Arduino Uno R3"
+                    className="h-10"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">URL Slug</Label>
+                  <Input value={productForm.slug} onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })} placeholder="auto-generated" className="h-10 font-mono text-sm" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Category</Label>
+                  <Select value={productForm.category_id} onValueChange={(v) => setProductForm({ ...productForm, category_id: v })}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Select category" /></SelectTrigger>
+                    <SelectContent>{categories?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold mb-1.5 block">Description</Label>
+                <Textarea value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} rows={3} placeholder="Product description..." className="resize-none" />
+              </div>
+            </div>
+
+            {/* ── LCSC Auto-Import ── */}
             {!editingProductId && categories?.find(c => c.id === productForm.category_id && c.name.toLowerCase().includes("micro")) && (
-              <div className={`border rounded-lg p-3 space-y-2 ${lcscFailed ? "border-destructive/50 bg-destructive/5" : "border-secondary/40 bg-secondary/5"}`}>
+              <div className={`border rounded-xl p-4 space-y-2 ${lcscFailed ? "border-destructive/50 bg-destructive/5" : "border-secondary/40 bg-secondary/5"}`}>
                 <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
                   <ExternalLink className="w-4 h-4" />
                   LCSC Auto-Import
@@ -3925,95 +3957,140 @@ const AdminDashboard = () => {
                     onKeyDown={(e) => { if (e.key === 'Enter') fetchFromLcsc(); }}
                     className="flex-1 text-xs"
                   />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={fetchFromLcsc}
-                    disabled={lcscLoading || !lcscPartNumber}
-                    className="shrink-0"
-                  >
+                  <Button type="button" variant="secondary" onClick={fetchFromLcsc} disabled={lcscLoading || !lcscPartNumber} className="shrink-0">
                     {lcscLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-                    {lcscLoading ? "Fetching..." : "Fetch from LCSC"}
+                    {lcscLoading ? "Fetching..." : "Fetch"}
                   </Button>
                 </div>
-                {!lcscFailed && (
-                  <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs. Then set price & stock.</p>
-                )}
-
-                {/* Manual fallback — shown when LCSC fetch fails */}
+                {!lcscFailed && <p className="text-xs text-muted-foreground">Enter a part number (C93216) or paste a full LCSC URL to auto-fill name, SKU, datasheet & specs.</p>}
                 {lcscFailed && (
                   <div className="space-y-2 pt-1 border-t border-destructive/20">
-                    <p className="text-xs text-destructive font-medium flex items-center gap-1.5">
-                      <X className="w-3.5 h-3.5" /> Part not found on LCSC — fill in manually:
-                    </p>
+                    <p className="text-xs text-destructive font-medium flex items-center gap-1.5"><X className="w-3.5 h-3.5" /> Part not found — fill manually:</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-xs">LCSC Part Number (C‑number)</Label>
-                        <Input
-                          placeholder="e.g. C5381776"
-                          value={lcscFailedLcscNum}
-                          onChange={(e) => {
-                            setLcscFailedLcscNum(e.target.value);
-                            setProductForm((prev) => ({ ...prev, sku: e.target.value }));
-                          }}
-                          className="text-xs h-8 font-mono"
-                        />
+                      <div>
+                        <Label className="text-xs">LCSC C‑number</Label>
+                        <Input placeholder="e.g. C5381776" value={lcscFailedLcscNum} onChange={(e) => { setLcscFailedLcscNum(e.target.value); setProductForm((prev) => ({ ...prev, sku: e.target.value })); }} className="text-xs h-8 font-mono" />
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">MPN (Manufacturer Part Number)</Label>
-                        <Input
-                          placeholder="e.g. TP4054"
-                          value={lcscFailedMpn}
-                          onChange={(e) => {
-                            setLcscFailedMpn(e.target.value);
-                            setProductForm((prev) => ({
-                              ...prev,
-                              name: e.target.value || prev.name,
-                              slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || prev.slug,
-                            }));
-                          }}
-                          className="text-xs h-8 font-mono"
-                        />
+                      <div>
+                        <Label className="text-xs">MPN</Label>
+                        <Input placeholder="e.g. TP4054" value={lcscFailedMpn} onChange={(e) => { setLcscFailedMpn(e.target.value); setProductForm((prev) => ({ ...prev, name: e.target.value || prev.name, slug: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || prev.slug })); }} className="text-xs h-8 font-mono" />
                       </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      LCSC number will be saved as SKU. Fill in the product name, description and other fields below.
-                    </p>
                   </div>
                 )}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Price (Rs.) *</Label><Input type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} /></div>
-              <div><Label>Original Price (Rs.)</Label><Input type="number" value={productForm.discount_price} onChange={(e) => setProductForm({ ...productForm, discount_price: e.target.value })} placeholder="Higher price" /></div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div><Label>Cost Price (Rs.)</Label><Input type="number" value={productForm.cost_price} onChange={(e) => setProductForm({ ...productForm, cost_price: e.target.value })} placeholder="Your cost" /></div>
-              <div><Label>SKU</Label><Input value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} /></div>
-              <div><Label>Stock Quantity</Label><Input type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })} /></div>
-            </div>
-            <div><Label>Description</Label><Textarea value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })} rows={3} /></div>
-            <div>
-              <Label>Images</Label>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {productImagePreviews.map((url, i) => (
-                  <div key={i} className="relative group w-16 h-16">
-                    <img src={url} alt="" className="w-16 h-16 rounded-lg object-cover border border-border" />
-                    <button type="button" onClick={() => removeProductImage(url)} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3" /></button>
-                  </div>
-                ))}
+
+            {/* ── Section 2: Pricing & Stock ── */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border pb-2">
+                <DollarSign className="w-4 h-4 text-primary" />
+                Pricing & Stock
               </div>
-              <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors text-sm text-muted-foreground">
-                <Upload className="w-4 h-4" />{uploading ? "Uploading..." : "Upload images / පින්තූර එකතු කරන්න"}
-                <input type="file" accept="image/*" multiple onChange={handleProductImageUpload} className="hidden" disabled={uploading} />
-              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Sale Price (Rs.) *</Label>
+                  <Input type="number" value={productForm.price} onChange={(e) => setProductForm({ ...productForm, price: e.target.value })} className="h-10" placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Original Price (Rs.)</Label>
+                  <Input type="number" value={productForm.discount_price} onChange={(e) => setProductForm({ ...productForm, discount_price: e.target.value })} placeholder="Strike-through" className="h-10" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Cost Price (Rs.)</Label>
+                  <Input type="number" value={productForm.cost_price} onChange={(e) => setProductForm({ ...productForm, cost_price: e.target.value })} placeholder="Internal" className="h-10" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Stock Quantity</Label>
+                  <Input type="number" value={productForm.stock_quantity} onChange={(e) => setProductForm({ ...productForm, stock_quantity: e.target.value })} placeholder="0" className="h-10" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold mb-1.5 block">SKU / Part Number</Label>
+                <Input value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} placeholder="e.g. ARD-UNO-R3" className="h-10 font-mono" />
+              </div>
             </div>
-            <div className="border-t border-border pt-4 space-y-4">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2"><Video className="w-4 h-4 text-secondary" /> වීඩියෝ සහ ලේඛන / Videos & Documents</h4>
-              <div><Label>වීඩියෝ URL / Video URL</Label><Input value={productForm.video_url} onChange={(e) => setProductForm({ ...productForm, video_url: e.target.value })} placeholder="https://youtube.com/watch?v=... හෝ වීඩියෝ link එක" /></div>
-              <div><Label>Datasheet / PDF URL</Label><Input value={productForm.datasheet_url} onChange={(e) => setProductForm({ ...productForm, datasheet_url: e.target.value })} placeholder="https://... datasheet PDF link එක" /></div>
-              <p className="text-xs text-muted-foreground">සියලුම නිෂ්පාදන සඳහා මේවා අවශ්‍ය නොවේ. තිබේ නම් පමණක් එකතු කරන්න.</p>
+
+            {/* ── Section 3: Images ── */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border pb-2">
+                <Image className="w-4 h-4 text-primary" />
+                Images
+              </div>
+              {productImagePreviews.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {productImagePreviews.map((url, i) => (
+                    <div key={i} className="relative group w-20 h-20 rounded-xl border border-border overflow-hidden bg-muted">
+                      <img src={url} alt="" className="w-full h-full object-contain" />
+                      <button type="button" onClick={() => removeProductImage(url)} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <X className="w-4 h-4 text-white" />
+                      </button>
+                      {i === 0 && <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center bg-primary/80 text-primary-foreground py-0.5 font-semibold">Main</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <label className="flex-1 flex items-center justify-center gap-2 px-3 py-3 border-2 border-dashed border-border rounded-xl cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors text-sm text-muted-foreground hover:text-primary">
+                  <Upload className="w-4 h-4" />
+                  {uploading ? "Uploading..." : "Upload image files"}
+                  <input type="file" accept="image/*" multiple onChange={handleProductImageUpload} className="hidden" disabled={uploading} />
+                </label>
+              </div>
+              {/* URL input */}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Or paste an image URL: https://..."
+                  className="text-xs h-9"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const url = (e.target as HTMLInputElement).value.trim();
+                      if (url) {
+                        setProductForm(prev => ({ ...prev, images: [...prev.images.split(",").filter(Boolean), url].join(",") }));
+                        setProductImagePreviews(prev => [...prev, url]);
+                        (e.target as HTMLInputElement).value = "";
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 h-9 px-3 text-xs gap-1"
+                  onClick={(e) => {
+                    const input = (e.currentTarget.previousSibling as HTMLInputElement);
+                    const url = input?.value?.trim();
+                    if (url) {
+                      setProductForm(prev => ({ ...prev, images: [...prev.images.split(",").filter(Boolean), url].join(",") }));
+                      setProductImagePreviews(prev => [...prev, url]);
+                      input.value = "";
+                    }
+                  }}
+                >
+                  <Link2 className="w-3 h-3" /> Add URL
+                </Button>
+              </div>
             </div>
+
+            {/* ── Section 4: Media & Docs ── */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border pb-2">
+                <Video className="w-4 h-4 text-primary" />
+                Media & Documents
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Video URL</Label>
+                  <Input value={productForm.video_url} onChange={(e) => setProductForm({ ...productForm, video_url: e.target.value })} placeholder="https://youtube.com/watch?v=..." className="h-10" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Datasheet / PDF URL</Label>
+                  <Input value={productForm.datasheet_url} onChange={(e) => setProductForm({ ...productForm, datasheet_url: e.target.value })} placeholder="https://..." className="h-10" />
+                </div>
+              </div>
+            </div>
+
             {/* International Links & Similar Products (only when editing) */}
             {editingProductId && (
               <ProductLinksManager
@@ -4021,28 +4098,61 @@ const AdminDashboard = () => {
                 allProducts={(products || []).map((p) => ({ id: p.id, name: p.name }))}
               />
             )}
-            <div className="border-t border-border pt-4 space-y-4">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2"><Truck className="w-4 h-4 text-secondary" /> Shipping / ප්‍රවාහනය</h4>
-              <div>
-                <Label>Shipping Source</Label>
-                <Select value={productForm.shipping_type} onValueChange={(v) => setProductForm({ ...productForm, shipping_type: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="local">🇱🇰 Local</SelectItem>
-                    <SelectItem value="overseas">🌍 Overseas</SelectItem>
-                  </SelectContent>
-                </Select>
+
+            {/* ── Section 5: Shipping ── */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground border-b border-border pb-2">
+                <Truck className="w-4 h-4 text-primary" />
+                Shipping
               </div>
-              <div><Label>Ships From</Label><Input value={productForm.ships_from} onChange={(e) => setProductForm({ ...productForm, ships_from: e.target.value })} placeholder="e.g. Colombo, Sri Lanka" /></div>
-              <div><Label>Delivery ETA (after payment)</Label><Input value={productForm.delivery_eta} onChange={(e) => setProductForm({ ...productForm, delivery_eta: e.target.value })} placeholder="e.g. 2-4 Days or 7-14 Business Days" /></div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Shipping Source</Label>
+                  <Select value={productForm.shipping_type} onValueChange={(v) => setProductForm({ ...productForm, shipping_type: v })}>
+                    <SelectTrigger className="h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="local">🇱🇰 Local</SelectItem>
+                      <SelectItem value="overseas">🌍 Overseas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Ships From</Label>
+                  <Input value={productForm.ships_from} onChange={(e) => setProductForm({ ...productForm, ships_from: e.target.value })} placeholder="e.g. Colombo" className="h-10" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold mb-1.5 block">Delivery ETA</Label>
+                  <Input value={productForm.delivery_eta} onChange={(e) => setProductForm({ ...productForm, delivery_eta: e.target.value })} placeholder="e.g. 2-4 Days" className="h-10" />
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2"><Switch checked={productForm.is_active} onCheckedChange={(v) => setProductForm({ ...productForm, is_active: v })} /><Label>Active</Label></div>
-              <div className="flex items-center gap-2"><Switch checked={productForm.is_featured} onCheckedChange={(v) => setProductForm({ ...productForm, is_featured: v })} /><Label>Featured</Label></div>
+
+            {/* ── Section 6: Visibility ── */}
+            <div className="bg-muted/30 rounded-xl p-4 flex items-center gap-6">
+              <div className="flex items-center gap-2.5">
+                <Switch checked={productForm.is_active} onCheckedChange={(v) => setProductForm({ ...productForm, is_active: v })} />
+                <div>
+                  <Label className="text-sm font-medium block">Active</Label>
+                  <p className="text-[11px] text-muted-foreground">Visible to customers</p>
+                </div>
+              </div>
+              <div className="w-px h-10 bg-border" />
+              <div className="flex items-center gap-2.5">
+                <Switch checked={productForm.is_featured} onCheckedChange={(v) => setProductForm({ ...productForm, is_featured: v })} />
+                <div>
+                  <Label className="text-sm font-medium block">Featured</Label>
+                  <p className="text-[11px] text-muted-foreground">Show on homepage</p>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+
+            {/* ── Footer Actions ── */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
               <Button variant="outline" onClick={() => setProductDialog(false)}>Cancel</Button>
-              <Button onClick={saveProduct} disabled={!productForm.name || !productForm.price}>Save Product</Button>
+              <Button onClick={saveProduct} disabled={!productForm.name || !productForm.price} className="gap-2">
+                <Save className="w-4 h-4" />
+                {editingProductId ? "Update Product" : "Create Product"}
+              </Button>
             </div>
           </div>
         </DialogContent>

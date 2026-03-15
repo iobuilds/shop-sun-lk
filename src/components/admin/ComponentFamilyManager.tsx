@@ -124,6 +124,10 @@ const COMPONENT_TYPES = [
   { id: "sensor", label: "Sensor" },
   { id: "crystal", label: "Crystal / Oscillator" },
   { id: "led", label: "LED" },
+  { id: "module", label: "Module / Board" },
+  { id: "display", label: "Display" },
+  { id: "power", label: "Power / Voltage Reg." },
+  { id: "other", label: "Other" },
 ];
 
 const MOUNT_TYPES = ["SMD", "Through-hole"];
