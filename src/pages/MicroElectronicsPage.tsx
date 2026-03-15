@@ -234,6 +234,68 @@ const BUILTIN_COMPONENT_TYPES = [
     bg: "bg-sky-500/5 hover:bg-sky-500/10 border-sky-200 hover:border-sky-400",
     badge: "bg-sky-100 text-sky-700",
   },
+  {
+    id: "module",
+    label: "Modules",
+    description: "WiFi, BT, LoRa, dev boards",
+    icon: (
+      <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+        <rect x="8" y="16" width="48" height="32" rx="4" fill="hsl(var(--muted))" stroke="hsl(330 70% 55%)" strokeWidth="2"/>
+        <rect x="14" y="22" width="16" height="12" rx="2" fill="hsl(330 70% 55%)" opacity="0.3"/>
+        <rect x="34" y="22" width="16" height="12" rx="2" fill="hsl(330 70% 55%)" opacity="0.15"/>
+        {[0,1,2,3].map(i => (
+          <line key={i} x1={14+i*12} y1="48" x2={14+i*12} y2="56" stroke="hsl(var(--foreground))" strokeWidth="2"/>
+        ))}
+      </svg>
+    ),
+    bg: "bg-pink-500/5 hover:bg-pink-500/10 border-pink-200 hover:border-pink-400",
+    badge: "bg-pink-100 text-pink-700",
+  },
+  {
+    id: "power",
+    label: "Power ICs",
+    description: "Voltage reg, LDO, DCDC",
+    icon: (
+      <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+        <polygon points="32,8 40,26 58,26 44,38 50,56 32,44 14,56 20,38 6,26 24,26" fill="hsl(260 60% 55%)" opacity="0.35" stroke="hsl(260 60% 55%)" strokeWidth="1.5"/>
+      </svg>
+    ),
+    bg: "bg-violet-500/5 hover:bg-violet-500/10 border-violet-200 hover:border-violet-400",
+    badge: "bg-violet-100 text-violet-700",
+  },
+  {
+    id: "display",
+    label: "Displays",
+    description: "OLED, LCD, TFT, 7-seg",
+    icon: (
+      <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+        <rect x="6" y="12" width="52" height="34" rx="4" fill="hsl(var(--muted))" stroke="hsl(240 60% 55%)" strokeWidth="2"/>
+        <rect x="12" y="18" width="40" height="22" rx="2" fill="hsl(240 60% 55%)" opacity="0.2"/>
+        <line x1="18" y1="26" x2="46" y2="26" stroke="hsl(240 60% 55%)" strokeWidth="1.5"/>
+        <line x1="18" y1="32" x2="38" y2="32" stroke="hsl(240 60% 55%)" strokeWidth="1.5" opacity="0.6"/>
+        <line x1="26" y1="46" x2="38" y2="46" stroke="hsl(var(--foreground))" strokeWidth="2"/>
+      </svg>
+    ),
+    bg: "bg-indigo-500/5 hover:bg-indigo-500/10 border-indigo-200 hover:border-indigo-400",
+    badge: "bg-indigo-100 text-indigo-700",
+  },
+  {
+    id: "other",
+    label: "Other",
+    description: "Misc components",
+    icon: (
+      <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+        <circle cx="32" cy="32" r="20" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
+        <circle cx="32" cy="32" r="8" fill="hsl(var(--muted-foreground))" opacity="0.3"/>
+        <circle cx="16" cy="18" r="4" fill="hsl(var(--muted-foreground))" opacity="0.2"/>
+        <circle cx="48" cy="18" r="4" fill="hsl(var(--muted-foreground))" opacity="0.2"/>
+        <circle cx="16" cy="46" r="4" fill="hsl(var(--muted-foreground))" opacity="0.2"/>
+        <circle cx="48" cy="46" r="4" fill="hsl(var(--muted-foreground))" opacity="0.2"/>
+      </svg>
+    ),
+    bg: "bg-muted hover:bg-muted/80 border-border hover:border-foreground/20",
+    badge: "bg-muted text-muted-foreground",
+  },
 ];
 
 // Load custom types created by admin (stored in localStorage)
@@ -242,6 +304,21 @@ const loadAdminCustomTypes = (): Array<{ id: string; label: string; shortDesc: s
   catch { return []; }
 };
 
+const buildCustomTypeEntry = (ct: { id: string; label: string; shortDesc: string }) => ({
+  id: ct.id,
+  label: ct.label,
+  description: ct.shortDesc || "Custom component type",
+  icon: (
+    <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+      <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
+      <line x1="32" y1="22" x2="32" y2="42" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="32" x2="42" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  bg: "bg-fuchsia-500/5 hover:bg-fuchsia-500/10 border-fuchsia-200 hover:border-fuchsia-400",
+  badge: "bg-fuchsia-100 text-fuchsia-700",
+});
+
 const MicroElectronicsPage = () => {
   const { storeName } = useBranding();
   const navigate = useNavigate();
@@ -249,27 +326,15 @@ const MicroElectronicsPage = () => {
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
 
-  // Merge built-in + custom admin types
+  // Merge built-in + custom admin types — re-read localStorage on each render so new types appear
+  const builtinIds = new Set(BUILTIN_COMPONENT_TYPES.map(t => t.id));
   const COMPONENT_TYPES = useMemo(() => {
     const customTypes = loadAdminCustomTypes();
-    const builtinIds = new Set(BUILTIN_COMPONENT_TYPES.map(t => t.id));
     const customMapped = customTypes
       .filter(ct => !builtinIds.has(ct.id))
-      .map(ct => ({
-        id: ct.id,
-        label: ct.label,
-        description: ct.shortDesc || "Custom component type",
-        icon: (
-          <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
-            <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
-            <line x1="32" y1="22" x2="32" y2="42" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="22" y1="32" x2="42" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-        ),
-        bg: "bg-fuchsia-50 hover:bg-fuchsia-100 border-fuchsia-200 hover:border-fuchsia-400",
-        badge: "bg-fuchsia-100 text-fuchsia-700",
-      }));
+      .map(buildCustomTypeEntry);
     return [...BUILTIN_COMPONENT_TYPES, ...customMapped];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Queries ──────────────────────────────────────────────────────────────
