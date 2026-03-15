@@ -2276,7 +2276,7 @@ const AdminDashboard = () => {
                                   <DropdownMenuItem onClick={() => { setSelectedUserId(p.user_id); setSelectedUserRole(role); setUserDetailOpen(true); }}>
                                     <Eye className="w-4 h-4 mr-2" /> View Details
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => openEditUser(p.user_id)}>
+                                  <DropdownMenuItem onClick={() => openEditUser(p)}>
                                     <Pencil className="w-4 h-4 mr-2" /> Edit User
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
