@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import * as nodemailer from "npm:nodemailer@6.9.9";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,32 +35,28 @@ serve(async (req) => {
       );
     }
 
-    // Port 465 = implicit TLS; port 587/25 = STARTTLS (tls:false, starttls handled by denomailer)
-    const useTLS = SMTP_PORT === 465;
-
-    const client = new SMTPClient({
-      connection: {
-        hostname: SMTP_HOST,
-        port: SMTP_PORT,
-        tls: useTLS,
-        auth: { username: SMTP_USERNAME, password: SMTP_PASSWORD },
+    const transporter = nodemailer.createTransport({
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: SMTP_PORT === 465, // true for 465, false for 587 (STARTTLS)
+      auth: {
+        user: SMTP_USERNAME,
+        pass: SMTP_PASSWORD,
       },
     });
 
-    await client.send({
+    const info = await transporter.sendMail({
       from: `NanoCircuit.lk <${SMTP_FROM_EMAIL}>`,
-      to: Array.isArray(to) ? to : [to],
+      to: Array.isArray(to) ? to.join(", ") : to,
       subject,
-      content: text || "Please view this email in an HTML-compatible email client.",
+      text: text || "Please view this email in an HTML-compatible email client.",
       html: html || undefined,
     });
 
-    await client.close();
-
-    console.log(`✅ Email sent to ${Array.isArray(to) ? to.join(", ") : to}: ${subject}`);
+    console.log(`✅ Email sent: ${info.messageId} to ${Array.isArray(to) ? to.join(", ") : to}`);
 
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({ success: true, messageId: info.messageId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
