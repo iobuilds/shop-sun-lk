@@ -332,14 +332,61 @@ const DatabaseTools = () => {
     }
   };
 
+  // Two-phase full restore: Phase 1 = DB tables, Phase 2 = storage files in batches
+  const runFullRestoreFromFileName = async (fileName: string) => {
+    const STORAGE_BATCH_SIZE = 15;
+
+    // Phase 1: Restore DB tables
+    setProgress(p => ({ ...p, step: 1, currentStepLabel: "Restoring database tables..." }));
+    const phase1 = await callBackupFn({ action: "full_restore", file_name: fileName });
+    const totalStorageFiles: number = phase1.total_storage_files ?? 0;
+
+    if (totalStorageFiles === 0) {
+      // No storage files to restore
+      await callBackupFn({ action: "full_restore", file_name: fileName }); // log
+      return { restored_files: 0 };
+    }
+
+    // Phase 2: Restore storage files in batches
+    let offset = 0;
+    let totalRestored = 0;
+    let clearFirst = true;
+    while (offset < totalStorageFiles) {
+      setProgress(p => ({
+        ...p,
+        step: 3,
+        currentStepLabel: `Restoring images… ${Math.min(offset + STORAGE_BATCH_SIZE, totalStorageFiles)}/${totalStorageFiles}`,
+      }));
+      const batchResult = await callBackupFn({
+        action: "restore_storage_batch",
+        file_name: fileName,
+        offset,
+        batch_size: STORAGE_BATCH_SIZE,
+        clear_first: clearFirst,
+      });
+      totalRestored += batchResult.restored ?? 0;
+      offset += STORAGE_BATCH_SIZE;
+      clearFirst = false;
+    }
+
+    // Log completion
+    await callBackupFn({
+      action: "log_restore_complete",
+      file_name: fileName,
+      restored_files: totalRestored,
+    });
+
+    return { restored_files: totalRestored };
+  };
+
   const executeFullRestore = async (fileName: string) => {
     setRestoring(true);
     setConfirmFullRestore(null);
     startProgress("Restoring Full Site from ZIP", RESTORE_STEPS);
     try {
-      const data = await callBackupFn({ action: "full_restore", file_name: fileName });
+      const result = await runFullRestoreFromFileName(fileName);
       finishProgress(true);
-      toast({ title: "Full site restored", description: `Database + ${data.restored_files} storage files restored.` });
+      toast({ title: "Full site restored", description: `Database + ${result.restored_files} storage files restored.` });
       fetchBackups();
     } catch (e: any) {
       finishProgress(false, e.message);
@@ -366,9 +413,9 @@ const DatabaseTools = () => {
       if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
 
       setProgress(p => ({ ...p, step: 3, currentStepLabel: UPLOAD_RESTORE_STEPS[3] }));
-      const data = await callBackupFn({ action: "full_restore", file_name: tempName });
+      const result = await runFullRestoreFromFileName(tempName);
       finishProgress(true);
-      toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${data.restored_files} storage files restored.` });
+      toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${result.restored_files} storage files restored.` });
       fetchBackups();
     } catch (e: any) {
       finishProgress(false, e.message);
