@@ -9,7 +9,7 @@ const corsHeaders = {
 const TABLES = [
   "site_settings", "categories", "products", "banners", "promo_banners",
   "combo_packs", "combo_pack_items", "daily_deals", "pages", "coupons",
-  "sms_templates",
+  "sms_templates", "sms_scheduled_campaigns",
   "profiles", "user_roles", "moderator_permissions",
   "orders", "order_items", "order_status_history",
   "preorder_requests", "preorder_items", "pcb_order_requests",
@@ -21,6 +21,8 @@ const TABLES = [
   "referral_codes", "referral_code_usage",
   "conversations", "conversation_messages", "db_backup_logs",
   "admin_activity_logs",
+  "component_families", "component_variants",
+  "image_designs",
 ];
 
 // Tables that should use upsert (conflict on unique key) instead of insert during restore

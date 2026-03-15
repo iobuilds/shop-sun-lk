@@ -27,6 +27,9 @@ const CLEANUP_TABLES = [
   "daily_deals",
   "contact_messages",
   "search_logs",
+  "sms_scheduled_campaigns",
+  "component_variants",  // must come before component_families
+  "image_designs",
   // Parent tables
   "preorder_requests",
   "pcb_order_requests",
@@ -36,6 +39,7 @@ const CLEANUP_TABLES = [
   "conversations",
   "products",
   "categories",
+  "component_families",
   "banners",
   "promo_banners",
   "pages",
