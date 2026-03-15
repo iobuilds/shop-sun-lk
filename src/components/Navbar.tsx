@@ -32,7 +32,7 @@ const DEFAULT_CONFIG: NavbarConfig = {
   hidden_category_slugs: [],
   custom_links: [
     { id: "3dprint", label: "3D Print", url: "https://3dprint.iobuilds.com", icon: "Printer", visible: true, external: true },
-    { id: "pcbdesign", label: "PCB Design", url: "https://pcb.iobuilds.com", icon: "CircuitBoard", visible: true, external: true },
+    { id: "pcbdesign", label: "PCB Design", url: "/pcb-order", icon: "CircuitBoard", visible: true, external: false },
   ],
 };
 
@@ -460,18 +460,31 @@ const Navbar = () => {
                 </Link>
               ))}
               {visibleCustomLinks.map((link) => (
-                <a
-                  key={link.id}
-                  href={link.url}
-                  target={link.external ? "_blank" : undefined}
-                  rel={link.external ? "noopener noreferrer" : undefined}
-                  className="mx-1 px-3 py-1 flex items-center gap-1.5 text-[13px] font-semibold text-secondary border border-secondary/40 rounded-md hover:bg-secondary/10 transition-all duration-150 whitespace-nowrap"
-                >
-                  {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
-                  {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
-                  {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
-                  {link.label}
-                </a>
+                link.external ? (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mx-1 px-3 py-1 flex items-center gap-1.5 text-[13px] font-semibold text-secondary border border-secondary/40 rounded-md hover:bg-secondary/10 transition-all duration-150 whitespace-nowrap"
+                  >
+                    {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
+                    {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
+                    {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    key={link.id}
+                    to={link.url}
+                    className="mx-1 px-3 py-1 flex items-center gap-1.5 text-[13px] font-semibold text-secondary border border-secondary/40 rounded-md hover:bg-secondary/10 transition-all duration-150 whitespace-nowrap"
+                  >
+                    {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
+                    {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
+                    {!["Printer", "CircuitBoard"].includes(link.icon) && <ExternalLink className="w-3 h-3" />}
+                    {link.label}
+                  </Link>
+                )
               ))}
             </div>
 
