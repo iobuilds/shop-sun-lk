@@ -11,8 +11,8 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { useBranding } from "@/hooks/useBranding";
 
-// ── Component type config ──────────────────────────────────────────────────────
-const COMPONENT_TYPES = [
+// ── Component type config (built-in) ──────────────────────────────────────────
+const BUILTIN_COMPONENT_TYPES = [
   {
     id: "resistor",
     label: "Resistors",
