@@ -271,12 +271,6 @@ const MicroElectronicsPage = () => {
   const { addItem } = useCart();
 
   const [selectedType, setSelectedType] = useState<string | null>(null);
-  const [selectedFamily, setSelectedFamily] = useState<any | null>(null);
-  const [mountType, setMountType] = useState<string>("all");
-  const [selectedPackage, setSelectedPackage] = useState<string>("all");
-  const [valueSearch, setValueSearch] = useState("");
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [cartSelections, setCartSelections] = useState<Set<string>>(new Set());
   const [globalSearch, setGlobalSearch] = useState("");
 
   // ── Queries ──────────────────────────────────────────────────────────────
