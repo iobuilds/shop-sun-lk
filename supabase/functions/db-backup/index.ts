@@ -509,10 +509,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: error?.message || "Could not create signed URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Replace internal host (kong:8000, localhost, etc.) with the public URL
-    const publicUrl = data.signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, publicSupabaseUrl);
-
-    return new Response(JSON.stringify({ url: publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ url: resolvePublicUrl(data.signedUrl, publicSupabaseUrl) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
