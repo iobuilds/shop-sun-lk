@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { logAdminAction } from "@/lib/logAdminAction";
-import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone, BookOpen, Terminal, Palette } from "lucide-react";
+import { Package, ShoppingBag, Image, BarChart3, Loader2, FolderTree, Plus, Trash2, Pencil, X, Upload, Tag, FileText, TrendingUp, DollarSign, Eye, EyeOff, MessageSquare, Ticket, Mail, Check, Users, Star, Layers, Search, Save, Building2, Video, FileDown, LogOut, Phone, Send, ExternalLink, CreditCard, Settings, Truck, Clock, MapPin, Link2, StickyNote, CalendarDays, Database, ChevronDown, Megaphone, Wrench, Globe, Copy, Menu, Wallet, Lock, MoreVertical, Shield, Ban, UserX, UserCheck, Navigation as NavIcon, LayoutDashboard, QrCode, ShoppingCart, CheckCircle, XCircle, Paperclip, Download, Activity, Smartphone, BookOpen, Terminal, Palette, Inbox } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,8 +42,9 @@ import SearchAnalytics from "@/components/admin/SearchAnalytics";
 import ImageEditor from "@/components/admin/ImageEditor";
 import ComponentFamilyManager from "@/components/admin/ComponentFamilyManager";
 import EmailTemplatesManager from "@/components/admin/EmailTemplatesManager";
+import EmailInboxViewer from "@/components/admin/EmailInboxViewer";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_inbox" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -717,6 +718,7 @@ const AdminDashboard = () => {
     {
       label: "Email Center", icon: Mail, defaultOpen: false, adminOnly: true,
       items: [
+        { id: "email_inbox" as Tab, label: "Inbox", icon: Inbox, count: 0 },
         { id: "email_templates" as Tab, label: "Email Templates", icon: Mail, count: 0 },
       ],
     },
@@ -3846,6 +3848,13 @@ const AdminDashboard = () => {
           {tab === "email_templates" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <EmailTemplatesManager />
+            </motion.div>
+          )}
+
+          {/* ═══ Email Inbox Tab ═══ */}
+          {tab === "email_inbox" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <EmailInboxViewer />
             </motion.div>
           )}
 
