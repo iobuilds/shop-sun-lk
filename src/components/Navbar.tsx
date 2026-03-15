@@ -32,7 +32,7 @@ const DEFAULT_CONFIG: NavbarConfig = {
   hidden_category_slugs: [],
   custom_links: [
     { id: "3dprint", label: "3D Print", url: "https://3dprint.iobuilds.com", icon: "Printer", visible: true, external: true },
-    { id: "pcbdesign", label: "PCB Design", url: "https://pcb.iobuilds.com", icon: "CircuitBoard", visible: true, external: true },
+    { id: "pcbdesign", label: "PCB Design", url: "/pcb-order", icon: "CircuitBoard", visible: true, external: false },
   ],
 };
 
