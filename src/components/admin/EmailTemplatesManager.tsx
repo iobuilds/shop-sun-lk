@@ -71,8 +71,8 @@ export default function EmailTemplatesManager() {
   const { data: templates, isLoading } = useQuery({
     queryKey: ["admin-email-templates"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("email_templates" as any)
+      const { data, error } = await (supabase as any)
+        .from("email_templates")
         .select("*")
         .order("name");
       if (error) throw error;
