@@ -2,6 +2,13 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import * as nodemailer from "npm:nodemailer@6.9.9";
 
+const LOGO_URL = "https://shop-sun-lk.lovable.app/site-logo.png";
+
+function injectLogo(html: string): string {
+  if (html.includes(LOGO_URL) || html.includes("site-logo")) return html;
+  return html.replace('<div class="c">', `<div class="c"><div style="background:#1a1a2e;padding:20px 32px 0;text-align:center"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:44px;width:auto;filter:brightness(0) invert(1)"></div>`);
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
