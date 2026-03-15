@@ -715,6 +715,12 @@ const AdminDashboard = () => {
       ],
     },
     {
+      label: "Email Center", icon: Mail, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "email_templates" as Tab, label: "Email Templates", icon: Mail, count: 0 },
+      ],
+    },
+    {
       label: "Analytics & Reports", icon: TrendingUp, defaultOpen: false, adminOnly: true,
       items: [
         { id: "reports" as Tab, label: "Reports", icon: TrendingUp, count: 0 },
