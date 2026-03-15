@@ -1251,7 +1251,11 @@ const AdminDashboard = () => {
   const saveCompanySettings = async () => {
     const { error } = await (supabase as any).from("site_settings").upsert({ key: "company", value: companyForm }, { onConflict: "key" });
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
-    else { toast({ title: "Company info saved" }); queryClient.invalidateQueries({ queryKey: ["admin-company"] }); }
+    else {
+      toast({ title: "Company info saved" });
+      queryClient.invalidateQueries({ queryKey: ["admin-company"] });
+      queryClient.invalidateQueries({ queryKey: ["site-company-settings"] });
+    }
   };
   const addBankAccount = () => setBankForm((prev: any[]) => [...(prev || []), { bank_name: "", account_name: "", account_number: "", branch: "", additional_info: "" }]);
   const removeBankAccount = (index: number) => setBankForm((prev: any[]) => prev.filter((_: any, i: number) => i !== index));
