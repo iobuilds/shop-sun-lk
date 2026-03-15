@@ -277,6 +277,7 @@ const MicroElectronicsPage = () => {
   const [valueSearch, setValueSearch] = useState("");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [cartSelections, setCartSelections] = useState<Set<string>>(new Set());
+  const [globalSearch, setGlobalSearch] = useState("");
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: allFamilyCounts = {} } = useQuery({
