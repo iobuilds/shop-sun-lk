@@ -17,7 +17,7 @@ export const useBranding = () => {
   });
 
   const storeName = company?.store_name || "NanoCircuit.lk";
-  const logoUrl = company?.logo_url || null;
+  const logoUrl = company?.logo_url || "/site-logo.png";
   const initial = storeName.charAt(0).toUpperCase();
 
   return { storeName, logoUrl, initial, company };
