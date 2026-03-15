@@ -483,7 +483,6 @@ const MicroElectronicsPage = () => {
 };
 
 export default MicroElectronicsPage;
-    queryKey: ["component-family-counts"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("component_families").select("component_type").eq("is_active", true);
