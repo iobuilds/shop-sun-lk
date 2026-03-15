@@ -67,6 +67,22 @@ async function getPgClient() {
   return client;
 }
 
+// Converts any signed URL (absolute or relative) to a fully-qualified public URL.
+// Handles three cases:
+//   1. Relative path like "db/storage/v1/..." → prepend publicBase
+//   2. Internal host like "http://kong:8000/..." → replace host with publicBase
+//   3. Already correct absolute URL → returned as-is
+function resolvePublicUrl(signedUrl: string, publicBase: string): string {
+  const base = publicBase.replace(/\/$/, "");
+  if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
+    // Replace any host (internal or external) with our known-good public base
+    return signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, base);
+  }
+  // Relative URL — prepend base (strip leading slash if both have one)
+  const path = signedUrl.startsWith("/") ? signedUrl : `/${signedUrl}`;
+  return `${base}${path}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
