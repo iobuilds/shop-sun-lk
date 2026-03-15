@@ -898,38 +898,53 @@ const ComponentFamilyManager = () => {
                   {allTypes.map(type => {
                     const fc = typeFamilyCount(type.id);
                     const vc = typeVariantCount(type.id);
+                    const isCustom = !!customTypes.find(ct => ct.id === type.id);
                     return (
-                      <motion.button
-                        key={type.id}
-                        whileHover={{ y: -2, scale: 1.01 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => { setActiveType(type.id); setExpandedFamily(null); setSearchQ(""); }}
-                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 group ${type.color}`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
-                            {type.icon}
+                      <div key={type.id} className="relative group/card">
+                        <motion.button
+                          whileHover={{ y: -2, scale: 1.01 }}
+                          whileTap={{ scale: 0.97 }}
+                          onClick={() => { setActiveType(type.id); setExpandedFamily(null); setSearchQ(""); }}
+                          className={`w-full relative text-left p-4 rounded-xl border-2 transition-all duration-150 group ${type.color}`}
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
+                              {type.icon}
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
+                                {fc}
+                              </span>
+                              {vc > 0 && (
+                                <span className="text-[9px] text-muted-foreground font-medium">{vc}v</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
-                              {fc}
-                            </span>
-                            {vc > 0 && (
-                              <span className="text-[9px] text-muted-foreground font-medium">{vc}v</span>
-                            )}
+                          <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
+                          {/* Hover arrow */}
+                          <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-60 transition-opacity">
+                            <ChevronRight className="w-4 h-4 text-foreground" />
                           </div>
-                        </div>
-                        <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
-                        {/* Hover arrow */}
-                        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-60 transition-opacity">
-                          <ChevronRight className="w-4 h-4 text-foreground" />
-                        </div>
-                        {/* Custom badge */}
-                        {customTypes.find(ct => ct.id === type.id) && (
-                          <span className="absolute top-2 right-2 text-[9px] bg-fuchsia-200 text-fuchsia-700 px-1 py-0.5 rounded font-bold">custom</span>
+                          {/* Custom badge */}
+                          {isCustom && (
+                            <span className="absolute top-2 left-2 text-[9px] bg-fuchsia-200 text-fuchsia-700 px-1 py-0.5 rounded font-bold">custom</span>
+                          )}
+                        </motion.button>
+                        {/* Delete button — only for custom types, shown on hover */}
+                        {isCustom && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Remove custom type "${type.label}"? This won't delete existing families.`)) handleDeleteCustomType(type.id);
+                            }}
+                            className="absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-destructive text-destructive-foreground opacity-0 group-hover/card:opacity-100 transition-opacity flex items-center justify-center hover:bg-destructive/80 shadow-sm"
+                            title="Delete type"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         )}
-                      </motion.button>
+                      </div>
                     );
                   })}
 
@@ -949,24 +964,6 @@ const ComponentFamilyManager = () => {
                     <p className="text-[11px] text-muted-foreground mt-0.5">Create custom category</p>
                   </motion.button>
                 </div>
-
-                {/* Custom types management row */}
-                {customTypes.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap pt-1">
-                    <span className="text-xs text-muted-foreground font-medium">Custom types:</span>
-                    {customTypes.map(ct => (
-                      <div key={ct.id} className="flex items-center gap-1 bg-fuchsia-50 border border-fuchsia-200 rounded-full pl-2.5 pr-1 py-0.5">
-                        <span className="text-xs text-fuchsia-700 font-semibold">{ct.label}</span>
-                        <button
-                          onClick={() => { if (confirm(`Remove custom type "${ct.label}"?`)) handleDeleteCustomType(ct.id); }}
-                          className="w-4 h-4 rounded-full hover:bg-fuchsia-200 flex items-center justify-center text-fuchsia-500 transition-colors"
-                        >
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </motion.div>
