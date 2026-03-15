@@ -2,11 +2,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import * as nodemailer from "npm:nodemailer@6.9.9";
 
-const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.svg";
+const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo-white.png";
 
 function injectLogo(html: string): string {
   if (html.includes("site-logo") || html.includes(LOGO_URL)) return html;
-  return html.replace('<div class="c">', `<div class="c"><div style="background:#1a1a2e;padding:20px 32px;text-align:center;border-bottom:1px solid #2d2d4e"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block;filter:brightness(0) invert(1)"></div>`);
+  return html.replace('<div class="c">', `<div class="c"><div style="background:#1a1a2e;padding:20px 32px;text-align:center;border-bottom:1px solid #2d2d4e"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block"></div>`);
 }
 
 const corsHeaders = {

@@ -7,9 +7,9 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.svg";
+const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo-white.png";
 
-const LOGO_HEADER = `<div style="background:#1a1a2e;padding:20px 32px;text-align:center;border-bottom:1px solid #2d2d4e"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block;filter:brightness(0) invert(1)"></div>`;
+const LOGO_HEADER = `<div style="background:#1a1a2e;padding:20px 32px;text-align:center;border-bottom:1px solid #2d2d4e"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block"></div>`;
 
 /** Injects logo if not already present */
 function injectLogo(html: string): string {
