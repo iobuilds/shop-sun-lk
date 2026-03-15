@@ -393,7 +393,7 @@ const MicroElectronicsPage = () => {
                     </h1>
                     <p className="text-muted-foreground mt-1.5 text-sm">
                       {totalFamilies > 0
-                        ? `${totalFamilies} component famil${totalFamilies !== 1 ? "ies" : "y"} across ${COMPONENT_TYPES.filter(t => (allFamilyCounts as any)[t.id] > 0).length} types`
+                        ? `${totalFamilies} component famil${totalFamilies !== 1 ? "ies" : "y"} across ${activeTypesWithData.filter(t => (allFamilyCounts as any)[t.id] > 0).length} types`
                         : "Parametric search by value, package & mount type"}
                     </p>
                   </div>
