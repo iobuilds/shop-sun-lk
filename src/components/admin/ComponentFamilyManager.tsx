@@ -541,15 +541,33 @@ const ComponentFamilyManager = () => {
 
                       {variants.length > 0 && (
                         <div className="rounded-lg border border-border overflow-hidden mb-3">
-                          <div className="hidden sm:grid grid-cols-[1fr_100px_80px_80px_80px_80px_80px_100px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/50 px-3 py-2 gap-2 border-b border-border">
-                            <div>Value / SKU</div><div>Package</div><div>Mount</div><div>Tolerance</div><div>Wattage</div><div>Price</div><div>Stock</div><div className="text-right">Avail / Actions</div>
+                          <div className="hidden sm:grid grid-cols-[48px_1fr_100px_80px_80px_80px_80px_80px_110px] text-[11px] font-semibold text-muted-foreground uppercase tracking-wide bg-muted/50 px-3 py-2 gap-2 border-b border-border">
+                            <div>Img</div><div>Value / SKU</div><div>Package</div><div>Mount</div><div>Tolerance</div><div>Wattage</div><div>Price</div><div>Stock</div><div className="text-right">Avail / Actions</div>
                           </div>
-                          {variants.map((v: any) => (
+                          {variants.map((v: any) => {
+                            const imgSrc = v.images?.[0] || family.images?.[0] || null;
+                            return (
                             <div key={v.id}
-                              className={`grid grid-cols-1 sm:grid-cols-[1fr_100px_80px_80px_80px_80px_80px_100px] gap-2 px-3 py-2.5 border-b border-border last:border-0 items-center text-sm ${!v.is_available ? "opacity-50" : ""}`}>
-                              <div>
-                                <p className="font-semibold text-foreground">{v.value || "—"}</p>
-                                {v.sku && <p className="text-[10px] text-muted-foreground font-mono">{v.sku}</p>}
+                              className={`grid grid-cols-1 sm:grid-cols-[48px_1fr_100px_80px_80px_80px_80px_80px_110px] gap-2 px-3 py-2.5 border-b border-border last:border-0 items-center text-sm ${!v.is_available ? "opacity-50" : ""}`}>
+                              {/* Thumbnail */}
+                              <div className="hidden sm:flex items-center">
+                                {imgSrc ? (
+                                  <img src={imgSrc} alt={v.value || ""} className="w-9 h-9 object-contain rounded-md bg-muted border border-border" />
+                                ) : (
+                                  <div className="w-9 h-9 rounded-md bg-muted border border-dashed border-border flex items-center justify-center">
+                                    <ImagePlus className="w-3.5 h-3.5 text-muted-foreground/40" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 sm:block">
+                                {/* Mobile thumbnail */}
+                                {imgSrc && (
+                                  <img src={imgSrc} alt={v.value || ""} className="sm:hidden w-8 h-8 object-contain rounded bg-muted border border-border shrink-0" />
+                                )}
+                                <div>
+                                  <p className="font-semibold text-foreground">{v.value || "—"}</p>
+                                  {v.sku && <p className="text-[10px] text-muted-foreground font-mono">{v.sku}</p>}
+                                </div>
                               </div>
                               <div className="text-xs font-mono text-muted-foreground">{v.package || "—"}</div>
                               <div>
@@ -562,7 +580,6 @@ const ComponentFamilyManager = () => {
                               <div className="text-xs font-semibold text-foreground">{v.price > 0 ? `Rs.${v.price}` : "—"}</div>
                               <div className="text-xs text-muted-foreground">{v.stock_quantity}</div>
                               <div className="flex items-center gap-1.5 justify-end">
-                                {/* Availability toggle */}
                                 <button
                                   onClick={() => toggleVariantAvailable.mutate({ id: v.id, val: !v.is_available })}
                                   className={`text-[10px] font-semibold px-2 py-1 rounded-md border transition-colors ${
@@ -583,7 +600,8 @@ const ComponentFamilyManager = () => {
                                 </Button>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
