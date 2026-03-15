@@ -25,6 +25,7 @@ import PreOrder from "./pages/PreOrder";
 import DealsPage from "./pages/DealsPage";
 import PCBOrder from "./pages/PCBOrder";
 import MicroElectronicsPage from "./pages/MicroElectronicsPage";
+import ComponentDetailPage from "./pages/ComponentDetailPage";
 
 const queryClient = new QueryClient();
 
