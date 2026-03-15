@@ -451,39 +451,60 @@ const MicroElectronicsPage = () => {
                   </div>
                 </div>
 
-                {/* Category tiles grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {COMPONENT_TYPES.map((type, i) => {
-                    const count = (allFamilyCounts as any)[type.id] || 0;
-                    return (
-                      <motion.button
-                        key={type.id}
-                        initial={{ opacity: 0, y: 16 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.04 }}
-                        onClick={() => setSelectedType(type.id)}
-                        className={`relative group text-left p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${type.bg}`}
-                      >
-                        {/* Count badge */}
-                        {count > 0 && (
-                          <span className={`absolute top-3 right-3 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${type.badge}`}>
-                            {count}
-                          </span>
-                        )}
-                        {/* Icon */}
-                        <div className="mb-3 flex items-center justify-center w-14 h-14">
-                          {type.icon}
-                        </div>
-                        {/* Label */}
-                        <p className="font-bold text-foreground text-sm leading-tight">{type.label}</p>
-                        {/* Description */}
-                        <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{type.description}</p>
-                        {/* Arrow */}
-                        <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </motion.button>
-                    );
-                  })}
+                {/* Global search bar */}
+                <div className="relative mb-7">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={globalSearch}
+                    onChange={e => setGlobalSearch(e.target.value)}
+                    placeholder="Search component types… e.g. Resistor, IC, MOSFET, LED"
+                    className="w-full h-12 pl-11 pr-10 rounded-xl border-2 border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-secondary transition-colors"
+                  />
+                  {globalSearch && (
+                    <button onClick={() => setGlobalSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
+
+                {/* Category tiles grid */}
+                {filteredTypes.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">No categories match "<span className="text-foreground">{globalSearch}</span>"</p>
+                    <button onClick={() => setGlobalSearch("")} className="mt-2 text-xs text-secondary hover:underline">Clear search</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {filteredTypes.map((type, i) => {
+                      const count = (allFamilyCounts as any)[type.id] || 0;
+                      return (
+                        <motion.button
+                          key={type.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.04 }}
+                          onClick={() => setSelectedType(type.id)}
+                          className={`relative group text-left p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${type.bg}`}
+                        >
+                          {count > 0 && (
+                            <span className={`absolute top-3 right-3 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${type.badge}`}>
+                              {count}
+                            </span>
+                          )}
+                          <div className="mb-3 flex items-center justify-center w-14 h-14">
+                            {type.icon}
+                          </div>
+                          <p className="font-bold text-foreground text-sm leading-tight">{type.label}</p>
+                          <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{type.description}</p>
+                          <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                )}
               </motion.div>
             )}
 
