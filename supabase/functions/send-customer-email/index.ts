@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
-import { SmtpClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,13 +8,11 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ── Placeholder replacement ───────────────────────────────────────────────────
 function renderTemplate(template: string, data: Record<string, string>): string {
   let out = template;
   for (const [key, val] of Object.entries(data)) {
     out = out.replace(new RegExp(`{{${key}}}`, "g"), val ?? "");
   }
-  // Clear any unreplaced placeholders
   out = out.replace(/{{[\w_]+}}/g, "");
   return out;
 }
@@ -44,7 +42,7 @@ serve(async (req) => {
 
     if (!to || !template_key) throw new Error("'to' and 'template_key' are required");
 
-    // ── 1. Fetch template, check is_active ────────────────────────────────────
+    // 1. Fetch template, check is_active
     const { data: template } = await supabaseAdmin
       .from("email_templates")
       .select("*")
@@ -60,7 +58,7 @@ serve(async (req) => {
       );
     }
 
-    // ── 2. Render subject + body ──────────────────────────────────────────────
+    // 2. Render subject + body
     const data: Record<string, string> = {};
     if (template_data) {
       for (const [k, v] of Object.entries(template_data)) {
@@ -71,16 +69,16 @@ serve(async (req) => {
     const subject = renderTemplate(template.subject, data);
     const htmlBody = renderTemplate(template.html_body, data);
     const textBody = template.text_body ? renderTemplate(template.text_body, data) : subject;
-
-    // ── 3. Send via SMTP ──────────────────────────────────────────────────────
     const recipients = Array.isArray(to) ? to : [to];
 
-    const client = new SmtpClient();
-    await client.connectTLS({
-      hostname: SMTP_HOST,
-      port: SMTP_PORT,
-      username: SMTP_USERNAME,
-      password: SMTP_PASSWORD,
+    // 3. Send via SMTP using denomailer SMTPClient
+    const client = new SMTPClient({
+      connection: {
+        hostname: SMTP_HOST,
+        port: SMTP_PORT,
+        tls: SMTP_PORT === 465,
+        auth: { username: SMTP_USERNAME, password: SMTP_PASSWORD },
+      },
     });
 
     await client.send({
