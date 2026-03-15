@@ -482,8 +482,7 @@ const MicroElectronicsPage = () => {
   );
 };
 
-  // ── Queries ──────────────────────────────────────────────────────────────
-  const { data: allFamilyCounts = {} } = useQuery({
+export default MicroElectronicsPage;
     queryKey: ["component-family-counts"],
     queryFn: async () => {
       const { data, error } = await supabase
