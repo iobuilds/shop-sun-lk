@@ -4,8 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, Pencil, ChevronDown, ChevronRight,
   Package, X, Upload, Link as LinkIcon, ImagePlus, Loader2,
-  Layers, Search, Eye, EyeOff, AlertTriangle, Zap,
-  MoreVertical, CheckCircle2, CircleOff,
+  Layers, Search, Eye, EyeOff, Zap,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
