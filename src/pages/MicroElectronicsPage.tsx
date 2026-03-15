@@ -433,7 +433,7 @@ const MicroElectronicsPage = () => {
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                           {searchedFamilies.map((family: any, i: number) => {
-                            const typeInfo = COMPONENT_TYPES.find(t => t.id === family.component_type);
+                            const typeInfo = activeTypesWithData.find(t => t.id === family.component_type);
                             const detailUrl = `/micro-electronics/${family.component_type}/${family.slug}`;
                             return (
                               <motion.div
