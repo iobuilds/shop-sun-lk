@@ -387,13 +387,10 @@ Deno.serve(async (req) => {
       if (uploadedData) {
         backupData = uploadedData;
       } else if (file_name) {
-        // Use signed URL via publicSupabaseUrl to avoid internal-hostname issues on Lovable Cloud
-        const { data: signedData, error: signErr } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 300);
-        if (signErr || !signedData) return new Response(JSON.stringify({ error: "Could not create signed URL: " + signErr?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const publicSignedUrl = resolvePublicUrl(signedData.signedUrl, publicSupabaseUrl);
-        const fetchRes = await fetch(publicSignedUrl);
-        if (!fetchRes.ok) return new Response(JSON.stringify({ error: `File download failed: ${fetchRes.status}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const text = await fetchRes.text();
+        // Download directly via adminClient — avoids signed URL hostname issues on Lovable Cloud
+        const { data: fileBlob, error: dlErr } = await adminClient.storage.from("db-backups").download(file_name);
+        if (dlErr || !fileBlob) return new Response(JSON.stringify({ error: "Could not download file: " + dlErr?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const text = await fileBlob.text();
         backupData = JSON.parse(text);
       } else {
         return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
