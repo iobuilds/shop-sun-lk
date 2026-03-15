@@ -304,6 +304,21 @@ const loadAdminCustomTypes = (): Array<{ id: string; label: string; shortDesc: s
   catch { return []; }
 };
 
+const buildCustomTypeEntry = (ct: { id: string; label: string; shortDesc: string }) => ({
+  id: ct.id,
+  label: ct.label,
+  description: ct.shortDesc || "Custom component type",
+  icon: (
+    <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+      <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
+      <line x1="32" y1="22" x2="32" y2="42" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="32" x2="42" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  ),
+  bg: "bg-fuchsia-500/5 hover:bg-fuchsia-500/10 border-fuchsia-200 hover:border-fuchsia-400",
+  badge: "bg-fuchsia-100 text-fuchsia-700",
+});
+
 const MicroElectronicsPage = () => {
   const { storeName } = useBranding();
   const navigate = useNavigate();
@@ -311,27 +326,15 @@ const MicroElectronicsPage = () => {
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
 
-  // Merge built-in + custom admin types
+  // Merge built-in + custom admin types — re-read localStorage on each render so new types appear
+  const builtinIds = new Set(BUILTIN_COMPONENT_TYPES.map(t => t.id));
   const COMPONENT_TYPES = useMemo(() => {
     const customTypes = loadAdminCustomTypes();
-    const builtinIds = new Set(BUILTIN_COMPONENT_TYPES.map(t => t.id));
     const customMapped = customTypes
       .filter(ct => !builtinIds.has(ct.id))
-      .map(ct => ({
-        id: ct.id,
-        label: ct.label,
-        description: ct.shortDesc || "Custom component type",
-        icon: (
-          <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
-            <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
-            <line x1="32" y1="22" x2="32" y2="42" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
-            <line x1="22" y1="32" x2="42" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
-          </svg>
-        ),
-        bg: "bg-fuchsia-50 hover:bg-fuchsia-100 border-fuchsia-200 hover:border-fuchsia-400",
-        badge: "bg-fuchsia-100 text-fuchsia-700",
-      }));
+      .map(buildCustomTypeEntry);
     return [...BUILTIN_COMPONENT_TYPES, ...customMapped];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Queries ──────────────────────────────────────────────────────────────
