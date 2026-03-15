@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const TEXTLK_API_URL = "https://app.text.lk/api/v3/sms/send";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 
 const STATUS_TEMPLATE_MAP: Record<string, string> = {
   pending: "order_placed",
@@ -28,10 +29,30 @@ const STATUS_TEMPLATE_MAP: Record<string, string> = {
   tracking_updated: "tracking_updated",
 };
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+async function sendCustomerEmail(
+  supabaseAdmin: any,
+  userEmail: string,
+  templateKey: string,
+  templateData: Record<string, string>
+) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-customer-email`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ to: userEmail, template_key: templateKey, template_data: templateData }),
+    });
+    const result = await res.json();
+    console.log(`Email [${templateKey}] → ${userEmail}:`, result?.success ? "sent" : result?.message || "failed");
+  } catch (e) {
+    console.error(`Email send error [${templateKey}]:`, e);
   }
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const TEXTLK_API_KEY = Deno.env.get("TEXTLK_API_KEY");
   if (!TEXTLK_API_KEY) {
@@ -41,7 +62,7 @@ serve(async (req) => {
   }
 
   const supabaseAdmin = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
+    SUPABASE_URL,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
 
@@ -49,7 +70,6 @@ serve(async (req) => {
     const { order_id, status, tracking_code } = await req.json();
     if (!order_id || !status) throw new Error("order_id and status are required");
 
-    // Find template for this status
     const templateKey = STATUS_TEMPLATE_MAP[status];
     if (!templateKey) {
       return new Response(
@@ -58,14 +78,10 @@ serve(async (req) => {
       );
     }
 
-    // Check for duplicate - don't send same SMS for same order+status
+    // Duplicate-send guard
     const { data: existingLog } = await supabaseAdmin
-      .from("sms_logs")
-      .select("id")
-      .eq("order_id", order_id)
-      .eq("template_key", templateKey)
-      .eq("status", "sent")
-      .limit(1);
+      .from("sms_logs").select("id")
+      .eq("order_id", order_id).eq("template_key", templateKey).eq("status", "sent").limit(1);
 
     if (existingLog && existingLog.length > 0) {
       return new Response(
@@ -74,91 +90,94 @@ serve(async (req) => {
       );
     }
 
-    // Fetch order with user profile
+    // Fetch order + profile
     const { data: order, error: orderError } = await supabaseAdmin
-      .from("orders")
-      .select("*")
-      .eq("id", order_id)
-      .single();
+      .from("orders").select("*").eq("id", order_id).single();
     if (orderError || !order) throw new Error("Order not found");
 
-    // Get user profile for phone
     const { data: profile } = await supabaseAdmin
-      .from("profiles")
-      .select("phone, full_name")
-      .eq("user_id", order.user_id)
-      .single();
+      .from("profiles").select("phone, full_name").eq("user_id", order.user_id).single();
 
     const phone = profile?.phone || (order.shipping_address as any)?.phone;
-    if (!phone) {
-      return new Response(
-        JSON.stringify({ success: false, message: "No phone number found for user" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
-
-    // Fetch template
-    const { data: template } = await supabaseAdmin
-      .from("sms_templates")
-      .select("*")
-      .eq("template_key", templateKey)
-      .eq("is_active", true)
-      .single();
-
-    if (!template) {
-      return new Response(
-        JSON.stringify({ success: false, message: `Template '${templateKey}' not found or disabled` }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
-
-    // Replace placeholders
     const shortOrderId = order.id.slice(0, 8).toUpperCase();
-    const trackingLink = (order as any).tracking_link || "";
-    const eta = (order as any).expected_delivery || "3-5 business days";
-    let finalMessage = template.message_template
-      .replace(/{{customer_name}}/g, profile?.full_name || "Customer")
-      .replace(/{{order_id}}/g, shortOrderId)
-      .replace(/{{total}}/g, String(order.total?.toLocaleString() || "0"))
-      .replace(/{{status}}/g, status)
-      .replace(/{{tracking_info}}/g, tracking_code ? `Tracking: ${tracking_code}. ` : "")
-      .replace(/{{tracking_link}}/g, trackingLink)
-      .replace(/{{eta}}/g, eta)
-      .replace(/{{wallet_amount}}/g, String((order as any).wallet_amount || "0"))
-      .replace(/{{coupon_code}}/g, (order as any).coupon_code || "");
+    const trackingLink = order.tracking_link || "";
+    const eta = order.expected_delivery || "3-5 business days";
 
-    // Send SMS
-    const smsResponse = await fetch(TEXTLK_API_URL, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${TEXTLK_API_KEY}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-      },
-      body: JSON.stringify({
-        recipient: phone,
-        sender_id: Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit",
-        type: "plain",
-        message: finalMessage,
-      }),
-    });
+    // Common template data for email
+    const templateData: Record<string, string> = {
+      customer_name: profile?.full_name || "Customer",
+      order_id: shortOrderId,
+      total: String(order.total?.toLocaleString() || "0"),
+      status,
+      payment_method: order.payment_method || "N/A",
+      tracking_number: tracking_code || order.tracking_number || "",
+      tracking_link: trackingLink,
+      eta,
+    };
 
-    const smsResult = await smsResponse.json();
-    const smsStatus = smsResult.status === "success" ? "sent" : "failed";
+    // ── Get user email ────────────────────────────────────────────────────────
+    let userEmail = "";
+    try {
+      const { data: { user } } = await supabaseAdmin.auth.admin.getUserById(order.user_id);
+      if (user?.email) userEmail = user.email;
+    } catch (_) { /* email is best-effort */ }
 
-    // Log
-    await supabaseAdmin.from("sms_logs").insert({
-      phone,
-      message: finalMessage,
-      template_key: templateKey,
-      status: smsStatus,
-      provider_response: smsResult,
-      order_id,
-      user_id: order.user_id,
-    });
+    // ── Send SMS ──────────────────────────────────────────────────────────────
+    let smsStatus = "skipped";
+    if (phone) {
+      const { data: smsTemplate } = await supabaseAdmin
+        .from("sms_templates").select("*")
+        .eq("template_key", templateKey).eq("is_active", true).single();
+
+      if (smsTemplate) {
+        let finalMessage = smsTemplate.message_template
+          .replace(/{{customer_name}}/g, profile?.full_name || "Customer")
+          .replace(/{{order_id}}/g, shortOrderId)
+          .replace(/{{total}}/g, String(order.total?.toLocaleString() || "0"))
+          .replace(/{{status}}/g, status)
+          .replace(/{{tracking_info}}/g, tracking_code ? `Tracking: ${tracking_code}. ` : "")
+          .replace(/{{tracking_link}}/g, trackingLink)
+          .replace(/{{eta}}/g, eta)
+          .replace(/{{wallet_amount}}/g, String((order as any).wallet_amount || "0"))
+          .replace(/{{coupon_code}}/g, order.coupon_code || "");
+
+        const smsResponse = await fetch(TEXTLK_API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${TEXTLK_API_KEY}`,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+          },
+          body: JSON.stringify({
+            recipient: phone,
+            sender_id: Deno.env.get("TEXTLK_SENDER_ID") ?? "NanoCircuit",
+            type: "plain",
+            message: finalMessage,
+          }),
+        });
+
+        const smsResult = await smsResponse.json();
+        smsStatus = smsResult.status === "success" ? "sent" : "failed";
+
+        await supabaseAdmin.from("sms_logs").insert({
+          phone,
+          message: finalMessage,
+          template_key: templateKey,
+          status: smsStatus,
+          provider_response: smsResult,
+          order_id,
+          user_id: order.user_id,
+        });
+      }
+    }
+
+    // ── Send Email (non-blocking, checks is_active) ───────────────────────────
+    if (userEmail) {
+      await sendCustomerEmail(supabaseAdmin, userEmail, templateKey, templateData);
+    }
 
     return new Response(
-      JSON.stringify({ success: smsStatus === "sent", status: smsStatus }),
+      JSON.stringify({ success: true, sms_status: smsStatus, email_attempted: !!userEmail }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
     );
   } catch (error) {
