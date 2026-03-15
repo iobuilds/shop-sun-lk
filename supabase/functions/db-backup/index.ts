@@ -299,19 +299,19 @@ Deno.serve(async (req) => {
   }
 
   // ── Full ZIP restore ──
+  // ── Full ZIP restore — Phase 1: DB tables only (fast, no timeout risk) ──
   if (action === "full_restore") {
     try {
       const { file_name } = body;
       if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      // Download directly via adminClient to avoid signed URL hostname issues on Lovable Cloud.
-      // adminClient.storage.download() uses the internal SUPABASE_URL which works server-side.
       const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
       if (dlError || !fileData) return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       const arrayBuffer = await fileData.arrayBuffer();
       const zip = await JSZip.loadAsync(arrayBuffer);
 
+      // Restore DB tables
       const tablesFile = zip.file("database/tables.json");
       if (tablesFile) {
         const tablesJson = await tablesFile.async("string");
@@ -340,20 +340,55 @@ Deno.serve(async (req) => {
         }
       }
 
-      let restoredFiles = 0;
+      // Count how many storage files are in the ZIP so the client knows what to restore
+      const storageFilePaths: Record<string, string[]> = {};
       for (const bucket of STORAGE_BUCKETS) {
         const prefix = `storage/${bucket}/`;
-        const bucketFiles = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip.files[f].dir);
-        const { data: existingFiles } = await adminClient.storage.from(bucket).list("", { limit: 1000 });
-        if (existingFiles && existingFiles.length > 0) {
+        storageFilePaths[bucket] = Object.keys(zip.files)
+          .filter(f => f.startsWith(prefix) && !zip.files[f].dir)
+          .map(f => f.substring(prefix.length));
+      }
+      const totalStorageFiles = Object.values(storageFilePaths).flat().length;
+
+      await adminClient.from("db_backup_logs").insert({ action: "full_restore_db", file_name, created_by: user.id, created_by_email: user.email, note: `DB restored. ${totalStorageFiles} storage files pending.` });
+      return new Response(JSON.stringify({ success: true, storage_files: storageFilePaths, total_storage_files: totalStorageFiles }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // ── Full ZIP restore — Phase 2: Storage files in batches ──
+  // Called multiple times by the client with offset/batchSize to avoid timeout
+  if (action === "restore_storage_batch") {
+    try {
+      const { file_name, offset = 0, batch_size = 20, clear_first = false } = body;
+      if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
+      if (dlError || !fileData) return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const arrayBuffer = await fileData.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      let restoredFiles = 0;
+      let errorCount = 0;
+      const results: { path: string; status: string }[] = [];
+
+      for (const bucket of STORAGE_BUCKETS) {
+        const prefix = `storage/${bucket}/`;
+        const allBucketFiles = Object.keys(zip.files)
+          .filter(f => f.startsWith(prefix) && !zip.files[f].dir);
+
+        // On first batch (offset=0), clear the bucket
+        if (offset === 0 && clear_first) {
           const allExisting = await getAllStorageFiles(adminClient, bucket);
-          if (allExisting.length > 0) {
-            for (let i = 0; i < allExisting.length; i += 100) {
-              await adminClient.storage.from(bucket).remove(allExisting.slice(i, i + 100));
-            }
+          for (let i = 0; i < allExisting.length; i += 100) {
+            await adminClient.storage.from(bucket).remove(allExisting.slice(i, i + 100));
           }
         }
-        for (const zipPath of bucketFiles) {
+
+        const batchFiles = allBucketFiles.slice(offset, offset + batch_size);
+        for (const zipPath of batchFiles) {
           const storagePath = zipPath.substring(prefix.length);
           const fileObj = zip.file(zipPath);
           if (!fileObj) continue;
@@ -365,16 +400,16 @@ Deno.serve(async (req) => {
               webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf", json: "application/json",
             };
             const { error: upErr } = await adminClient.storage.from(bucket).upload(storagePath, content, { contentType: contentTypes[ext] || "application/octet-stream", upsert: true });
-            if (upErr) console.error(`Upload ${bucket}/${storagePath}:`, upErr.message);
-            else restoredFiles++;
+            if (upErr) { errorCount++; results.push({ path: storagePath, status: "error: " + upErr.message }); }
+            else { restoredFiles++; results.push({ path: storagePath, status: "ok" }); }
           } catch (err) {
-            console.error(`Error restoring ${bucket}/${storagePath}:`, (err as Error).message);
+            errorCount++;
+            results.push({ path: storagePath, status: "error: " + (err as Error).message });
           }
         }
       }
 
-      await adminClient.from("db_backup_logs").insert({ action: "full_restore", file_name, created_by: user.id, created_by_email: user.email });
-      return new Response(JSON.stringify({ success: true, restored_files: restoredFiles }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, restored: restoredFiles, errors: errorCount, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
