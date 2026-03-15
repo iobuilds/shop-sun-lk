@@ -1,9 +1,9 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronRight, Search, X, ArrowLeft, Package2, ExternalLink,
+  ChevronRight, Search, X, ArrowLeft, Package2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
@@ -27,7 +27,6 @@ const COMPONENT_TYPES = [
         <rect x="36" y="24" width="4" height="16" rx="1" fill="hsl(220 80% 60%)"/>
       </svg>
     ),
-    accent: "hsl(var(--secondary))",
     bg: "bg-secondary/5 hover:bg-secondary/10 border-secondary/20 hover:border-secondary/40",
     badge: "bg-secondary/15 text-secondary",
   },
@@ -45,7 +44,6 @@ const COMPONENT_TYPES = [
         <line x1="30" y1="21" x2="36" y2="21" stroke="hsl(30 90% 55%)" strokeWidth="2"/>
       </svg>
     ),
-    accent: "hsl(220 70% 55%)",
     bg: "bg-blue-500/5 hover:bg-blue-500/10 border-blue-200 hover:border-blue-400",
     badge: "bg-blue-100 text-blue-700",
   },
@@ -72,7 +70,6 @@ const COMPONENT_TYPES = [
         <circle cx="32" cy="32" r="5" fill="hsl(var(--secondary))" opacity="0.8"/>
       </svg>
     ),
-    accent: "hsl(var(--foreground))",
     bg: "bg-slate-500/5 hover:bg-slate-500/10 border-slate-200 hover:border-slate-400",
     badge: "bg-slate-100 text-slate-700",
   },
@@ -92,7 +89,6 @@ const COMPONENT_TYPES = [
         <polygon points="33,44 38,48 33,52" fill="hsl(30 80% 55%)"/>
       </svg>
     ),
-    accent: "hsl(30 80% 55%)",
     bg: "bg-orange-500/5 hover:bg-orange-500/10 border-orange-200 hover:border-orange-400",
     badge: "bg-orange-100 text-orange-700",
   },
@@ -108,7 +104,6 @@ const COMPONENT_TYPES = [
         <line x1="42" y1="16" x2="42" y2="48" stroke="hsl(var(--foreground))" strokeWidth="2.5"/>
       </svg>
     ),
-    accent: "hsl(0 70% 55%)",
     bg: "bg-red-500/5 hover:bg-red-500/10 border-red-200 hover:border-red-400",
     badge: "bg-red-100 text-red-700",
   },
@@ -123,7 +118,6 @@ const COMPONENT_TYPES = [
         <line x1="52" y1="32" x2="60" y2="32" stroke="hsl(var(--foreground))" strokeWidth="2.5"/>
       </svg>
     ),
-    accent: "hsl(45 90% 50%)",
     bg: "bg-yellow-500/5 hover:bg-yellow-500/10 border-yellow-200 hover:border-yellow-400",
     badge: "bg-yellow-100 text-yellow-700",
   },
@@ -144,7 +138,6 @@ const COMPONENT_TYPES = [
         <line x1="30" y1="32" x2="34" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="1.5" strokeDasharray="2 2"/>
       </svg>
     ),
-    accent: "hsl(140 60% 45%)",
     bg: "bg-green-500/5 hover:bg-green-500/10 border-green-200 hover:border-green-400",
     badge: "bg-green-100 text-green-700",
   },
@@ -163,7 +156,6 @@ const COMPONENT_TYPES = [
         <path d="M8 26 Q19 12 30 26" fill="hsl(50 100% 70%)" opacity="0.4"/>
       </svg>
     ),
-    accent: "hsl(50 100% 50%)",
     bg: "bg-amber-500/5 hover:bg-amber-500/10 border-amber-200 hover:border-amber-400",
     badge: "bg-amber-100 text-amber-700",
   },
@@ -186,7 +178,6 @@ const COMPONENT_TYPES = [
         <line x1="38" y1="52" x2="38" y2="56" stroke="hsl(var(--foreground))" strokeWidth="2"/>
       </svg>
     ),
-    accent: "hsl(260 60% 55%)",
     bg: "bg-purple-500/5 hover:bg-purple-500/10 border-purple-200 hover:border-purple-400",
     badge: "bg-purple-100 text-purple-700",
   },
@@ -204,7 +195,6 @@ const COMPONENT_TYPES = [
         <text x="32" y="36" textAnchor="middle" fontSize="9" fill="hsl(195 70% 50%)" fontWeight="600">MHz</text>
       </svg>
     ),
-    accent: "hsl(195 70% 50%)",
     bg: "bg-cyan-500/5 hover:bg-cyan-500/10 border-cyan-200 hover:border-cyan-400",
     badge: "bg-cyan-100 text-cyan-700",
   },
@@ -225,7 +215,6 @@ const COMPONENT_TYPES = [
         <line x1="48" y1="50" x2="48" y2="56" stroke="hsl(var(--foreground))" strokeWidth="2"/>
       </svg>
     ),
-    accent: "hsl(160 55% 45%)",
     bg: "bg-teal-500/5 hover:bg-teal-500/10 border-teal-200 hover:border-teal-400",
     badge: "bg-teal-100 text-teal-700",
   },
@@ -242,7 +231,6 @@ const COMPONENT_TYPES = [
         <line x1="26" y1="32" x2="38" y2="22" stroke="hsl(var(--secondary))" strokeWidth="2.5" strokeLinecap="round"/>
       </svg>
     ),
-    accent: "hsl(var(--secondary))",
     bg: "bg-sky-500/5 hover:bg-sky-500/10 border-sky-200 hover:border-sky-400",
     badge: "bg-sky-100 text-sky-700",
   },
@@ -250,6 +238,7 @@ const COMPONENT_TYPES = [
 
 const MicroElectronicsPage = () => {
   const { storeName } = useBranding();
+  const navigate = useNavigate();
 
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
@@ -267,6 +256,17 @@ const MicroElectronicsPage = () => {
     },
   });
 
+  // All families (for global search)
+  const { data: allFamilies = [] } = useQuery({
+    queryKey: ["all-component-families"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("component_families").select("*").eq("is_active", true).order("sort_order");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   const { data: families = [], isLoading: familiesLoading } = useQuery({
     queryKey: ["component-families", selectedType],
     queryFn: async () => {
@@ -279,8 +279,19 @@ const MicroElectronicsPage = () => {
     enabled: !!selectedType,
   });
 
-  // Global search filter
   const globalQ = globalSearch.trim().toLowerCase();
+
+  // When there's a global search, filter families across all types
+  const searchedFamilies = useMemo(() => {
+    if (!globalQ) return [];
+    return allFamilies.filter((f: any) =>
+      f.name.toLowerCase().includes(globalQ) ||
+      (f.description || "").toLowerCase().includes(globalQ) ||
+      f.component_type.toLowerCase().includes(globalQ)
+    );
+  }, [globalQ, allFamilies]);
+
+  // Filter category types by label/description
   const filteredTypes = useMemo(() => {
     if (!globalQ) return COMPONENT_TYPES;
     return COMPONENT_TYPES.filter(t =>
@@ -288,6 +299,7 @@ const MicroElectronicsPage = () => {
     );
   }, [globalQ]);
 
+  const isSearching = globalQ.length > 0;
   const typeConfig = COMPONENT_TYPES.find(t => t.id === selectedType);
   const totalFamilies = Object.values(allFamilyCounts as Record<string, number>).reduce((a, b) => a + b, 0);
 
@@ -306,7 +318,7 @@ const MicroElectronicsPage = () => {
           <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2 flex-wrap">
             <Link to="/" className="hover:text-secondary transition-colors">Home</Link>
             <ChevronRight className="w-3 h-3" />
-            <button onClick={() => setSelectedType(null)}
+            <button onClick={() => { setSelectedType(null); setGlobalSearch(""); }}
               className="hover:text-secondary transition-colors">Micro Electronics</button>
             {selectedType && (
               <>
@@ -318,7 +330,7 @@ const MicroElectronicsPage = () => {
 
           <AnimatePresence mode="wait">
 
-            {/* ── LEVEL 0 : Category Grid ──────────────────────────────────── */}
+            {/* ── LEVEL 0 : Category Grid / Global Search ───────────────────── */}
             {!selectedType && (
               <motion.div key="type-grid"
                 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
@@ -344,7 +356,7 @@ const MicroElectronicsPage = () => {
                     type="text"
                     value={globalSearch}
                     onChange={e => setGlobalSearch(e.target.value)}
-                    placeholder="Search component types… e.g. Resistor, IC, MOSFET, LED"
+                    placeholder="Search components… e.g. 10kΩ, NE555, 100nF, BC547"
                     className="w-full h-12 pl-11 pr-10 rounded-xl border-2 border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-secondary transition-colors"
                   />
                   {globalSearch && (
@@ -355,13 +367,59 @@ const MicroElectronicsPage = () => {
                   )}
                 </div>
 
-                {filteredTypes.length === 0 ? (
-                  <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
-                    <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="font-medium">No categories match "<span className="text-foreground">{globalSearch}</span>"</p>
-                    <button onClick={() => setGlobalSearch("")} className="mt-2 text-xs text-secondary hover:underline">Clear search</button>
-                  </div>
+                {/* ── Search results: show matching families ── */}
+                {isSearching ? (
+                  <>
+                    {searchedFamilies.length === 0 ? (
+                      <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
+                        <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                        <p className="font-medium">No components match "<span className="text-foreground">{globalSearch}</span>"</p>
+                        <button onClick={() => setGlobalSearch("")} className="mt-2 text-xs text-secondary hover:underline">Clear search</button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          <span className="font-semibold text-foreground">{searchedFamilies.length}</span> result{searchedFamilies.length !== 1 ? "s" : ""} for "{globalSearch}"
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {searchedFamilies.map((family: any, i: number) => {
+                            const typeInfo = COMPONENT_TYPES.find(t => t.id === family.component_type);
+                            const detailUrl = `/micro-electronics/${family.component_type}/${family.slug}`;
+                            return (
+                              <motion.div
+                                key={family.id}
+                                initial={{ opacity: 0, y: 12 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.04 }}
+                                className="relative text-left p-5 rounded-xl border-2 border-border bg-card hover:border-secondary/50 hover:shadow-md transition-all duration-200 group cursor-pointer"
+                                onClick={() => navigate(detailUrl)}
+                              >
+                                <div className="flex items-start gap-4">
+                                  {family.images?.[0] ? (
+                                    <img src={family.images[0]} alt={family.name}
+                                      className="w-14 h-14 object-contain rounded-lg bg-muted/50 flex-shrink-0 border border-border" />
+                                  ) : (
+                                    <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                                      <div className="opacity-40 scale-75">{typeInfo?.icon}</div>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">{typeInfo?.label}</p>
+                                    <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight">{family.name}</h3>
+                                    {family.description && (
+                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{family.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </>
                 ) : (
+                  /* ── Category tiles grid ── */
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     {filteredTypes.map((type, i) => {
                       const count = (allFamilyCounts as any)[type.id] || 0;
@@ -406,7 +464,7 @@ const MicroElectronicsPage = () => {
                   </button>
                   <div className="flex-1">
                     <h1 className="text-2xl font-bold font-display text-foreground">{typeConfig?.label}</h1>
-                    <p className="text-sm text-muted-foreground">Click a component family to open the full details page</p>
+                    <p className="text-sm text-muted-foreground">Select a component family to view variants</p>
                   </div>
                 </div>
 
@@ -434,7 +492,7 @@ const MicroElectronicsPage = () => {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05 }}
                         className="relative text-left p-5 rounded-xl border-2 border-border bg-card hover:border-secondary/50 hover:shadow-md transition-all duration-200 group cursor-pointer"
-                        onClick={() => window.open(detailUrl, "_blank", "noopener,noreferrer")}
+                        onClick={() => navigate(detailUrl)}
                       >
                         <div className="flex items-start gap-4">
                           {family.images?.[0] ? (
@@ -446,14 +504,13 @@ const MicroElectronicsPage = () => {
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight pr-7">{family.name}</h3>
+                            <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight">{family.name}</h3>
                             {family.description && (
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{family.description}</p>
                             )}
-                            <div className="flex items-center gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="text-xs text-secondary font-semibold">View variants</span>
-                              <ExternalLink className="w-3 h-3 text-secondary" />
-                            </div>
+                            <p className="text-xs text-secondary font-semibold mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              View variants →
+                            </p>
                           </div>
                         </div>
                       </motion.div>
