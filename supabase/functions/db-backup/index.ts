@@ -10,6 +10,7 @@ const TABLES = [
   "site_settings", "categories", "products", "banners", "promo_banners",
   "combo_packs", "combo_pack_items", "daily_deals", "pages", "coupons",
   "sms_templates", "sms_scheduled_campaigns",
+  "email_templates",
   "profiles", "user_roles", "moderator_permissions",
   "orders", "order_items", "order_status_history",
   "preorder_requests", "preorder_items", "pcb_order_requests",
@@ -29,6 +30,7 @@ const TABLES = [
 const UPSERT_TABLES: Record<string, string> = {
   site_settings: "key",
   sms_templates: "template_key",
+  email_templates: "template_key",
 };
 
 const STORAGE_BUCKETS = ["images"];
