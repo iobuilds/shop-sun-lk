@@ -483,9 +483,6 @@ const MicroElectronicsPage = () => {
 };
 
 export default MicroElectronicsPage;
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("component_families").select("component_type").eq("is_active", true);
       if (error) throw error;
       const counts: Record<string, number> = {};
       (data || []).forEach((r: any) => { counts[r.component_type] = (counts[r.component_type] || 0) + 1; });
