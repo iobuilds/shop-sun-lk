@@ -382,8 +382,15 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      const data = await callBackupFn({ action: "download_url", file_name: fileName });
-      const response = await fetch(data.url);
+      // Use Supabase JS client directly to get a proper absolute signed URL,
+      // bypassing the edge function which may return relative/internal paths.
+      const { data, error } = await supabase.storage
+        .from("db-backups")
+        .createSignedUrl(fileName, 600);
+      if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create download URL");
+
+      const response = await fetch(data.signedUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
