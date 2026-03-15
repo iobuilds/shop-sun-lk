@@ -349,11 +349,13 @@ const ComponentFamilyManager = () => {
                   onChange={e => setFamilyForm(f => ({ ...f, datasheet_url: e.target.value }))}
                   placeholder="https://..." />
               </div>
-              <div>
-                <Label className="text-xs mb-1 block">Image URLs (comma-separated)</Label>
-                <Input value={(familyForm.images || []).join(",")}
-                  onChange={e => setFamilyForm(f => ({ ...f, images: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }))}
-                  placeholder="https://...jpg, https://...jpg" />
+              <div className="sm:col-span-2">
+                <Label className="text-xs mb-2 block flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Images</Label>
+                <ImageUploader
+                  images={familyForm.images || []}
+                  onChange={imgs => setFamilyForm(f => ({ ...f, images: imgs }))}
+                  placeholder="Paste image URL…"
+                />
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={familyForm.is_active} onCheckedChange={v => setFamilyForm(f => ({ ...f, is_active: v }))} />
