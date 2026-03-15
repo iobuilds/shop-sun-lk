@@ -25,6 +25,7 @@ import PreOrder from "./pages/PreOrder";
 import DealsPage from "./pages/DealsPage";
 import PCBOrder from "./pages/PCBOrder";
 import MicroElectronicsPage from "./pages/MicroElectronicsPage";
+import ComponentDetailPage from "./pages/ComponentDetailPage";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/cart" element={<Cart />} />
               <Route path="/category/:slug" element={<CategoryPage />} />
               <Route path="/micro-electronics" element={<MicroElectronicsPage />} />
+              <Route path="/micro-electronics/:type/:familySlug" element={<ComponentDetailPage />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/profile" element={<Profile />} />
