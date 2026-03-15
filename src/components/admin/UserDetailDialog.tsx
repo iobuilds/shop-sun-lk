@@ -11,18 +11,22 @@ interface UserDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   userId: string | null;
   userRole: string;
+  initialProfile?: any;
 }
 
-const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDialogProps) => {
-  const { data: profile } = useQuery({
+const UserDetailDialog = ({ open, onOpenChange, userId, userRole, initialProfile }: UserDetailDialogProps) => {
+  const { data: profileData } = useQuery({
     queryKey: ["admin-user-detail", userId],
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId!).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
+    initialData: initialProfile ?? undefined,
+    staleTime: 0,
   });
+  const profile = profileData ?? initialProfile;
 
   const { data: userOrders } = useQuery({
     queryKey: ["admin-user-orders", userId],
@@ -36,7 +40,7 @@ const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDi
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
   });
 
   const { data: wallet } = useQuery({
@@ -50,11 +54,11 @@ const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDi
       if (error) throw error;
       return data as any;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
   });
 
   const { data: walletTxns } = useQuery({
-    queryKey: ["admin-user-wallet-txns", userId, wallet],
+    queryKey: ["admin-user-wallet-txns", userId, wallet?.id],
     queryFn: async () => {
       if (!wallet?.id) return [];
       const { data, error } = await supabase
@@ -66,23 +70,22 @@ const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDi
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!wallet?.id && open,
+    enabled: !!wallet?.id,
   });
 
   const { data: assignedCoupons } = useQuery({
-    queryKey: ["admin-user-coupons", userId, profile?.phone],
+    queryKey: ["admin-user-coupons", userId],
     queryFn: async () => {
       const filters: string[] = [];
       if (userId) filters.push(`user_id.eq.${userId}`);
-      if (profile?.phone) filters.push(`phone.eq.${profile.phone}`);
       const { data, error } = await supabase
         .from("coupon_assignments" as any)
         .select("*, coupons(*)")
-        .or(filters.join(","));
+        .or(filters.length ? filters.join(",") : "user_id.is.null");
       if (error) throw error;
       return data as any[];
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
   });
 
   const { data: reviews } = useQuery({
@@ -97,7 +100,7 @@ const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDi
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
   });
 
   if (!userId) return null;

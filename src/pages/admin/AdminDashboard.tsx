@@ -2310,7 +2310,7 @@ const AdminDashboard = () => {
                 </div>
               </div>
               {renderPagination(userPage, totalUserPages, setUserPage, filteredUsers?.length || 0)}
-              <UserDetailDialog open={userDetailOpen} onOpenChange={setUserDetailOpen} userId={selectedUserId} userRole={selectedUserRole} />
+              <UserDetailDialog open={userDetailOpen} onOpenChange={setUserDetailOpen} userId={selectedUserId} userRole={selectedUserRole} initialProfile={(allProfiles || []).find((p: any) => p.user_id === selectedUserId) || null} />
 
               {/* Suspend Dialog */}
               <AlertDialog open={suspendDialog} onOpenChange={setSuspendDialog}>
