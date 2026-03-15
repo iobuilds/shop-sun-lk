@@ -240,7 +240,35 @@ const ComponentFamilyManager = () => {
       qc.invalidateQueries({ queryKey: ["admin-all-variants"] });
       qc.invalidateQueries({ queryKey: ["component-variants"] });
       setShowVariantForm(null); setEditingVariant(null); setVariantForm(emptyVariant());
+      setBulkMode(false); setBulkPackagesInput("");
       toast({ title: editingVariant ? "Variant updated" : "Variant added" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Bulk save: insert one variant per package in bulkPackagesInput
+  const saveBulkVariants = useMutation({
+    mutationFn: async ({ familyId }: { familyId: string }) => {
+      const packages = bulkPackagesInput
+        .split(",")
+        .map(p => p.trim())
+        .filter(Boolean);
+      if (packages.length === 0) throw new Error("Enter at least one package");
+      const rows = packages.map(pkg => ({
+        ...variantForm,
+        package: pkg,
+        family_id: familyId,
+      }));
+      const { error } = await supabase.from("component_variants").insert(rows);
+      if (error) throw error;
+      return packages.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["admin-all-variants"] });
+      qc.invalidateQueries({ queryKey: ["component-variants"] });
+      setShowVariantForm(null); setEditingVariant(null); setVariantForm(emptyVariant());
+      setBulkMode(false); setBulkPackagesInput("");
+      toast({ title: `${count} variant${count !== 1 ? "s" : ""} added` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
