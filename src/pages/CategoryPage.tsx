@@ -28,8 +28,10 @@ const CategoryPage = () => {
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { storeName } = useBranding();
   const isComboPage = slug === "combo-packs";
-
   const isMicroElectronics = slug === "micro-electronics";
+
+  // Redirect micro-electronics to the new parametric page
+  if (isMicroElectronics) return <Navigate to="/micro-electronics" replace />;
 
   // Filter/sort state
   const [sortBy, setSortBy] = useState<SortOption>("newest");
