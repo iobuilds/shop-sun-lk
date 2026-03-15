@@ -152,6 +152,9 @@ const CategoryPage = () => {
 
   const isLoading = catLoading || prodsLoading || (isComboPage && combosLoading);
 
+  // Redirect micro-electronics to the dedicated parametric catalog page
+  if (isMicroElectronics) return <Navigate to="/micro-electronics" replace />;
+
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
