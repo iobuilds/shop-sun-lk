@@ -2,10 +2,9 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Trash2, Pencil, ChevronDown, ChevronRight,
+  Plus, Trash2, Pencil, ChevronRight,
   Package, X, Upload, Link as LinkIcon, ImagePlus, Loader2,
-  Layers, Search, Eye, EyeOff, AlertTriangle, Zap,
-  MoreVertical, CheckCircle2, CircleOff,
+  Layers, Search, Eye, EyeOff, Zap, CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -93,22 +92,252 @@ const ImageUploader = ({
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 const COMPONENT_TYPES = [
-  { id: "resistor", label: "Resistor", color: "bg-orange-100 text-orange-700" },
-  { id: "capacitor", label: "Capacitor", color: "bg-blue-100 text-blue-700" },
-  { id: "ic", label: "IC / MCU", color: "bg-purple-100 text-purple-700" },
-  { id: "transistor", label: "Transistor", color: "bg-green-100 text-green-700" },
-  { id: "diode", label: "Diode", color: "bg-red-100 text-red-700" },
-  { id: "inductor", label: "Inductor", color: "bg-yellow-100 text-yellow-700" },
-  { id: "connector", label: "Connector", color: "bg-teal-100 text-teal-700" },
-  { id: "relay", label: "Relay", color: "bg-gray-100 text-gray-700" },
-  { id: "switch", label: "Switch", color: "bg-slate-100 text-slate-700" },
-  { id: "sensor", label: "Sensor", color: "bg-cyan-100 text-cyan-700" },
-  { id: "crystal", label: "Crystal / Oscillator", color: "bg-indigo-100 text-indigo-700" },
-  { id: "led", label: "LED", color: "bg-lime-100 text-lime-700" },
-  { id: "module", label: "Module / Board", color: "bg-pink-100 text-pink-700" },
-  { id: "display", label: "Display", color: "bg-violet-100 text-violet-700" },
-  { id: "power", label: "Power / Voltage Reg.", color: "bg-amber-100 text-amber-700" },
-  { id: "other", label: "Other", color: "bg-muted text-muted-foreground" },
+  {
+    id: "resistor", label: "Resistor", shortDesc: "Carbon film, metal film, SMD",
+    color: "bg-orange-50 border-orange-200 hover:border-orange-400",
+    badgeColor: "bg-orange-100 text-orange-700",
+    iconColor: "text-orange-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="3" y="20" width="42" height="8" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="10" y="16" width="28" height="16" rx="3" fill="currentColor" opacity="0.2" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="14" y="17" width="4" height="14" rx="1" fill="currentColor" opacity="0.6"/>
+        <rect x="22" y="17" width="4" height="14" rx="1" fill="currentColor" opacity="0.4"/>
+        <rect x="30" y="17" width="4" height="14" rx="1" fill="currentColor" opacity="0.6"/>
+      </svg>
+    ),
+  },
+  {
+    id: "capacitor", label: "Capacitor", shortDesc: "Electrolytic, ceramic, tantalum",
+    color: "bg-blue-50 border-blue-200 hover:border-blue-400",
+    badgeColor: "bg-blue-100 text-blue-700",
+    iconColor: "text-blue-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <line x1="6" y1="24" x2="18" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <rect x="18" y="10" width="4" height="28" rx="1.5" fill="currentColor" opacity="0.7"/>
+        <rect x="26" y="10" width="4" height="28" rx="1.5" fill="currentColor" opacity="0.7"/>
+        <line x1="30" y1="24" x2="42" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <line x1="24" y1="13" x2="24" y2="18" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+        <line x1="21" y1="15.5" x2="27" y2="15.5" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: "ic", label: "ICs / MCUs", shortDesc: "Microcontrollers, op-amps, logic ICs",
+    color: "bg-slate-50 border-slate-200 hover:border-slate-400",
+    badgeColor: "bg-slate-100 text-slate-700",
+    iconColor: "text-slate-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="12" y="12" width="24" height="24" rx="3" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="15" y="15" width="18" height="18" rx="2" fill="currentColor" opacity="0.25"/>
+        {[0,1,2].map(i => (
+          <g key={i}>
+            <line x1="5" y1={17+i*5} x2="12" y2={17+i*5} stroke="currentColor" strokeWidth="1.5"/>
+            <line x1="36" y1={17+i*5} x2="43" y2={17+i*5} stroke="currentColor" strokeWidth="1.5"/>
+          </g>
+        ))}
+        <circle cx="24" cy="24" r="4" fill="currentColor" opacity="0.6"/>
+      </svg>
+    ),
+  },
+  {
+    id: "transistor", label: "Transistors", shortDesc: "NPN, PNP, MOSFET, BJT",
+    color: "bg-green-50 border-green-200 hover:border-green-400",
+    badgeColor: "bg-green-100 text-green-700",
+    iconColor: "text-green-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <circle cx="24" cy="24" r="14" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="6" y1="24" x2="16" y2="24" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="16" y1="14" x2="16" y2="34" stroke="currentColor" strokeWidth="2"/>
+        <line x1="16" y1="19" x2="28" y2="13" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="16" y1="29" x2="28" y2="35" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="28" y1="13" x2="28" y2="7" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="28" y1="35" x2="28" y2="41" stroke="currentColor" strokeWidth="1.5"/>
+        <polygon points="24,31 28,35 24,39" fill="currentColor" opacity="0.7"/>
+      </svg>
+    ),
+  },
+  {
+    id: "diode", label: "Diodes", shortDesc: "Rectifier, Zener, Schottky, TVS",
+    color: "bg-red-50 border-red-200 hover:border-red-400",
+    badgeColor: "bg-red-100 text-red-700",
+    iconColor: "text-red-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <line x1="6" y1="24" x2="16" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <line x1="32" y1="24" x2="42" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <polygon points="16,12 16,36 32,24" fill="currentColor" opacity="0.6"/>
+        <line x1="32" y1="12" x2="32" y2="36" stroke="currentColor" strokeWidth="2.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: "inductor", label: "Inductors", shortDesc: "SMD coil, toroid, power",
+    color: "bg-yellow-50 border-yellow-200 hover:border-yellow-400",
+    badgeColor: "bg-yellow-100 text-yellow-700",
+    iconColor: "text-yellow-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <line x1="3" y1="24" x2="9" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <path d="M9 24 Q13 16 17 24 Q21 32 25 24 Q29 16 33 24 Q37 32 41 24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round"/>
+        <line x1="41" y1="24" x2="46" y2="24" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    ),
+  },
+  {
+    id: "connector", label: "Connectors", shortDesc: "JST, Dupont, pin headers",
+    color: "bg-teal-50 border-teal-200 hover:border-teal-400",
+    badgeColor: "bg-teal-100 text-teal-700",
+    iconColor: "text-teal-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="6" y="13" width="16" height="22" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="26" y="13" width="16" height="22" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.5"/>
+        {[0,1,2].map(i => (
+          <g key={i}>
+            <circle cx="14" cy={19+i*5} r="2.5" fill="currentColor" opacity="0.7"/>
+            <circle cx="34" cy={19+i*5} r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" opacity="0.7"/>
+          </g>
+        ))}
+      </svg>
+    ),
+  },
+  {
+    id: "led", label: "LEDs", shortDesc: "Through-hole, SMD, RGB, IR",
+    color: "bg-amber-50 border-amber-200 hover:border-amber-400",
+    badgeColor: "bg-amber-100 text-amber-700",
+    iconColor: "text-amber-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <polygon points="8,34 28,34 28,20 8,20" fill="currentColor" opacity="0.6" rx="2"/>
+        <line x1="14" y1="34" x2="14" y2="42" stroke="currentColor" strokeWidth="2"/>
+        <line x1="22" y1="34" x2="22" y2="42" stroke="currentColor" strokeWidth="2"/>
+        <line x1="30" y1="16" x2="38" y2="9" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+        <line x1="30" y1="22" x2="40" y2="18" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+      </svg>
+    ),
+  },
+  {
+    id: "sensor", label: "Sensors", shortDesc: "Temperature, Hall, current",
+    color: "bg-purple-50 border-purple-200 hover:border-purple-400",
+    badgeColor: "bg-purple-100 text-purple-700",
+    iconColor: "text-purple-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <circle cx="24" cy="22" r="12" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="24" cy="22" r="6" fill="currentColor" opacity="0.2"/>
+        <circle cx="24" cy="22" r="2.5" fill="currentColor" opacity="0.8"/>
+        {[0,60,120,180,240,300].map((d, i) => (
+          <line key={i} x1={24+Math.cos(d*Math.PI/180)*8} y1={22+Math.sin(d*Math.PI/180)*8} x2={24+Math.cos(d*Math.PI/180)*11} y2={22+Math.sin(d*Math.PI/180)*11} stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+        ))}
+        <line x1="24" y1="34" x2="24" y2="42" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    ),
+  },
+  {
+    id: "crystal", label: "Crystals", shortDesc: "Quartz, oscillators, resonators",
+    color: "bg-cyan-50 border-cyan-200 hover:border-cyan-400",
+    badgeColor: "bg-cyan-100 text-cyan-700",
+    iconColor: "text-cyan-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <line x1="5" y1="24" x2="13" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <line x1="35" y1="24" x2="43" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <rect x="13" y="13" width="22" height="22" rx="3" fill="currentColor" opacity="0.12" stroke="currentColor" strokeWidth="1.5"/>
+        <line x1="20" y1="13" x2="20" y2="35" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+        <line x1="28" y1="13" x2="28" y2="35" stroke="currentColor" strokeWidth="1.5" opacity="0.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: "relay", label: "Relays", shortDesc: "SPDT, DPDT, solid state",
+    color: "bg-emerald-50 border-emerald-200 hover:border-emerald-400",
+    badgeColor: "bg-emerald-100 text-emerald-700",
+    iconColor: "text-emerald-600",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="7" y="10" width="34" height="28" rx="3" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="11" y="16" width="12" height="7" rx="1.5" fill="currentColor" opacity="0.4"/>
+        <line x1="23" y1="26" x2="37" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="37" cy="20" r="2.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+        <circle cx="37" cy="28" r="2.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+      </svg>
+    ),
+  },
+  {
+    id: "switch", label: "Switches", shortDesc: "Tact, toggle, push buttons",
+    color: "bg-sky-50 border-sky-200 hover:border-sky-400",
+    badgeColor: "bg-sky-100 text-sky-700",
+    iconColor: "text-sky-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <line x1="6" y1="24" x2="17" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <line x1="31" y1="24" x2="42" y2="24" stroke="currentColor" strokeWidth="2"/>
+        <circle cx="17" cy="24" r="3.5" stroke="currentColor" strokeWidth="1.5" fill="currentColor" opacity="0.1"/>
+        <circle cx="31" cy="24" r="3.5" stroke="currentColor" strokeWidth="1.5" fill="currentColor" opacity="0.1"/>
+        <line x1="20" y1="24" x2="28" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    id: "module", label: "Modules", shortDesc: "WiFi, BT, LoRa, dev boards",
+    color: "bg-pink-50 border-pink-200 hover:border-pink-400",
+    badgeColor: "bg-pink-100 text-pink-700",
+    iconColor: "text-pink-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="6" y="12" width="36" height="24" rx="3" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="12" y="18" width="10" height="8" rx="1.5" fill="currentColor" opacity="0.4"/>
+        <rect x="26" y="18" width="10" height="8" rx="1.5" fill="currentColor" opacity="0.2"/>
+        {[0,1,2,3].map(i => <line key={i} x1={10+i*8} y1="36" x2={10+i*8} y2="42" stroke="currentColor" strokeWidth="1.5"/>)}
+      </svg>
+    ),
+  },
+  {
+    id: "power", label: "Power ICs", shortDesc: "Voltage reg, LDO, DCDC",
+    color: "bg-violet-50 border-violet-200 hover:border-violet-400",
+    badgeColor: "bg-violet-100 text-violet-700",
+    iconColor: "text-violet-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <polygon points="24,6 30,20 44,20 33,29 37,43 24,34 11,43 15,29 4,20 18,20" fill="currentColor" opacity="0.4" stroke="currentColor" strokeWidth="1.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: "display", label: "Displays", shortDesc: "OLED, LCD, TFT, 7-seg",
+    color: "bg-indigo-50 border-indigo-200 hover:border-indigo-400",
+    badgeColor: "bg-indigo-100 text-indigo-700",
+    iconColor: "text-indigo-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <rect x="5" y="10" width="38" height="26" rx="3" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <rect x="9" y="14" width="30" height="18" rx="1.5" fill="currentColor" opacity="0.2"/>
+        <line x1="14" y1="20" x2="34" y2="20" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+        <line x1="14" y1="24" x2="28" y2="24" stroke="currentColor" strokeWidth="1.5" opacity="0.4"/>
+        <line x1="20" y1="36" x2="28" y2="36" stroke="currentColor" strokeWidth="2"/>
+      </svg>
+    ),
+  },
+  {
+    id: "other", label: "Other", shortDesc: "Misc components",
+    color: "bg-gray-50 border-gray-200 hover:border-gray-400",
+    badgeColor: "bg-gray-100 text-gray-700",
+    iconColor: "text-gray-500",
+    icon: (
+      <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+        <circle cx="24" cy="24" r="16" fill="currentColor" opacity="0.1" stroke="currentColor" strokeWidth="1.5"/>
+        <circle cx="24" cy="24" r="5" fill="currentColor" opacity="0.4"/>
+        <circle cx="12" cy="14" r="3" fill="currentColor" opacity="0.3"/>
+        <circle cx="36" cy="14" r="3" fill="currentColor" opacity="0.3"/>
+        <circle cx="12" cy="34" r="3" fill="currentColor" opacity="0.3"/>
+        <circle cx="36" cy="34" r="3" fill="currentColor" opacity="0.3"/>
+      </svg>
+    ),
+  },
 ];
 const MOUNT_TYPES = ["SMD", "Through-hole"];
 const typeInfo = (id: string) => COMPONENT_TYPES.find(t => t.id === id) || COMPONENT_TYPES[COMPONENT_TYPES.length - 1];
@@ -454,58 +683,116 @@ const ComponentFamilyManager = () => {
   const totalVariants = Object.values(allVariants as Record<string, any[]>).reduce((s, a) => s + a.length, 0);
   const totalActive = (families as any[]).filter((f: any) => f.is_active).length;
 
+  // Per-type family & variant counts
+  const typeFamilyCount = (id: string) => (families as any[]).filter((f: any) => f.component_type === id).length;
+  const typeVariantCount = (id: string) => {
+    const fids = (families as any[]).filter((f: any) => f.component_type === id).map((f: any) => f.id);
+    return fids.reduce((s: number, id: string) => s + ((allVariants as any)[id]?.length || 0), 0);
+  };
+
   return (
     <div className="space-y-5">
 
-      {/* ── Stats bar ── */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Families", value: totalFamilies, icon: <Package className="w-4 h-4" />, color: "text-primary" },
-          { label: "Total Variants", value: totalVariants, icon: <Layers className="w-4 h-4" />, color: "text-secondary" },
-          { label: "Active Families", value: totalActive, icon: <CheckCircle2 className="w-4 h-4" />, color: "text-green-600" },
-        ].map(s => (
-          <div key={s.label} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
-            <div className={`${s.color} opacity-70`}>{s.icon}</div>
-            <div>
-              <p className="text-xl font-bold text-foreground leading-none">{s.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            placeholder="Search families…" className="pl-8 h-9 text-sm" />
+      {/* ── Global search + New Family ── */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input value={searchQ} onChange={e => { setSearchQ(e.target.value); if (e.target.value) setFilterType("all"); }}
+            placeholder="Search component families… e.g. 10kΩ, NE555" className="pl-9 h-10 text-sm" />
           {searchQ && (
             <button onClick={() => setSearchQ("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
-        {/* Type filter */}
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[150px] h-9 text-sm">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {COMPONENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {filteredFamilies.length} / {totalFamilies}
-        </span>
-        <Button size="sm" className="ml-auto gap-1.5"
+        <Button className="gap-1.5 h-10 shrink-0"
           onClick={() => { setEditingFamily(null); setFamilyForm(emptyFamily()); setShowFamilyModal(true); }}>
           <Plus className="w-4 h-4" /> New Family
         </Button>
       </div>
+
+      {/* ── Visual category navigation grid ── */}
+      {!searchQ && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {/* "All" card */}
+          <button
+            onClick={() => setFilterType("all")}
+            className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 hover:shadow-sm ${
+              filterType === "all"
+                ? "bg-secondary/10 border-secondary shadow-sm"
+                : "bg-card border-border hover:border-secondary/50"
+            }`}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${filterType === "all" ? "bg-secondary/20 text-secondary" : "bg-muted text-muted-foreground"}`}>
+                <Package className="w-5 h-5" />
+              </div>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${filterType === "all" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+                {totalFamilies}
+              </span>
+            </div>
+            <p className="font-bold text-sm text-foreground leading-tight">All Types</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{totalVariants} variants total</p>
+          </button>
+
+          {COMPONENT_TYPES.map(type => {
+            const fc = typeFamilyCount(type.id);
+            const vc = typeVariantCount(type.id);
+            const isActive = filterType === type.id;
+            return (
+              <motion.button
+                key={type.id}
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setFilterType(isActive ? "all" : type.id)}
+                className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 ${
+                  isActive
+                    ? `${type.color} shadow-sm ring-1 ring-inset ring-current/20`
+                    : `${type.color} opacity-80 hover:opacity-100`
+                } ${fc === 0 ? "opacity-40" : ""}`}
+              >
+                {/* Count badge */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
+                    {type.icon}
+                  </div>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
+                    {fc}
+                  </span>
+                </div>
+                <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
+                {vc > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">{vc} variants</p>
+                )}
+                {isActive && (
+                  <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-current opacity-60" />
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Active filter indicator */}
+      {!searchQ && filterType !== "all" && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">
+            {COMPONENT_TYPES.find(t => t.id === filterType)?.label}
+          </span>
+          <span className="text-xs text-muted-foreground">— {filteredFamilies.length} famil{filteredFamilies.length !== 1 ? "ies" : "y"}</span>
+          <button onClick={() => setFilterType("all")}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <X className="w-3 h-3" /> Show all
+          </button>
+        </div>
+      )}
+      {searchQ && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">{filteredFamilies.length}</span> result{filteredFamilies.length !== 1 ? "s" : ""} for "<span className="text-foreground">{searchQ}</span>"
+        </p>
+      )}
 
       {/* ── Family Form Modal ── */}
       <Dialog open={showFamilyModal} onOpenChange={v => !v && (setShowFamilyModal(false), setEditingFamily(null))}>
