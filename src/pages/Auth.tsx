@@ -272,13 +272,15 @@ const Auth = () => {
         <div className="text-center mb-6">
           <Link to="/" className="inline-flex items-center gap-2 mb-6">
             {logoUrl ? (
-              <img src={logoUrl} alt={storeName} className="h-10 w-auto object-contain" />
+              <img src={logoUrl} alt={storeName} className="h-12 w-auto object-contain max-w-[200px]" />
             ) : (
               <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
                 <span className="text-secondary-foreground font-bold text-xl font-display">{initial}</span>
               </div>
             )}
-            <span className="text-2xl font-bold font-display text-foreground">{storeName}</span>
+            {company?.navbar_brand_mode === "logo_text" || company?.navbar_brand_mode === "text_only" ? (
+              <span className="text-2xl font-bold font-display text-foreground">{storeName}</span>
+            ) : null}
           </Link>
           <h1 className="text-2xl font-bold font-display text-foreground">
             {step === "otp"
