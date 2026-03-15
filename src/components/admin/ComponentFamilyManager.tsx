@@ -2,9 +2,9 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Trash2, Pencil, ChevronRight,
+  Plus, Trash2, Pencil, ChevronRight, ChevronLeft,
   Package, X, Upload, Link as LinkIcon, ImagePlus, Loader2,
-  Layers, Search, Eye, EyeOff, Zap, CheckCircle2,
+  Layers, Search, Eye, EyeOff, Zap, CheckCircle2, Settings2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -89,9 +89,9 @@ const ImageUploader = ({
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Constants
+// Built-in component types
 // ─────────────────────────────────────────────────────────────────────────────
-const COMPONENT_TYPES = [
+const BUILTIN_TYPES = [
   {
     id: "resistor", label: "Resistor", shortDesc: "Carbon film, metal film, SMD",
     color: "bg-orange-50 border-orange-200 hover:border-orange-400",
@@ -212,7 +212,7 @@ const COMPONENT_TYPES = [
     iconColor: "text-amber-500",
     icon: (
       <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
-        <polygon points="8,34 28,34 28,20 8,20" fill="currentColor" opacity="0.6" rx="2"/>
+        <polygon points="8,34 28,34 28,20 8,20" fill="currentColor" opacity="0.6"/>
         <line x1="14" y1="34" x2="14" y2="42" stroke="currentColor" strokeWidth="2"/>
         <line x1="22" y1="34" x2="22" y2="42" stroke="currentColor" strokeWidth="2"/>
         <line x1="30" y1="16" x2="38" y2="9" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
@@ -339,11 +339,50 @@ const COMPONENT_TYPES = [
     ),
   },
 ];
-const MOUNT_TYPES = ["SMD", "Through-hole"];
-const typeInfo = (id: string) => COMPONENT_TYPES.find(t => t.id === id) || COMPONENT_TYPES[COMPONENT_TYPES.length - 1];
 
-const emptyFamily = () => ({
-  name: "", slug: "", component_type: "resistor",
+// Generic icon for custom types
+const CustomTypeIcon = () => (
+  <svg viewBox="0 0 48 48" fill="none" className="w-9 h-9">
+    <rect x="8" y="8" width="32" height="32" rx="4" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.5"/>
+    <line x1="24" y1="16" x2="24" y2="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    <line x1="16" y1="24" x2="32" y2="24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+const CUSTOM_TYPE_COLOR = "bg-fuchsia-50 border-fuchsia-200 hover:border-fuchsia-400";
+const CUSTOM_TYPE_BADGE = "bg-fuchsia-100 text-fuchsia-700";
+const CUSTOM_TYPE_ICON = "text-fuchsia-500";
+
+const MOUNT_TYPES = ["SMD", "Through-hole"];
+
+const typeInfo = (id: string, customTypes: CustomType[]) => {
+  const builtin = BUILTIN_TYPES.find(t => t.id === id);
+  if (builtin) return builtin;
+  const custom = customTypes.find(t => t.id === id);
+  if (custom) return {
+    id: custom.id, label: custom.label, shortDesc: custom.shortDesc,
+    color: CUSTOM_TYPE_COLOR, badgeColor: CUSTOM_TYPE_BADGE,
+    iconColor: CUSTOM_TYPE_ICON, icon: <CustomTypeIcon />,
+  };
+  return BUILTIN_TYPES[BUILTIN_TYPES.length - 1];
+};
+
+// Custom types stored in localStorage
+interface CustomType {
+  id: string; label: string; shortDesc: string;
+}
+
+const CUSTOM_TYPES_KEY = "admin_custom_component_types";
+const loadCustomTypes = (): CustomType[] => {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_TYPES_KEY) || "[]"); }
+  catch { return []; }
+};
+const saveCustomTypes = (types: CustomType[]) => {
+  localStorage.setItem(CUSTOM_TYPES_KEY, JSON.stringify(types));
+};
+
+const emptyFamily = (type?: string) => ({
+  name: "", slug: "", component_type: type || "resistor",
   description: "", images: [] as string[], datasheet_url: "",
   is_active: true, sort_order: 0,
 });
@@ -354,7 +393,7 @@ const emptyVariant = () => ({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Variant form (modal)
+// Variant form modal
 // ─────────────────────────────────────────────────────────────────────────────
 const VariantFormModal = ({
   open, onClose, familyId, editingVariant, family,
@@ -370,11 +409,8 @@ const VariantFormModal = ({
   const [bulkPkgs, setBulkPkgs] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Reset when opened
   const wasOpen = useRef(false);
-  if (open && !wasOpen.current) {
-    wasOpen.current = true;
-  }
+  if (open && !wasOpen.current) wasOpen.current = true;
   if (!open) wasOpen.current = false;
 
   const handleSave = async () => {
@@ -528,8 +564,17 @@ const ComponentFamilyManager = () => {
   const [editingFamily, setEditingFamily] = useState<any | null>(null);
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [familyForm, setFamilyForm] = useState(emptyFamily());
-  const [filterType, setFilterType] = useState("all");
+
+  // Drill-down navigation: null = home grid, string = inside a type
+  const [activeType, setActiveType] = useState<string | null>(null);
+
   const [searchQ, setSearchQ] = useState("");
+
+  // Custom types
+  const [customTypes, setCustomTypes] = useState<CustomType[]>(loadCustomTypes);
+  const [showNewTypeModal, setShowNewTypeModal] = useState(false);
+  const [newTypeForm, setNewTypeForm] = useState({ label: "", shortDesc: "" });
+
   // Variant modal
   const [variantModalFamilyId, setVariantModalFamilyId] = useState<string | null>(null);
   const [editingVariant, setEditingVariant] = useState<any | null>(null);
@@ -669,8 +714,27 @@ const ComponentFamilyManager = () => {
     setEditingVariant(variant); setVariantModalFamilyId(variant.family_id);
   };
 
+  // All types (builtin + custom)
+  const allTypes = [
+    ...BUILTIN_TYPES,
+    ...customTypes.map(ct => ({
+      ...ct, color: CUSTOM_TYPE_COLOR, badgeColor: CUSTOM_TYPE_BADGE,
+      iconColor: CUSTOM_TYPE_ICON, icon: <CustomTypeIcon />,
+    })),
+  ];
+
+  const typeFamilyCount = (id: string) => (families as any[]).filter((f: any) => f.component_type === id).length;
+  const typeVariantCount = (id: string) => {
+    const fids = (families as any[]).filter((f: any) => f.component_type === id).map((f: any) => f.id);
+    return fids.reduce((s: number, fid: string) => s + ((allVariants as any)[fid]?.length || 0), 0);
+  };
+  const totalFamilies = (families as any[]).length;
+  const totalVariants = Object.values(allVariants as Record<string, any[]>).reduce((s, a) => s + a.length, 0);
+
+  // Families shown in the drill-down or search view
   const filteredFamilies = (families as any[]).filter((f: any) => {
-    if (filterType !== "all" && f.component_type !== filterType) return false;
+    const typeMatch = activeType ? f.component_type === activeType : true;
+    if (!typeMatch) return false;
     if (searchQ) {
       const q = searchQ.toLowerCase();
       return f.name.toLowerCase().includes(q) || (f.description || "").toLowerCase().includes(q);
@@ -678,120 +742,235 @@ const ComponentFamilyManager = () => {
     return true;
   });
 
-  // Stats
-  const totalFamilies = (families as any[]).length;
-  const totalVariants = Object.values(allVariants as Record<string, any[]>).reduce((s, a) => s + a.length, 0);
-  const totalActive = (families as any[]).filter((f: any) => f.is_active).length;
+  // Active type info
+  const activeTypeInfo = activeType ? allTypes.find(t => t.id === activeType) : null;
 
-  // Per-type family & variant counts
-  const typeFamilyCount = (id: string) => (families as any[]).filter((f: any) => f.component_type === id).length;
-  const typeVariantCount = (id: string) => {
-    const fids = (families as any[]).filter((f: any) => f.component_type === id).map((f: any) => f.id);
-    return fids.reduce((s: number, id: string) => s + ((allVariants as any)[id]?.length || 0), 0);
+  // Save custom type
+  const handleCreateCustomType = () => {
+    if (!newTypeForm.label.trim()) return;
+    const id = slugify(newTypeForm.label);
+    if (allTypes.find(t => t.id === id)) {
+      toast({ title: "Type already exists", variant: "destructive" }); return;
+    }
+    const newTypes = [...customTypes, { id, label: newTypeForm.label.trim(), shortDesc: newTypeForm.shortDesc.trim() }];
+    setCustomTypes(newTypes);
+    saveCustomTypes(newTypes);
+    setNewTypeForm({ label: "", shortDesc: "" });
+    setShowNewTypeModal(false);
+    toast({ title: `"${newTypeForm.label}" type created` });
   };
 
+  const handleDeleteCustomType = (id: string) => {
+    const newTypes = customTypes.filter(t => t.id !== id);
+    setCustomTypes(newTypes);
+    saveCustomTypes(newTypes);
+    toast({ title: "Custom type removed" });
+  };
+
+  // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
 
-      {/* ── Global search + New Family ── */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <Input value={searchQ} onChange={e => { setSearchQ(e.target.value); if (e.target.value) setFilterType("all"); }}
-            placeholder="Search component families… e.g. 10kΩ, NE555" className="pl-9 h-10 text-sm" />
-          {searchQ && (
-            <button onClick={() => setSearchQ("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        <Button className="gap-1.5 h-10 shrink-0"
-          onClick={() => { setEditingFamily(null); setFamilyForm(emptyFamily()); setShowFamilyModal(true); }}>
-          <Plus className="w-4 h-4" /> New Family
-        </Button>
-      </div>
-
-      {/* ── Visual category navigation grid ── */}
-      {!searchQ && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {/* "All" card */}
-          <button
-            onClick={() => setFilterType("all")}
-            className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 hover:shadow-sm ${
-              filterType === "all"
-                ? "bg-secondary/10 border-secondary shadow-sm"
-                : "bg-card border-border hover:border-secondary/50"
-            }`}
+      {/* ── Drill-down: inside a type ── */}
+      {activeType && !searchQ ? (
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeType}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-4"
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${filterType === "all" ? "bg-secondary/20 text-secondary" : "bg-muted text-muted-foreground"}`}>
-                <Package className="w-5 h-5" />
-              </div>
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${filterType === "all" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
-                {totalFamilies}
-              </span>
-            </div>
-            <p className="font-bold text-sm text-foreground leading-tight">All Types</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{totalVariants} variants total</p>
-          </button>
-
-          {COMPONENT_TYPES.map(type => {
-            const fc = typeFamilyCount(type.id);
-            const vc = typeVariantCount(type.id);
-            const isActive = filterType === type.id;
-            return (
-              <motion.button
-                key={type.id}
-                whileHover={{ y: -1 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => setFilterType(isActive ? "all" : type.id)}
-                className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 ${
-                  isActive
-                    ? `${type.color} shadow-sm ring-1 ring-inset ring-current/20`
-                    : `${type.color} opacity-80 hover:opacity-100`
-                } ${fc === 0 ? "opacity-40" : ""}`}
+            {/* Header bar */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setActiveType(null); setExpandedFamily(null); }}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
-                {/* Count badge */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
-                    {type.icon}
-                  </div>
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
-                    {fc}
-                  </span>
-                </div>
-                <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
-                {vc > 0 && (
-                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">{vc} variants</p>
-                )}
-                {isActive && (
-                  <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-current opacity-60" />
-                )}
-              </motion.button>
-            );
-          })}
-        </div>
-      )}
+                <ChevronLeft className="w-4 h-4" /> Back to categories
+              </button>
+              <span className="text-muted-foreground">/</span>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-semibold ${activeTypeInfo?.color}`}>
+                <span className={activeTypeInfo?.iconColor + " scale-75 inline-flex"}>{activeTypeInfo?.icon}</span>
+                {activeTypeInfo?.label}
+              </div>
+              <Badge variant="outline" className="ml-1">{filteredFamilies.length} famil{filteredFamilies.length !== 1 ? "ies" : "y"}</Badge>
+              <div className="flex-1" />
+              <Button size="sm" className="gap-1.5"
+                onClick={() => {
+                  setEditingFamily(null);
+                  setFamilyForm(emptyFamily(activeType));
+                  setShowFamilyModal(true);
+                }}>
+                <Plus className="w-4 h-4" /> New Family
+              </Button>
+            </div>
 
-      {/* Active filter indicator */}
-      {!searchQ && filterType !== "all" && (
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-foreground">
-            {COMPONENT_TYPES.find(t => t.id === filterType)?.label}
-          </span>
-          <span className="text-xs text-muted-foreground">— {filteredFamilies.length} famil{filteredFamilies.length !== 1 ? "ies" : "y"}</span>
-          <button onClick={() => setFilterType("all")}
-            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <X className="w-3 h-3" /> Show all
-          </button>
-        </div>
-      )}
-      {searchQ && (
-        <p className="text-sm text-muted-foreground">
-          <span className="font-semibold text-foreground">{filteredFamilies.length}</span> result{filteredFamilies.length !== 1 ? "s" : ""} for "<span className="text-foreground">{searchQ}</span>"
-        </p>
+            {/* Search within type */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                placeholder={`Search ${activeTypeInfo?.label} families…`}
+                className="pl-9 h-10 text-sm" />
+              {searchQ && (
+                <button onClick={() => setSearchQ("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Family list */}
+            {FamilyList({
+              filteredFamilies, allVariants, searchQ, isLoading,
+              expandedFamily, setExpandedFamily,
+              openEditFamily, deleteFamily, toggleFamilyActive,
+              openAddVariantModal, openEditVariantModal,
+              deleteVariant, toggleVariantAvailable,
+              inlineEdit, setInlineEdit, saveInlineEdit,
+              customTypes,
+              activeType,
+            })}
+          </motion.div>
+        </AnimatePresence>
+      ) : (
+        /* ── Home grid view ── */
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="home"
+            initial={{ opacity: 0, x: -24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 24 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-5"
+          >
+            {/* Global search + New Family */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                  placeholder="Search all component families… e.g. 10kΩ, NE555" className="pl-9 h-10 text-sm" />
+                {searchQ && (
+                  <button onClick={() => setSearchQ("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <Button className="gap-1.5 h-10 shrink-0"
+                onClick={() => { setEditingFamily(null); setFamilyForm(emptyFamily()); setShowFamilyModal(true); }}>
+                <Plus className="w-4 h-4" /> New Family
+              </Button>
+            </div>
+
+            {/* Search results */}
+            {searchQ ? (
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  <span className="font-semibold text-foreground">{filteredFamilies.length}</span> result{filteredFamilies.length !== 1 ? "s" : ""} for "<span className="text-foreground">{searchQ}</span>"
+                </p>
+                {FamilyList({
+                  filteredFamilies, allVariants, searchQ, isLoading,
+                  expandedFamily, setExpandedFamily,
+                  openEditFamily, deleteFamily, toggleFamilyActive,
+                  openAddVariantModal, openEditVariantModal,
+                  deleteVariant, toggleVariantAvailable,
+                  inlineEdit, setInlineEdit, saveInlineEdit,
+                  customTypes,
+                  activeType: null,
+                })}
+              </div>
+            ) : (
+              /* Category grid */
+              <div className="space-y-4">
+                {/* Stats row */}
+                <div className="flex items-center gap-4 px-1">
+                  <span className="text-sm text-muted-foreground"><span className="font-bold text-foreground">{totalFamilies}</span> families</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-sm text-muted-foreground"><span className="font-bold text-foreground">{totalVariants}</span> variants total</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="text-sm text-muted-foreground"><span className="font-bold text-foreground">{allTypes.length}</span> types</span>
+                </div>
+
+                {/* Built-in type cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                  {allTypes.map(type => {
+                    const fc = typeFamilyCount(type.id);
+                    const vc = typeVariantCount(type.id);
+                    return (
+                      <motion.button
+                        key={type.id}
+                        whileHover={{ y: -2, scale: 1.01 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => { setActiveType(type.id); setExpandedFamily(null); setSearchQ(""); }}
+                        className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 group ${type.color}`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
+                            {type.icon}
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
+                              {fc}
+                            </span>
+                            {vc > 0 && (
+                              <span className="text-[9px] text-muted-foreground font-medium">{vc}v</span>
+                            )}
+                          </div>
+                        </div>
+                        <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
+                        {/* Hover arrow */}
+                        <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-60 transition-opacity">
+                          <ChevronRight className="w-4 h-4 text-foreground" />
+                        </div>
+                        {/* Custom badge */}
+                        {customTypes.find(ct => ct.id === type.id) && (
+                          <span className="absolute top-2 right-2 text-[9px] bg-fuchsia-200 text-fuchsia-700 px-1 py-0.5 rounded font-bold">custom</span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+
+                  {/* + Add New Type card */}
+                  <motion.button
+                    whileHover={{ y: -2, scale: 1.01 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => setShowNewTypeModal(true)}
+                    className="relative text-left p-4 rounded-xl border-2 border-dashed border-border bg-muted/30 hover:border-primary hover:bg-primary/5 transition-all duration-150 group"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors">
+                        <Plus className="w-5 h-5" />
+                      </div>
+                    </div>
+                    <p className="font-bold text-sm text-muted-foreground group-hover:text-foreground leading-tight transition-colors">New Type</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Create custom category</p>
+                  </motion.button>
+                </div>
+
+                {/* Custom types management row */}
+                {customTypes.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <span className="text-xs text-muted-foreground font-medium">Custom types:</span>
+                    {customTypes.map(ct => (
+                      <div key={ct.id} className="flex items-center gap-1 bg-fuchsia-50 border border-fuchsia-200 rounded-full pl-2.5 pr-1 py-0.5">
+                        <span className="text-xs text-fuchsia-700 font-semibold">{ct.label}</span>
+                        <button
+                          onClick={() => { if (confirm(`Remove custom type "${ct.label}"?`)) handleDeleteCustomType(ct.id); }}
+                          className="w-4 h-4 rounded-full hover:bg-fuchsia-200 flex items-center justify-center text-fuchsia-500 transition-colors"
+                        >
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </motion.div>
+        </AnimatePresence>
       )}
 
       {/* ── Family Form Modal ── */}
@@ -822,7 +1001,7 @@ const ComponentFamilyManager = () => {
               <Select value={familyForm.component_type} onValueChange={v => setFamilyForm(f => ({ ...f, component_type: v }))}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {COMPONENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
+                  {allTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -871,6 +1050,45 @@ const ComponentFamilyManager = () => {
         </DialogContent>
       </Dialog>
 
+      {/* ── New Custom Type Modal ── */}
+      <Dialog open={showNewTypeModal} onOpenChange={v => !v && setShowNewTypeModal(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="w-4 h-4 text-primary" /> Create Custom Type
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div>
+              <Label className="text-xs mb-1.5 block text-muted-foreground">Type Name *</Label>
+              <Input
+                value={newTypeForm.label}
+                onChange={e => setNewTypeForm(f => ({ ...f, label: e.target.value }))}
+                placeholder="e.g. Optocoupler, Motor Driver…"
+                autoFocus
+              />
+              {newTypeForm.label && (
+                <p className="text-[11px] text-muted-foreground mt-1">ID: <span className="font-mono">{slugify(newTypeForm.label)}</span></p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs mb-1.5 block text-muted-foreground">Short Description</Label>
+              <Input
+                value={newTypeForm.shortDesc}
+                onChange={e => setNewTypeForm(f => ({ ...f, shortDesc: e.target.value }))}
+                placeholder="e.g. PC817, 4N35, solid-state…"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowNewTypeModal(false)}>Cancel</Button>
+            <Button disabled={!newTypeForm.label.trim()} onClick={handleCreateCustomType}>
+              Create Type
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Variant Modal ── */}
       {variantModalOpen && (
         <VariantFormModal
@@ -883,285 +1101,273 @@ const ComponentFamilyManager = () => {
           onBulkSave={handleBulkSaveVariants}
         />
       )}
-
-      {/* ── Loading ── */}
-      {isLoading && (
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-[68px] bg-muted animate-pulse rounded-xl" />
-          ))}
-        </div>
-      )}
-
-      {/* ── Empty ── */}
-      {!isLoading && filteredFamilies.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground bg-muted/20 rounded-xl border border-dashed border-border">
-          <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">{searchQ || filterType !== "all" ? "No families match your filter" : "No families yet"}</p>
-          {!searchQ && filterType === "all" && (
-            <p className="text-sm mt-1">Click <strong>New Family</strong> to get started</p>
-          )}
-        </div>
-      )}
-
-      {/* ── Family list ── */}
-      <div className="space-y-2">
-        {filteredFamilies.map((family: any) => {
-          const variants: any[] = (allVariants as Record<string, any[]>)[family.id] || [];
-          const isExpanded = expandedFamily === family.id;
-          const availCount = variants.filter(v => v.is_available).length;
-          const ti = typeInfo(family.component_type);
-
-          return (
-            <div key={family.id} className={`bg-card rounded-xl border transition-all overflow-hidden ${
-              isExpanded ? "border-secondary/40 shadow-sm" : "border-border hover:border-border/80"
-            }`}>
-
-              {/* ── Family header row ── */}
-              <div className="flex items-center gap-3 px-4 py-3">
-                {/* Expand toggle */}
-                <button
-                  onClick={() => setExpandedFamily(isExpanded ? null : family.id)}
-                  className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                >
-                  <motion.div animate={{ rotate: isExpanded ? 90 : 0 }} transition={{ duration: 0.15 }}>
-                    <ChevronRight className="w-4 h-4" />
-                  </motion.div>
-                </button>
-
-                {/* Thumbnail */}
-                <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 overflow-hidden">
-                  {family.images?.[0]
-                    ? <img src={family.images[0]} alt={family.name} className="w-full h-full object-contain p-1" />
-                    : <Package className="w-4 h-4 text-muted-foreground/40" />
-                  }
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm text-foreground">{family.name}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${ti.color}`}>
-                      {ti.label}
-                    </span>
-                    {!family.is_active && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Hidden</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    {family.description && (
-                      <p className="text-xs text-muted-foreground truncate max-w-xs">{family.description}</p>
-                    )}
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      <span className="text-foreground font-semibold">{variants.length}</span> variant{variants.length !== 1 ? "s" : ""}
-                      {" · "}<span className={availCount > 0 ? "text-green-600 font-semibold" : "text-destructive font-semibold"}>{availCount}</span> available
-                    </span>
-                  </div>
-                </div>
-
-                {/* Active toggle */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-muted-foreground hidden md:inline">
-                    {family.is_active ? "Active" : "Hidden"}
-                  </span>
-                  <Switch checked={family.is_active}
-                    onCheckedChange={v => toggleFamilyActive.mutate({ id: family.id, val: v })}
-                    className="data-[state=checked]:bg-secondary" />
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title="Edit family" onClick={() => openEditFamily(family)}>
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/60 hover:text-destructive"
-                    title="Delete family"
-                    onClick={() => { if (confirm(`Delete "${family.name}" and all ${variants.length} variants?`)) deleteFamily.mutate(family.id); }}>
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* ── Variants panel ── */}
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="border-t border-border bg-muted/10 p-4 space-y-3">
-
-                      {/* Variant panel header */}
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                          Variants ({variants.length})
-                        </p>
-                        <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"
-                          onClick={() => openAddVariantModal(family.id)}>
-                          <Plus className="w-3.5 h-3.5" /> Add Variant
-                        </Button>
-                      </div>
-
-                      {variants.length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
-                          <Zap className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                          <p className="text-sm">No variants yet</p>
-                          <button onClick={() => openAddVariantModal(family.id)}
-                            className="text-xs text-secondary hover:underline mt-1">Add first variant →</button>
-                        </div>
-                      ) : (
-                        <div className="rounded-lg border border-border overflow-hidden bg-card">
-                          {/* Table header */}
-                          <div className="hidden lg:grid grid-cols-[36px_140px_90px_70px_70px_70px_90px_90px_110px] gap-2 px-3 py-2 bg-muted/60 border-b border-border">
-                            {["", "Value / SKU", "Package", "Mount", "Tol.", "Watt.", "Price", "Stock", ""].map((h, i) => (
-                              <div key={i} className={`text-[10px] font-semibold text-muted-foreground uppercase tracking-wide ${i === 8 ? "text-right" : ""}`}>{h}</div>
-                            ))}
-                          </div>
-
-                          {/* Variant rows */}
-                          {variants.map((v: any) => {
-                            const imgSrc = v.images?.[0] || family.images?.[0] || null;
-                            const isEditingPrice = inlineEdit?.id === v.id && inlineEdit.field === "price";
-                            const isEditingStock = inlineEdit?.id === v.id && inlineEdit.field === "stock_quantity";
-
-                            return (
-                              <div key={v.id}
-                                className={`grid grid-cols-1 lg:grid-cols-[36px_140px_90px_70px_70px_70px_90px_90px_110px] gap-2 px-3 py-2.5 border-b border-border last:border-0 items-center transition-colors ${
-                                  !v.is_available ? "opacity-40 bg-muted/20" : "hover:bg-muted/20"
-                                }`}
-                              >
-                                {/* Thumbnail */}
-                                <div className="hidden lg:flex items-center">
-                                  <div className="w-7 h-7 rounded bg-muted border border-border overflow-hidden flex items-center justify-center">
-                                    {imgSrc
-                                      ? <img src={imgSrc} alt="" className="w-full h-full object-contain p-0.5" />
-                                      : <Package className="w-3 h-3 text-muted-foreground/30" />
-                                    }
-                                  </div>
-                                </div>
-
-                                {/* Value + SKU (mobile: full row) */}
-                                <div className="flex items-center gap-2 lg:block">
-                                  {imgSrc && (
-                                    <img src={imgSrc} alt="" className="lg:hidden w-7 h-7 object-contain rounded bg-muted border border-border shrink-0" />
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-semibold text-foreground">{v.value || "—"}</p>
-                                    {v.sku && <p className="text-[10px] text-muted-foreground font-mono leading-none">{v.sku}</p>}
-                                  </div>
-                                  {/* Mobile: show badges inline */}
-                                  <div className="lg:hidden flex gap-1 ml-auto flex-wrap">
-                                    {v.package && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{v.package}</span>}
-                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${v.mount_type === "SMD" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"}`}>{v.mount_type}</span>
-                                  </div>
-                                </div>
-
-                                {/* Package */}
-                                <div className="hidden lg:block text-xs font-mono text-muted-foreground">{v.package || "—"}</div>
-
-                                {/* Mount */}
-                                <div className="hidden lg:block">
-                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${v.mount_type === "SMD" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"}`}>
-                                    {v.mount_type}
-                                  </span>
-                                </div>
-
-                                {/* Tolerance */}
-                                <div className="hidden lg:block text-xs text-muted-foreground">{v.tolerance || "—"}</div>
-
-                                {/* Wattage */}
-                                <div className="hidden lg:block text-xs text-muted-foreground">{v.wattage || "—"}</div>
-
-                                {/* Price — click to inline edit */}
-                                <div className="hidden lg:block">
-                                  {isEditingPrice ? (
-                                    <input
-                                      autoFocus
-                                      type="number"
-                                      defaultValue={v.price}
-                                      onChange={e => setInlineEdit(ie => ie ? { ...ie, value: e.target.value } : ie)}
-                                      onBlur={saveInlineEdit}
-                                      onKeyDown={e => e.key === "Enter" && saveInlineEdit()}
-                                      className="w-full text-xs font-mono border border-secondary rounded px-1.5 py-1 bg-background focus:outline-none"
-                                    />
-                                  ) : (
-                                    <button
-                                      onClick={() => setInlineEdit({ id: v.id, field: "price", value: String(v.price) })}
-                                      className="text-xs font-semibold text-foreground hover:text-secondary transition-colors cursor-text"
-                                      title="Click to edit price"
-                                    >
-                                      {v.price > 0 ? `Rs.${v.price}` : <span className="text-muted-foreground">—</span>}
-                                    </button>
-                                  )}
-                                </div>
-
-                                {/* Stock — click to inline edit */}
-                                <div className="hidden lg:block">
-                                  {isEditingStock ? (
-                                    <input
-                                      autoFocus
-                                      type="number"
-                                      defaultValue={v.stock_quantity}
-                                      onChange={e => setInlineEdit(ie => ie ? { ...ie, value: e.target.value } : ie)}
-                                      onBlur={saveInlineEdit}
-                                      onKeyDown={e => e.key === "Enter" && saveInlineEdit()}
-                                      className="w-full text-xs font-mono border border-secondary rounded px-1.5 py-1 bg-background focus:outline-none"
-                                    />
-                                  ) : (
-                                    <button
-                                      onClick={() => setInlineEdit({ id: v.id, field: "stock_quantity", value: String(v.stock_quantity) })}
-                                      className={`text-xs font-semibold cursor-text transition-colors ${
-                                        v.stock_quantity === 0 ? "text-destructive hover:text-destructive/80" :
-                                        v.stock_quantity < 10 ? "text-amber-600 hover:text-amber-500" : "text-foreground hover:text-secondary"
-                                      }`}
-                                      title="Click to edit stock"
-                                    >
-                                      {v.stock_quantity}
-                                    </button>
-                                  )}
-                                </div>
-
-                                {/* Actions */}
-                                <div className="flex items-center gap-1 justify-end">
-                                  <button
-                                    onClick={() => toggleVariantAvailable.mutate({ id: v.id, val: !v.is_available })}
-                                    title={v.is_available ? "Hide variant" : "Show variant"}
-                                    className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
-                                      v.is_available
-                                        ? "bg-secondary/10 text-secondary border-secondary/30 hover:bg-secondary/20"
-                                        : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
-                                    }`}
-                                  >
-                                    {v.is_available ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                                  </button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                    onClick={() => openEditVariantModal(v)}>
-                                    <Pencil className="w-3 h-3" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/50 hover:text-destructive"
-                                    onClick={() => { if (confirm("Delete this variant?")) deleteVariant.mutate(v.id); }}>
-                                    <Trash2 className="w-3 h-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Family list (extracted to avoid repetition)
+// ─────────────────────────────────────────────────────────────────────────────
+function FamilyList({
+  filteredFamilies, allVariants, searchQ, isLoading,
+  expandedFamily, setExpandedFamily,
+  openEditFamily, deleteFamily, toggleFamilyActive,
+  openAddVariantModal, openEditVariantModal,
+  deleteVariant, toggleVariantAvailable,
+  inlineEdit, setInlineEdit, saveInlineEdit,
+  customTypes, activeType,
+}: any) {
+  const allTypes = [
+    ...BUILTIN_TYPES,
+    ...customTypes.map((ct: CustomType) => ({
+      ...ct, color: CUSTOM_TYPE_COLOR, badgeColor: CUSTOM_TYPE_BADGE,
+      iconColor: CUSTOM_TYPE_ICON, icon: <CustomTypeIcon />,
+    })),
+  ];
+  const tInfo = (id: string) => allTypes.find(t => t.id === id) || allTypes[allTypes.length - 1];
+
+  if (isLoading) return (
+    <div className="space-y-3">
+      {[...Array(5)].map((_, i) => <div key={i} className="h-[68px] bg-muted animate-pulse rounded-xl" />)}
+    </div>
+  );
+
+  if (filteredFamilies.length === 0) return (
+    <div className="text-center py-16 text-muted-foreground bg-muted/20 rounded-xl border border-dashed border-border">
+      <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+      <p className="font-medium">{searchQ ? "No families match your search" : `No families in ${activeType ? tInfo(activeType)?.label : "this category"} yet`}</p>
+      {!searchQ && <p className="text-sm mt-1">Click <strong>New Family</strong> to get started</p>}
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      {filteredFamilies.map((family: any) => {
+        const variants: any[] = (allVariants as Record<string, any[]>)[family.id] || [];
+        const isExpanded = expandedFamily === family.id;
+        const availCount = variants.filter((v: any) => v.is_available).length;
+        const ti = tInfo(family.component_type);
+
+        return (
+          <div key={family.id} className={`bg-card rounded-xl border transition-all overflow-hidden ${
+            isExpanded ? "border-secondary/40 shadow-sm" : "border-border hover:border-border/80"
+          }`}>
+            {/* Family header row */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <button
+                onClick={() => setExpandedFamily(isExpanded ? null : family.id)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+              >
+                <motion.div animate={{ rotate: isExpanded ? 90 : 0 }} transition={{ duration: 0.15 }}>
+                  <ChevronRight className="w-4 h-4" />
+                </motion.div>
+              </button>
+
+              <div className="w-10 h-10 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0 overflow-hidden">
+                {family.images?.[0]
+                  ? <img src={family.images[0]} alt={family.name} className="w-full h-full object-contain p-1" />
+                  : <Package className="w-4 h-4 text-muted-foreground/40" />
+                }
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm text-foreground">{family.name}</span>
+                  {!activeType && (
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${ti.color}`}>
+                      {ti.label}
+                    </span>
+                  )}
+                  {!family.is_active && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">Hidden</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {family.description && (
+                    <p className="text-xs text-muted-foreground truncate max-w-xs">{family.description}</p>
+                  )}
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    <span className="text-foreground font-semibold">{variants.length}</span> variant{variants.length !== 1 ? "s" : ""}
+                    {" · "}<span className={availCount > 0 ? "text-green-600 font-semibold" : "text-destructive font-semibold"}>{availCount}</span> available
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted-foreground hidden md:inline">
+                  {family.is_active ? "Active" : "Hidden"}
+                </span>
+                <Switch checked={family.is_active}
+                  onCheckedChange={(v: boolean) => toggleFamilyActive.mutate({ id: family.id, val: v })}
+                  className="data-[state=checked]:bg-secondary" />
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Edit family" onClick={() => openEditFamily(family)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/60 hover:text-destructive"
+                  title="Delete family"
+                  onClick={() => { if (confirm(`Delete "${family.name}" and all ${variants.length} variants?`)) deleteFamily.mutate(family.id); }}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Variants panel */}
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="border-t border-border bg-muted/10 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Variants ({variants.length})
+                      </p>
+                      <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs"
+                        onClick={() => openAddVariantModal(family.id)}>
+                        <Plus className="w-3.5 h-3.5" /> Add Variant
+                      </Button>
+                    </div>
+
+                    {variants.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border">
+                        <Zap className="w-6 h-6 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">No variants yet</p>
+                        <button onClick={() => openAddVariantModal(family.id)}
+                          className="text-xs text-secondary hover:underline mt-1">Add first variant →</button>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-border overflow-hidden bg-card">
+                        <div className="hidden lg:grid grid-cols-[36px_140px_90px_70px_70px_70px_90px_90px_110px] gap-2 px-3 py-2 bg-muted/60 border-b border-border">
+                          {["", "Value / SKU", "Package", "Mount", "Tol.", "Watt.", "Price", "Stock", ""].map((h, i) => (
+                            <div key={i} className={`text-[10px] font-semibold text-muted-foreground uppercase tracking-wide ${i === 8 ? "text-right" : ""}`}>{h}</div>
+                          ))}
+                        </div>
+
+                        {variants.map((v: any) => {
+                          const imgSrc = v.images?.[0] || family.images?.[0] || null;
+                          const isEditingPrice = inlineEdit?.id === v.id && inlineEdit.field === "price";
+                          const isEditingStock = inlineEdit?.id === v.id && inlineEdit.field === "stock_quantity";
+
+                          return (
+                            <div key={v.id}
+                              className={`grid grid-cols-1 lg:grid-cols-[36px_140px_90px_70px_70px_70px_90px_90px_110px] gap-2 px-3 py-2.5 border-b border-border last:border-0 items-center transition-colors ${
+                                !v.is_available ? "opacity-40 bg-muted/20" : "hover:bg-muted/20"
+                              }`}
+                            >
+                              <div className="hidden lg:flex items-center">
+                                <div className="w-7 h-7 rounded bg-muted border border-border overflow-hidden flex items-center justify-center">
+                                  {imgSrc
+                                    ? <img src={imgSrc} alt="" className="w-full h-full object-contain p-0.5" />
+                                    : <Package className="w-3 h-3 text-muted-foreground/30" />
+                                  }
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 lg:block">
+                                {imgSrc && (
+                                  <img src={imgSrc} alt="" className="lg:hidden w-7 h-7 object-contain rounded bg-muted border border-border shrink-0" />
+                                )}
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">{v.value || "—"}</p>
+                                  {v.sku && <p className="text-[10px] text-muted-foreground font-mono leading-none">{v.sku}</p>}
+                                </div>
+                                <div className="lg:hidden flex gap-1 ml-auto flex-wrap">
+                                  {v.package && <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{v.package}</span>}
+                                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${v.mount_type === "SMD" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"}`}>{v.mount_type}</span>
+                                </div>
+                              </div>
+
+                              <div className="hidden lg:block text-xs font-mono text-muted-foreground">{v.package || "—"}</div>
+                              <div className="hidden lg:block">
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${v.mount_type === "SMD" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"}`}>
+                                  {v.mount_type}
+                                </span>
+                              </div>
+                              <div className="hidden lg:block text-xs text-muted-foreground">{v.tolerance || "—"}</div>
+                              <div className="hidden lg:block text-xs text-muted-foreground">{v.wattage || "—"}</div>
+
+                              {/* Price inline edit */}
+                              <div className="hidden lg:block">
+                                {isEditingPrice ? (
+                                  <input autoFocus type="number" defaultValue={v.price}
+                                    onChange={e => setInlineEdit((ie: any) => ie ? { ...ie, value: e.target.value } : ie)}
+                                    onBlur={saveInlineEdit}
+                                    onKeyDown={(e: any) => e.key === "Enter" && saveInlineEdit()}
+                                    className="w-full text-xs font-mono border border-secondary rounded px-1.5 py-1 bg-background focus:outline-none" />
+                                ) : (
+                                  <button
+                                    onClick={() => setInlineEdit({ id: v.id, field: "price", value: String(v.price) })}
+                                    className="text-xs font-semibold text-foreground hover:text-secondary transition-colors cursor-text"
+                                    title="Click to edit price">
+                                    {v.price > 0 ? `Rs.${v.price}` : <span className="text-muted-foreground">—</span>}
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Stock inline edit */}
+                              <div className="hidden lg:block">
+                                {isEditingStock ? (
+                                  <input autoFocus type="number" defaultValue={v.stock_quantity}
+                                    onChange={e => setInlineEdit((ie: any) => ie ? { ...ie, value: e.target.value } : ie)}
+                                    onBlur={saveInlineEdit}
+                                    onKeyDown={(e: any) => e.key === "Enter" && saveInlineEdit()}
+                                    className="w-full text-xs font-mono border border-secondary rounded px-1.5 py-1 bg-background focus:outline-none" />
+                                ) : (
+                                  <button
+                                    onClick={() => setInlineEdit({ id: v.id, field: "stock_quantity", value: String(v.stock_quantity) })}
+                                    className={`text-xs font-semibold cursor-text transition-colors ${
+                                      v.stock_quantity === 0 ? "text-destructive hover:text-destructive/80" :
+                                      v.stock_quantity < 10 ? "text-amber-600 hover:text-amber-500" : "text-foreground hover:text-secondary"
+                                    }`}
+                                    title="Click to edit stock">
+                                    {v.stock_quantity}
+                                  </button>
+                                )}
+                              </div>
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 justify-end">
+                                <button
+                                  onClick={() => toggleVariantAvailable.mutate({ id: v.id, val: !v.is_available })}
+                                  title={v.is_available ? "Hide variant" : "Show variant"}
+                                  className={`h-7 w-7 rounded-md border flex items-center justify-center transition-colors ${
+                                    v.is_available
+                                      ? "bg-secondary/10 text-secondary border-secondary/30 hover:bg-secondary/20"
+                                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                                  }`}>
+                                  {v.is_available ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                </button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  onClick={() => openEditVariantModal(v)}>
+                                  <Pencil className="w-3 h-3" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/50 hover:text-destructive"
+                                  onClick={() => { if (confirm("Delete this variant?")) deleteVariant.mutate(v.id); }}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default ComponentFamilyManager;
