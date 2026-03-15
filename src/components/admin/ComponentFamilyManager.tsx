@@ -508,10 +508,11 @@ const ComponentFamilyManager = () => {
                                   onChange={e => setVariantForm(f => ({ ...f, stock_quantity: parseInt(e.target.value) || 0 }))} />
                               </div>
                               <div className="sm:col-span-2">
-                                <Label className="text-xs mb-1 block">Image URLs (comma-sep, overrides family)</Label>
-                                <Input value={(variantForm.images || []).join(",")}
-                                  onChange={e => setVariantForm(f => ({ ...f, images: e.target.value.split(",").map(s => s.trim()).filter(Boolean) }))}
-                                  placeholder="Leave blank to use family images" />
+                                <Label className="text-xs mb-2 block flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Images (overrides family)</Label>
+                                <ImageUploader
+                                  images={variantForm.images || []}
+                                  onChange={imgs => setVariantForm(f => ({ ...f, images: imgs }))}
+                                />
                               </div>
                               <div className="flex items-center gap-2 pt-4">
                                 <Switch checked={variantForm.is_available} onCheckedChange={v => setVariantForm(f => ({ ...f, is_available: v }))} />
