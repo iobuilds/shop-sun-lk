@@ -154,6 +154,9 @@ const ComponentFamilyManager = () => {
   const [filterType, setFilterType] = useState<string>("all");
   const [familyForm, setFamilyForm] = useState(emptyFamily());
   const [variantForm, setVariantForm] = useState(emptyVariant());
+  // Bulk mode: same value, multiple packages at once
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkPackagesInput, setBulkPackagesInput] = useState(""); // comma-separated packages
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: families = [], isLoading } = useQuery({
