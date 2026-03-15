@@ -2,9 +2,9 @@ import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Trash2, Pencil, ChevronDown, ChevronRight,
+  Plus, Trash2, Pencil,
   Package, X, Upload, Link as LinkIcon, ImagePlus, Loader2,
-  Layers, Search, Eye, EyeOff, Zap,
+  Layers, Search, Eye, EyeOff, Zap, CheckCircle2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
