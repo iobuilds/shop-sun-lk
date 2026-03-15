@@ -6,7 +6,7 @@ const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/pub
 
 function injectLogo(html: string): string {
   if (html.includes("site-logo") || html.includes(LOGO_URL)) return html;
-  return html.replace('<div class="c">', `<div class="c"><div style="background:#ffffff;padding:20px 32px;text-align:center;border-bottom:1px solid #e5e7eb"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block"></div>`);
+  return html.replace('<div class="c">', `<div class="c"><div style="background:#1a1a2e;padding:20px 32px;text-align:center;border-bottom:1px solid #2d2d4e"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block;filter:brightness(0) invert(1)"></div>`);
 }
 
 const corsHeaders = {
