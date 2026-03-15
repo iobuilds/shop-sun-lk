@@ -627,6 +627,45 @@ export type Database = {
         }
         Relationships: []
       }
+      email_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          html_body: string
+          id: string
+          is_active: boolean
+          name: string
+          subject: string
+          template_key: string
+          text_body: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          html_body?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          subject?: string
+          template_key: string
+          text_body?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          html_body?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          subject?: string
+          template_key?: string
+          text_body?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       image_designs: {
         Row: {
           canvas_height: number

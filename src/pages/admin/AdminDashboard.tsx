@@ -41,8 +41,9 @@ import AdminDocumentation from "@/components/admin/AdminDocumentation";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
 import ImageEditor from "@/components/admin/ImageEditor";
 import ComponentFamilyManager from "@/components/admin/ComponentFamilyManager";
+import EmailTemplatesManager from "@/components/admin/EmailTemplatesManager";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_logs" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -711,6 +712,12 @@ const AdminDashboard = () => {
         { id: "sms_campaign" as Tab, label: "SMS Campaign", icon: Megaphone, count: 0 },
         { id: "sms_templates" as Tab, label: "SMS Templates", icon: Send, count: smsTemplates?.length || 0 },
         { id: "sms_logs" as Tab, label: "SMS Logs", icon: Phone, count: smsLogs?.length || 0 },
+      ],
+    },
+    {
+      label: "Email Center", icon: Mail, defaultOpen: false, adminOnly: true,
+      items: [
+        { id: "email_templates" as Tab, label: "Email Templates", icon: Mail, count: 0 },
       ],
     },
     {
@@ -3832,6 +3839,13 @@ const AdminDashboard = () => {
           {tab === "sms_templates" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <SMSTemplatesManager />
+            </motion.div>
+          )}
+
+          {/* ═══ Email Templates Tab ═══ */}
+          {tab === "email_templates" && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <EmailTemplatesManager />
             </motion.div>
           )}
 
