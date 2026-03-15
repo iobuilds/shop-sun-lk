@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Plus, Trash2, Pencil, ChevronDown, ChevronRight, ToggleLeft, ToggleRight,
-  Package, X, Check, AlertCircle, Upload, FileText
+  Plus, Trash2, Pencil, ChevronDown, ChevronRight,
+  Package, X, Upload, Link, ImagePlus, Loader2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,103 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+
+// ── Image uploader sub-component ─────────────────────────────────────────────
+const ImageUploader = ({
+  images,
+  onChange,
+  placeholder = "Leave blank to use family images",
+}: {
+  images: string[];
+  onChange: (imgs: string[]) => void;
+  placeholder?: string;
+}) => {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `components/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("images").upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from("images").getPublicUrl(path);
+      onChange([...images, urlData.publicUrl]);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    files.forEach(uploadFile);
+    e.target.value = "";
+  };
+
+  const addUrl = () => {
+    const trimmed = urlInput.trim();
+    if (trimmed) { onChange([...images, trimmed]); setUrlInput(""); }
+  };
+
+  const removeImage = (idx: number) => onChange(images.filter((_, i) => i !== idx));
+
+  return (
+    <div className="space-y-2">
+      {/* Thumbnails */}
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {images.map((url, idx) => (
+            <div key={idx} className="relative group w-14 h-14 rounded-lg border border-border overflow-hidden bg-muted">
+              <img src={url} alt="" className="w-full h-full object-contain" />
+              <button
+                type="button"
+                onClick={() => removeImage(idx)}
+                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              >
+                <X className="w-4 h-4 text-white" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload + URL row */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-dashed border-border hover:border-primary hover:bg-primary/5 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 shrink-0"
+        >
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+          {uploading ? "Uploading…" : "Upload"}
+        </button>
+        <div className="flex flex-1 gap-1">
+          <Input
+            value={urlInput}
+            onChange={e => setUrlInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addUrl())}
+            placeholder={images.length > 0 ? "Add another URL…" : placeholder}
+            className="text-xs h-9"
+          />
+          <button
+            type="button"
+            onClick={addUrl}
+            disabled={!urlInput.trim()}
+            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground disabled:opacity-40 transition-colors shrink-0"
+          >
+            <Link className="w-3 h-3" /> Add
+          </button>
+        </div>
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={handleFiles} />
+    </div>
+  );
+};
 
 const COMPONENT_TYPES = [
   { id: "resistor", label: "Resistor" },
