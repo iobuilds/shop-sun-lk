@@ -336,7 +336,7 @@ export default function EmailTemplatesManager() {
                               {/* Test send */}
                               <button
                                 onClick={() => { setTestTemplate(t); setTestEmail(""); setTestDialog(true); }}
-                                className="p-1.5 rounded-md hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 transition-colors"
+                                className="p-1.5 rounded-md hover:bg-secondary/10 text-muted-foreground hover:text-secondary transition-colors"
                               >
                                 <TestTube className="w-3.5 h-3.5" />
                               </button>
