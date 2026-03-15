@@ -344,6 +344,15 @@ const MicroElectronicsPage = () => {
     });
   }, [variants, mountType, selectedPackage, valueSearch]);
 
+  // Global search: filter component types by label/description
+  const globalQ = globalSearch.trim().toLowerCase();
+  const filteredTypes = useMemo(() => {
+    if (!globalQ) return COMPONENT_TYPES;
+    return COMPONENT_TYPES.filter(t =>
+      t.label.toLowerCase().includes(globalQ) || t.description.toLowerCase().includes(globalQ)
+    );
+  }, [globalQ]);
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const resetFilters = () => { setMountType("all"); setSelectedPackage("all"); setValueSearch(""); };
 
