@@ -591,7 +591,7 @@ const ComponentFamilyManager = () => {
           onClose={() => { setVariantModalFamilyId(null); setEditingVariant(null); }}
           familyId={variantModalFamilyId!}
           editingVariant={editingVariant}
-          family={variantModalFamily}
+          family={(families as any[]).find((f: any) => f.id === variantModalFamilyId) || null}
           onSave={handleSaveVariant}
           onBulkSave={handleBulkSaveVariants}
         />
