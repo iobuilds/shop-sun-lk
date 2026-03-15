@@ -11,6 +11,7 @@ interface UserDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   userId: string | null;
   userRole: string;
+  initialProfile?: any;
 }
 
 const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDialogProps) => {
