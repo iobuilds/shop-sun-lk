@@ -7,7 +7,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.png";
+const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.svg";
 
 const LOGO_HEADER = `<div style="background:#ffffff;padding:20px 32px;text-align:center;border-bottom:1px solid #e5e7eb"><img src="${LOGO_URL}" alt="NanoCircuit" style="max-height:54px;width:auto;display:inline-block"></div>`;
 

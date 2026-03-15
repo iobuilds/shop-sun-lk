@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.57.2";
 import * as nodemailer from "npm:nodemailer@6.9.9";
 
-const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.png";
+const LOGO_URL = "https://rcefmfiqqqsfurkdljup.supabase.co/storage/v1/object/public/images/site-logo.svg";
 
 function injectLogo(html: string): string {
   if (html.includes("site-logo") || html.includes(LOGO_URL)) return html;
