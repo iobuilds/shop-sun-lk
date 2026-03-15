@@ -14,16 +14,19 @@ interface UserDetailDialogProps {
   initialProfile?: any;
 }
 
-const UserDetailDialog = ({ open, onOpenChange, userId, userRole }: UserDetailDialogProps) => {
-  const { data: profile } = useQuery({
+const UserDetailDialog = ({ open, onOpenChange, userId, userRole, initialProfile }: UserDetailDialogProps) => {
+  const { data: profileData } = useQuery({
     queryKey: ["admin-user-detail", userId],
     queryFn: async () => {
       const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId!).maybeSingle();
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && open,
+    enabled: !!userId,
+    initialData: initialProfile ?? undefined,
+    staleTime: 0,
   });
+  const profile = profileData ?? initialProfile;
 
   const { data: userOrders } = useQuery({
     queryKey: ["admin-user-orders", userId],
