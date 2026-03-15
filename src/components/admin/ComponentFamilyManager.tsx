@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, Pencil, ChevronDown, ChevronRight,
-  Package, X, Upload, Link, ImagePlus, Loader2
+  Package, X, Upload, Link, ImagePlus, Loader2, Copy, Layers
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -154,6 +154,9 @@ const ComponentFamilyManager = () => {
   const [filterType, setFilterType] = useState<string>("all");
   const [familyForm, setFamilyForm] = useState(emptyFamily());
   const [variantForm, setVariantForm] = useState(emptyVariant());
+  // Bulk mode: same value, multiple packages at once
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkPackagesInput, setBulkPackagesInput] = useState(""); // comma-separated packages
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: families = [], isLoading } = useQuery({
@@ -237,7 +240,35 @@ const ComponentFamilyManager = () => {
       qc.invalidateQueries({ queryKey: ["admin-all-variants"] });
       qc.invalidateQueries({ queryKey: ["component-variants"] });
       setShowVariantForm(null); setEditingVariant(null); setVariantForm(emptyVariant());
+      setBulkMode(false); setBulkPackagesInput("");
       toast({ title: editingVariant ? "Variant updated" : "Variant added" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  // Bulk save: insert one variant per package in bulkPackagesInput
+  const saveBulkVariants = useMutation({
+    mutationFn: async ({ familyId }: { familyId: string }) => {
+      const packages = bulkPackagesInput
+        .split(",")
+        .map(p => p.trim())
+        .filter(Boolean);
+      if (packages.length === 0) throw new Error("Enter at least one package");
+      const rows = packages.map(pkg => ({
+        ...variantForm,
+        package: pkg,
+        family_id: familyId,
+      }));
+      const { error } = await supabase.from("component_variants").insert(rows);
+      if (error) throw error;
+      return packages.length;
+    },
+    onSuccess: (count) => {
+      qc.invalidateQueries({ queryKey: ["admin-all-variants"] });
+      qc.invalidateQueries({ queryKey: ["component-variants"] });
+      setShowVariantForm(null); setEditingVariant(null); setVariantForm(emptyVariant());
+      setBulkMode(false); setBulkPackagesInput("");
+      toast({ title: `${count} variant${count !== 1 ? "s" : ""} added` });
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
@@ -269,6 +300,8 @@ const ComponentFamilyManager = () => {
     setEditingVariant(null);
     setVariantForm(emptyVariant());
     setShowVariantForm(familyId);
+    setBulkMode(false);
+    setBulkPackagesInput("");
   };
 
   const openEditVariant = (variant: any) => {
@@ -451,16 +484,46 @@ const ComponentFamilyManager = () => {
                           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                             className="bg-card border border-secondary/20 rounded-xl p-4 mb-4 shadow-sm">
                             <div className="flex items-center justify-between mb-3">
-                              <h4 className="font-semibold text-sm text-foreground">{editingVariant ? "Edit Variant" : "Add Variant"}</h4>
-                              <button onClick={() => { setShowVariantForm(null); setEditingVariant(null); }}
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-semibold text-sm text-foreground">{editingVariant ? "Edit Variant" : "Add Variant"}</h4>
+                                {/* Bulk mode toggle — only for new variants */}
+                                {!editingVariant && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setBulkMode(b => !b)}
+                                    className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${
+                                      bulkMode
+                                        ? "bg-secondary/15 text-secondary border-secondary/50"
+                                        : "text-muted-foreground border-border hover:border-secondary/40 hover:text-foreground"
+                                    }`}
+                                    title="Add same value across multiple packages at once"
+                                  >
+                                    <Layers className="w-3.5 h-3.5" />
+                                    Bulk (multi-package)
+                                  </button>
+                                )}
+                              </div>
+                              <button onClick={() => { setShowVariantForm(null); setEditingVariant(null); setBulkMode(false); }}
                                 className="p-1 hover:bg-muted rounded-md text-muted-foreground"><X className="w-4 h-4" /></button>
                             </div>
+
+                            {/* Bulk hint banner */}
+                            {bulkMode && (
+                              <div className="bg-secondary/8 border border-secondary/25 rounded-lg px-3 py-2 mb-3 text-xs text-secondary flex items-start gap-2">
+                                <Copy className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                <span>
+                                  <strong>Bulk mode:</strong> Fill in Value, Tolerance, Wattage, Price &amp; Stock once — then enter all packages
+                                  separated by commas (e.g. <span className="font-mono">0201, 0402, 0603, 0805</span>). One variant will be created per package.
+                                </span>
+                              </div>
+                            )}
+
                             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                               <div>
                                 <Label className="text-xs mb-1 block">Value</Label>
                                 <Input value={variantForm.value}
                                   onChange={e => setVariantForm(f => ({ ...f, value: e.target.value }))}
-                                  placeholder="e.g. 10kΩ, 100nF" />
+                                  placeholder="e.g. 100kΩ, 10nF" />
                               </div>
                               <div>
                                 <Label className="text-xs mb-1 block">Mount Type</Label>
@@ -471,12 +534,35 @@ const ComponentFamilyManager = () => {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              <div>
-                                <Label className="text-xs mb-1 block">Package</Label>
-                                <Input value={variantForm.package}
-                                  onChange={e => setVariantForm(f => ({ ...f, package: e.target.value }))}
-                                  placeholder="0402, 0603, DIP-8…" />
-                              </div>
+
+                              {/* Single package field OR bulk packages field */}
+                              {bulkMode ? (
+                                <div className="sm:col-span-2">
+                                  <Label className="text-xs mb-1 block flex items-center gap-1">
+                                    <Layers className="w-3 h-3 text-secondary" />
+                                    Packages (comma-separated) *
+                                  </Label>
+                                  <Input
+                                    value={bulkPackagesInput}
+                                    onChange={e => setBulkPackagesInput(e.target.value)}
+                                    placeholder="0201, 0402, 0603, 0805, 1206"
+                                    className="font-mono text-sm"
+                                  />
+                                  {bulkPackagesInput && (
+                                    <p className="text-[10px] text-muted-foreground mt-1">
+                                      → {bulkPackagesInput.split(",").filter(p => p.trim()).length} package(s) will be created
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  <Label className="text-xs mb-1 block">Package</Label>
+                                  <Input value={variantForm.package}
+                                    onChange={e => setVariantForm(f => ({ ...f, package: e.target.value }))}
+                                    placeholder="0402, 0603, DIP-8…" className="font-mono" />
+                                </div>
+                              )}
+
                               <div>
                                 <Label className="text-xs mb-1 block">Tolerance</Label>
                                 <Input value={variantForm.tolerance}
@@ -511,24 +597,34 @@ const ComponentFamilyManager = () => {
                                 <Input type="number" value={variantForm.stock_quantity}
                                   onChange={e => setVariantForm(f => ({ ...f, stock_quantity: parseInt(e.target.value) || 0 }))} />
                               </div>
-                              <div className="sm:col-span-2">
-                                <Label className="text-xs mb-2 block flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Images (overrides family)</Label>
-                                <ImageUploader
-                                  images={variantForm.images || []}
-                                  onChange={imgs => setVariantForm(f => ({ ...f, images: imgs }))}
-                                />
-                              </div>
+                              {!bulkMode && (
+                                <div className="sm:col-span-2">
+                                  <Label className="text-xs mb-2 block flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Images (overrides family)</Label>
+                                  <ImageUploader
+                                    images={variantForm.images || []}
+                                    onChange={imgs => setVariantForm(f => ({ ...f, images: imgs }))}
+                                  />
+                                </div>
+                              )}
                               <div className="flex items-center gap-2 pt-4">
                                 <Switch checked={variantForm.is_available} onCheckedChange={v => setVariantForm(f => ({ ...f, is_available: v }))} />
                                 <Label className="text-xs">Available</Label>
                               </div>
                             </div>
                             <div className="flex justify-end gap-2 mt-3">
-                              <Button variant="outline" size="sm" onClick={() => { setShowVariantForm(null); setEditingVariant(null); }}>Cancel</Button>
-                              <Button size="sm" disabled={saveVariant.isPending}
-                                onClick={() => saveVariant.mutate({ form: variantForm, familyId: family.id })}>
-                                {saveVariant.isPending ? "Saving…" : editingVariant ? "Update Variant" : "Add Variant"}
-                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => { setShowVariantForm(null); setEditingVariant(null); setBulkMode(false); setBulkPackagesInput(""); }}>Cancel</Button>
+                              {bulkMode ? (
+                                <Button size="sm"
+                                  disabled={saveBulkVariants.isPending || !variantForm.value || !bulkPackagesInput.trim()}
+                                  onClick={() => saveBulkVariants.mutate({ familyId: family.id })}>
+                                  {saveBulkVariants.isPending ? "Adding…" : `Add ${bulkPackagesInput.split(",").filter(p=>p.trim()).length || 0} Variants`}
+                                </Button>
+                              ) : (
+                                <Button size="sm" disabled={saveVariant.isPending}
+                                  onClick={() => saveVariant.mutate({ form: variantForm, familyId: family.id })}>
+                                  {saveVariant.isPending ? "Saving…" : editingVariant ? "Update Variant" : "Add Variant"}
+                                </Button>
+                              )}
                             </div>
                           </motion.div>
                         )}
