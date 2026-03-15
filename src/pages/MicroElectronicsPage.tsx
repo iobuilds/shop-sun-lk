@@ -541,13 +541,13 @@ const MicroElectronicsPage = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {families.map((family: any, i: number) => (
-                    <motion.button
+                    <motion.div
                       key={family.id}
                       initial={{ opacity: 0, y: 12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.05 }}
+                      className="relative text-left p-5 rounded-xl border-2 border-border bg-card hover:border-secondary/50 hover:shadow-md transition-all duration-200 group cursor-pointer"
                       onClick={() => selectFamily(family)}
-                      className="text-left p-5 rounded-xl border-2 border-border bg-card hover:border-secondary/50 hover:shadow-md transition-all duration-200 group"
                     >
                       <div className="flex items-start gap-4">
                         {family.images?.[0] ? (
@@ -559,7 +559,7 @@ const MicroElectronicsPage = () => {
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight">{family.name}</h3>
+                          <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight pr-7">{family.name}</h3>
                           {family.description && (
                             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{family.description}</p>
                           )}
@@ -569,7 +569,18 @@ const MicroElectronicsPage = () => {
                           </div>
                         </div>
                       </div>
-                    </motion.button>
+                      {/* Open full page in new tab */}
+                      <Link
+                        to={`/micro-electronics/${family.component_type}/${family.slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        title="Open full page"
+                        className="absolute top-3 right-3 p-1.5 rounded-md text-muted-foreground hover:text-secondary hover:bg-secondary/10 transition-all opacity-0 group-hover:opacity-100"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </Link>
+                    </motion.div>
                   ))}
                 </div>
               </motion.div>
