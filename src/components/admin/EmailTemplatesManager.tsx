@@ -443,7 +443,7 @@ export default function EmailTemplatesManager() {
                   placeholder="Full HTML email body..."
                 />
               ) : (
-                <div className="border border-border rounded-md h-72 overflow-auto bg-white">
+          <div className="border border-border rounded-md h-72 overflow-auto bg-background">
                   <iframe srcDoc={form.html_body} title="Preview" className="w-full h-full" sandbox="allow-same-origin" />
                 </div>
               )}
