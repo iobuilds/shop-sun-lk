@@ -300,6 +300,8 @@ const ComponentFamilyManager = () => {
     setEditingVariant(null);
     setVariantForm(emptyVariant());
     setShowVariantForm(familyId);
+    setBulkMode(false);
+    setBulkPackagesInput("");
   };
 
   const openEditVariant = (variant: any) => {
