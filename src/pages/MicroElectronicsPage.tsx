@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronRight, ShoppingCart, FileText, Search, X,
-  AlertCircle, Check, ArrowLeft, Zap, Package2,
+  AlertCircle, Check, ArrowLeft, Zap, Package2, ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
