@@ -24,6 +24,7 @@ import SitemapRedirect from "./pages/SitemapRedirect";
 import PreOrder from "./pages/PreOrder";
 import DealsPage from "./pages/DealsPage";
 import PCBOrder from "./pages/PCBOrder";
+import MicroElectronicsPage from "./pages/MicroElectronicsPage";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
               <Route path="/product/:slug" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/category/:slug" element={<CategoryPage />} />
+              <Route path="/micro-electronics" element={<MicroElectronicsPage />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/profile" element={<Profile />} />
@@ -65,4 +67,3 @@ const App = () => (
 );
 
 export default App;
-

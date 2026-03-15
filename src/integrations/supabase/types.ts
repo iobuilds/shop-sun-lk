@@ -211,6 +211,113 @@ export type Database = {
         }
         Relationships: []
       }
+      component_families: {
+        Row: {
+          component_type: string
+          created_at: string
+          datasheet_url: string | null
+          description: string | null
+          id: string
+          images: string[] | null
+          is_active: boolean
+          name: string
+          slug: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          component_type: string
+          created_at?: string
+          datasheet_url?: string | null
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_active?: boolean
+          name: string
+          slug: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          component_type?: string
+          created_at?: string
+          datasheet_url?: string | null
+          description?: string | null
+          id?: string
+          images?: string[] | null
+          is_active?: boolean
+          name?: string
+          slug?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      component_variants: {
+        Row: {
+          created_at: string
+          extra_specs: Json | null
+          family_id: string
+          id: string
+          images: string[] | null
+          is_available: boolean
+          mount_type: string
+          package: string | null
+          price: number
+          sku: string | null
+          stock_quantity: number
+          tolerance: string | null
+          updated_at: string
+          value: string | null
+          voltage_rating: string | null
+          wattage: string | null
+        }
+        Insert: {
+          created_at?: string
+          extra_specs?: Json | null
+          family_id: string
+          id?: string
+          images?: string[] | null
+          is_available?: boolean
+          mount_type?: string
+          package?: string | null
+          price?: number
+          sku?: string | null
+          stock_quantity?: number
+          tolerance?: string | null
+          updated_at?: string
+          value?: string | null
+          voltage_rating?: string | null
+          wattage?: string | null
+        }
+        Update: {
+          created_at?: string
+          extra_specs?: Json | null
+          family_id?: string
+          id?: string
+          images?: string[] | null
+          is_available?: boolean
+          mount_type?: string
+          package?: string | null
+          price?: number
+          sku?: string | null
+          stock_quantity?: number
+          tolerance?: string | null
+          updated_at?: string
+          value?: string | null
+          voltage_rating?: string | null
+          wattage?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "component_variants_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "component_families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_messages: {
         Row: {
           created_at: string

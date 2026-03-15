@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import SEOHead from "@/components/SEOHead";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -28,7 +28,6 @@ const CategoryPage = () => {
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { storeName } = useBranding();
   const isComboPage = slug === "combo-packs";
-
   const isMicroElectronics = slug === "micro-electronics";
 
   // Filter/sort state
@@ -152,6 +151,9 @@ const CategoryPage = () => {
   };
 
   const isLoading = catLoading || prodsLoading || (isComboPage && combosLoading);
+
+  // Redirect micro-electronics to the dedicated parametric catalog page
+  if (isMicroElectronics) return <Navigate to="/micro-electronics" replace />;
 
   return (
     <div className="min-h-screen bg-background">
