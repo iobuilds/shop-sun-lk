@@ -748,7 +748,7 @@ const MicroElectronicsPage = () => {
                               {variant.price > 0 ? `Rs. ${variant.price.toLocaleString()}` : "—"}
                             </span>
                             {variant.stock_quantity <= 5 && variant.stock_quantity > 0 && (
-                              <p className="text-[10px] text-amber-600 font-medium">Only {variant.stock_quantity} left</p>
+                              <p className="text-[10px] text-warning font-medium">Only {variant.stock_quantity} left</p>
                             )}
                             {outOfStock && <p className="text-[10px] text-destructive font-medium">Out of stock</p>}
                           </div>
