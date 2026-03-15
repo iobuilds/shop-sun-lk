@@ -49,6 +49,25 @@ const CLEANUP_TABLES = [
   // site_settings and sms_templates are intentionally preserved
 ];
 
+// Storage buckets to wipe (excludes db-backups to avoid deleting backup files)
+const CLEANUP_BUCKETS = ["images"];
+
+async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): Promise<string[]> {
+  const files: string[] = [];
+  const { data, error } = await adminClient.storage.from(bucket).list(path, { limit: 1000 });
+  if (error || !data) return files;
+  for (const item of data) {
+    const fullPath = path ? `${path}/${item.name}` : item.name;
+    if (item.id) {
+      files.push(fullPath);
+    } else {
+      const subFiles = await getAllStorageFiles(adminClient, bucket, fullPath);
+      files.push(...subFiles);
+    }
+  }
+  return files;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -61,6 +80,7 @@ Deno.serve(async (req) => {
 
     const results: { table: string; status: string; error?: string }[] = [];
 
+    // ── 1. Clear database tables ──
     for (const table of CLEANUP_TABLES) {
       const { error } = await adminClient
         .from(table)
@@ -78,22 +98,45 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── 2. Clear storage buckets ──
+    const storageResults: { bucket: string; status: string; deleted: number; error?: string }[] = [];
+    for (const bucket of CLEANUP_BUCKETS) {
+      try {
+        const allFiles = await getAllStorageFiles(adminClient, bucket);
+        if (allFiles.length > 0) {
+          // Delete in batches of 100
+          const batchSize = 100;
+          for (let i = 0; i < allFiles.length; i += batchSize) {
+            const batch = allFiles.slice(i, i + batchSize);
+            const { error } = await adminClient.storage.from(bucket).remove(batch);
+            if (error) console.error(`Failed to delete batch from ${bucket}:`, error.message);
+          }
+        }
+        storageResults.push({ bucket, status: "cleared", deleted: allFiles.length });
+      } catch (e: any) {
+        storageResults.push({ bucket, status: "failed", deleted: 0, error: e.message });
+        console.error(`Failed to clear bucket ${bucket}:`, e.message);
+      }
+    }
+
     const succeeded = results.filter((r) => r.status === "cleared").length;
     const failed = results.filter((r) => r.status === "failed").length;
+    const totalStorageDeleted = storageResults.reduce((sum, r) => sum + r.deleted, 0);
 
     // Log the cleanup
     await adminClient.from("db_backup_logs").insert({
       action: "cleanup",
       file_name: `full-cleanup-${new Date().toISOString().replace(/[:.]/g, "-")}`,
       created_by_email: "system (cleanup)",
-      note: `Cleared ${succeeded} tables, ${failed} failed`,
+      note: `Cleared ${succeeded} tables, ${failed} failed. Storage: ${totalStorageDeleted} files deleted from ${CLEANUP_BUCKETS.join(", ")}`,
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Database cleanup complete. Cleared ${succeeded} tables, ${failed} failed.`,
+        message: `Database cleanup complete. Cleared ${succeeded} tables, ${failed} failed. Deleted ${totalStorageDeleted} storage files.`,
         results,
+        storageResults,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

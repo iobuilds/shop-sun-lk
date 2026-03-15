@@ -483,17 +483,18 @@ const DatabaseTools = () => {
   const executeCleanup = async () => {
     setCleaning(true);
     setConfirmCleanup(false);
-    startProgress("Cleaning Database", ["Authenticating...", "Deleting table data...", "Preserving settings...", "Finalizing..."]);
+    startProgress("Cleaning Database", ["Authenticating...", "Deleting table data...", "Clearing storage files...", "Preserving settings...", "Finalizing..."]);
     try {
       const res = await supabase.functions.invoke("db-cleanup", {});
       if (res.error) throw new Error(res.error.message);
       const data = res.data;
       const failed = data.results?.filter((r: any) => r.status === "failed") || [];
+      const storageDeleted = data.storageResults?.reduce((sum: number, r: any) => sum + (r.deleted || 0), 0) || 0;
       finishProgress(true);
       if (failed.length > 0) {
-        toast({ title: "Cleanup completed with errors", description: `${data.results.length - failed.length} tables cleared, ${failed.length} failed`, variant: "destructive" });
+        toast({ title: "Cleanup completed with errors", description: `${data.results.length - failed.length} tables cleared, ${failed.length} failed. ${storageDeleted} storage files deleted.`, variant: "destructive" });
       } else {
-        toast({ title: "Database cleaned", description: data.message });
+        toast({ title: "Database & storage cleaned", description: `${data.message}` });
       }
       fetchBackups();
     } catch (e: any) {
