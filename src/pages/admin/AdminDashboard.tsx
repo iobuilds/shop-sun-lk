@@ -1310,13 +1310,15 @@ const AdminDashboard = () => {
         </button>
         <Link to="/" className="flex items-center gap-2">
           {companySettings?.logo_url ? (
-            <img src={companySettings.logo_url} alt={companySettings?.store_name || "Logo"} className="h-8 w-auto object-contain" />
+            <img src={companySettings.logo_url} alt={companySettings?.store_name || "Logo"} className="h-8 w-auto object-contain max-w-[160px]" />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
               <span className="text-secondary-foreground font-bold text-sm font-display">{(companySettings?.store_name || "N").charAt(0)}</span>
             </div>
           )}
-          <span className="text-lg font-bold font-display text-foreground hidden sm:inline">{companySettings?.store_name || "NanoCircuit.lk"}</span>
+          {(companySettings?.navbar_brand_mode === "logo_text" || companySettings?.navbar_brand_mode === "text_only") && (
+            <span className="text-lg font-bold font-display text-foreground hidden sm:inline">{companySettings?.store_name || "NanoCircuit.lk"}</span>
+          )}
         </Link>
         <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground ml-2">
           <span>/</span>
