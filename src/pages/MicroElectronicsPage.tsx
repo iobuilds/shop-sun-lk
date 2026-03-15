@@ -236,12 +236,41 @@ const BUILTIN_COMPONENT_TYPES = [
   },
 ];
 
+// Load custom types created by admin (stored in localStorage)
+const loadAdminCustomTypes = (): Array<{ id: string; label: string; shortDesc: string }> => {
+  try { return JSON.parse(localStorage.getItem("admin_custom_component_types") || "[]"); }
+  catch { return []; }
+};
+
 const MicroElectronicsPage = () => {
   const { storeName } = useBranding();
   const navigate = useNavigate();
 
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
+
+  // Merge built-in + custom admin types
+  const COMPONENT_TYPES = useMemo(() => {
+    const customTypes = loadAdminCustomTypes();
+    const builtinIds = new Set(BUILTIN_COMPONENT_TYPES.map(t => t.id));
+    const customMapped = customTypes
+      .filter(ct => !builtinIds.has(ct.id))
+      .map(ct => ({
+        id: ct.id,
+        label: ct.label,
+        description: ct.shortDesc || "Custom component type",
+        icon: (
+          <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+            <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
+            <line x1="32" y1="22" x2="32" y2="42" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+            <line x1="22" y1="32" x2="42" y2="32" stroke="hsl(var(--muted-foreground))" strokeWidth="2.5" strokeLinecap="round"/>
+          </svg>
+        ),
+        bg: "bg-fuchsia-50 hover:bg-fuchsia-100 border-fuchsia-200 hover:border-fuchsia-400",
+        badge: "bg-fuchsia-100 text-fuchsia-700",
+      }));
+    return [...BUILTIN_COMPONENT_TYPES, ...customMapped];
+  }, []);
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: allFamilyCounts = {} } = useQuery({
@@ -291,16 +320,37 @@ const MicroElectronicsPage = () => {
     );
   }, [globalQ, allFamilies]);
 
+  // Combine known types with any DB-only types that don't have a built-in/custom entry
+  const activeTypesWithData = useMemo(() => {
+    const knownIds = new Set(COMPONENT_TYPES.map(t => t.id));
+    const dbOnlyTypes = Object.keys(allFamilyCounts as Record<string, number>)
+      .filter(id => !knownIds.has(id))
+      .map(id => ({
+        id,
+        label: id.charAt(0).toUpperCase() + id.slice(1),
+        description: "Component type",
+        icon: (
+          <svg viewBox="0 0 64 64" fill="none" className="w-12 h-12">
+            <rect x="10" y="10" width="44" height="44" rx="6" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="2"/>
+            <circle cx="32" cy="32" r="8" fill="hsl(var(--muted-foreground))" opacity="0.4"/>
+          </svg>
+        ),
+        bg: "bg-muted hover:bg-muted/80 border-border hover:border-foreground/30",
+        badge: "bg-muted text-muted-foreground",
+      }));
+    return [...COMPONENT_TYPES, ...dbOnlyTypes];
+  }, [COMPONENT_TYPES, allFamilyCounts]);
+
   // Filter category types by label/description
   const filteredTypes = useMemo(() => {
-    if (!globalQ) return COMPONENT_TYPES;
-    return COMPONENT_TYPES.filter(t =>
+    if (!globalQ) return activeTypesWithData;
+    return activeTypesWithData.filter(t =>
       t.label.toLowerCase().includes(globalQ) || t.description.toLowerCase().includes(globalQ)
     );
-  }, [globalQ]);
+  }, [globalQ, activeTypesWithData]);
 
   const isSearching = globalQ.length > 0;
-  const typeConfig = COMPONENT_TYPES.find(t => t.id === selectedType);
+  const typeConfig = activeTypesWithData.find(t => t.id === selectedType);
   const totalFamilies = Object.values(allFamilyCounts as Record<string, number>).reduce((a, b) => a + b, 0);
 
   return (
