@@ -465,7 +465,7 @@ const Navbar = () => {
                   href={link.url}
                   target={link.external ? "_blank" : undefined}
                   rel={link.external ? "noopener noreferrer" : undefined}
-                  className="px-3 h-10 flex items-center gap-1 text-[13px] text-muted-foreground hover:text-secondary hover:bg-secondary/5 transition-all duration-150 whitespace-nowrap font-medium"
+                  className="mx-1 px-3 py-1 flex items-center gap-1.5 text-[13px] font-semibold text-secondary border border-secondary/40 rounded-md hover:bg-secondary/10 transition-all duration-150 whitespace-nowrap"
                 >
                   {link.icon === "Printer" && <Printer className="w-3.5 h-3.5" />}
                   {link.icon === "CircuitBoard" && <CircuitBoard className="w-3.5 h-3.5" />}
