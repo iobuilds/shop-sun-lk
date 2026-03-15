@@ -1571,25 +1571,24 @@ const AdminDashboard = () => {
           {/* ═══ Micro Electronics Tab ═══ */}
           {tab === "micro_electronics" && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
-                    <Wrench className="w-5 h-5 text-secondary" /> Micro Electronics
+                    <Wrench className="w-5 h-5 text-secondary" /> Micro Electronics — Component Families
                   </h2>
-                  <p className="text-sm text-muted-foreground mt-0.5">{microElectronicsProducts.length} products in this section</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Manage parametric component families (Resistors, Capacitors, ICs…) and their variants. Customers select type → family → value/package → add to cart.
+                  </p>
                 </div>
-                <Button onClick={openAddMicroProduct} size="sm" className="gap-1.5">
-                  <Plus className="w-4 h-4" /> Add Component
-                </Button>
               </div>
 
-              {/* LCSC Quick Import Banner */}
+              {/* LCSC Quick Import Banner (kept for individual product imports) */}
               <div className="mb-6 border border-secondary/30 rounded-xl p-4 bg-secondary/5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="flex-1">
                   <p className="font-semibold text-foreground text-sm flex items-center gap-2">
-                    <ExternalLink className="w-4 h-4 text-secondary" /> LCSC Auto-Import
+                    <ExternalLink className="w-4 h-4 text-secondary" /> LCSC Quick Import (Legacy Products)
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Enter a part number (C93216) or paste a full LCSC product URL to instantly import component data.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Import a single component as a standalone product using a LCSC part number. For parametric families, use the Component Families manager below.</p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                   <Input
@@ -1599,80 +1598,14 @@ const AdminDashboard = () => {
                     onKeyDown={(e) => { if (e.key === 'Enter') { openAddMicroProduct(); } }}
                     className="w-56 text-xs"
                   />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => { openAddMicroProduct(); }}
-                    className="shrink-0"
-                  >
+                  <Button variant="secondary" size="sm" onClick={() => { openAddMicroProduct(); }} className="shrink-0">
                     <Plus className="w-4 h-4" /> Import
                   </Button>
                 </div>
               </div>
 
-              {/* Products table */}
-              <div className="bg-card rounded-xl border border-border overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Component</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">SKU / Part No.</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Price</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Stock</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                        <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {microElectronicsProducts.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                            <Wrench className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                            <p className="font-medium">No components yet</p>
-                            <p className="text-xs mt-1">Click "Add Component" or use LCSC import above</p>
-                          </td>
-                        </tr>
-                      ) : microElectronicsProducts.map((p) => (
-                        <tr key={p.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              <img src={p.images?.[0] || "/placeholder.svg"} alt="" className="w-10 h-10 rounded-lg object-cover border border-border" />
-                              <div>
-                                <p className="font-medium text-foreground line-clamp-1">{p.name}</p>
-                                {p.datasheet_url && (
-                                  <a href={p.datasheet_url} target="_blank" rel="noreferrer" className="text-xs text-secondary flex items-center gap-1 hover:underline">
-                                    <FileDown className="w-3 h-3" /> Datasheet
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.sku || "—"}</td>
-                          <td className="px-4 py-3 font-medium text-foreground">Rs. {p.price.toLocaleString()}</td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-medium ${(p.stock_quantity || 0) > 10 ? "text-secondary" : (p.stock_quantity || 0) > 0 ? "text-amber-600" : "text-destructive"}`}>
-                              {p.stock_quantity || 0}{(p.stock_quantity || 0) <= lowStockThreshold && (p.stock_quantity || 0) > 0 ? " ⚠️" : ""}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${p.is_active ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"}`}>
-                              {p.is_active ? "Active" : "Inactive"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => openEditProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => duplicateProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {/* Component Family Manager */}
+              <ComponentFamilyManager />
             </motion.div>
           )}
 
