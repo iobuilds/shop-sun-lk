@@ -342,8 +342,7 @@ const DatabaseTools = () => {
     const totalStorageFiles: number = phase1.total_storage_files ?? 0;
 
     if (totalStorageFiles === 0) {
-      // No storage files to restore
-      await callBackupFn({ action: "full_restore", file_name: fileName }); // log
+      await callBackupFn({ action: "log_restore_complete", file_name: fileName, restored_files: 0 });
       return { restored_files: 0 };
     }
 
