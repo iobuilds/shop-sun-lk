@@ -18,7 +18,7 @@ function renderTemplate(template: string, data: Record<string, string>): string 
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const SMTP_HOST = Deno.env.get("SMTP_HOST");
   const SMTP_PORT = parseInt(Deno.env.get("SMTP_PORT") || "587");
@@ -39,10 +39,9 @@ serve(async (req) => {
 
   try {
     const { to, template_key, template_data } = await req.json();
-
     if (!to || !template_key) throw new Error("'to' and 'template_key' are required");
 
-    // 1. Fetch template, check is_active
+    // Fetch template, check is_active
     const { data: template } = await supabaseAdmin
       .from("email_templates")
       .select("*")
@@ -58,7 +57,6 @@ serve(async (req) => {
       );
     }
 
-    // 2. Render subject + body
     const data: Record<string, string> = {};
     if (template_data) {
       for (const [k, v] of Object.entries(template_data)) {
@@ -71,12 +69,14 @@ serve(async (req) => {
     const textBody = template.text_body ? renderTemplate(template.text_body, data) : subject;
     const recipients = Array.isArray(to) ? to : [to];
 
-    // 3. Send via SMTP using denomailer SMTPClient
+    // Port 465 = implicit TLS; 587 = STARTTLS (tls: false, denomailer upgrades automatically)
+    const useTLS = SMTP_PORT === 465;
+
     const client = new SMTPClient({
       connection: {
         hostname: SMTP_HOST,
         port: SMTP_PORT,
-        tls: SMTP_PORT === 465,
+        tls: useTLS,
         auth: { username: SMTP_USERNAME, password: SMTP_PASSWORD },
       },
     });
@@ -90,7 +90,6 @@ serve(async (req) => {
     });
 
     await client.close();
-
     console.log(`✅ Email [${template_key}] sent to ${recipients.join(", ")}`);
 
     return new Response(
@@ -100,7 +99,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("send-customer-email error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: String(error?.message ?? error) }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }

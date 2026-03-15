@@ -9,7 +9,7 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   const SMTP_HOST = Deno.env.get("SMTP_HOST");
@@ -35,11 +35,14 @@ serve(async (req) => {
       );
     }
 
+    // Port 465 = implicit TLS; port 587/25 = STARTTLS (tls:false, starttls handled by denomailer)
+    const useTLS = SMTP_PORT === 465;
+
     const client = new SMTPClient({
       connection: {
         hostname: SMTP_HOST,
         port: SMTP_PORT,
-        tls: SMTP_PORT === 465,
+        tls: useTLS,
         auth: { username: SMTP_USERNAME, password: SMTP_PASSWORD },
       },
     });
@@ -63,7 +66,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("SMTP send error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: String(error?.message ?? error) }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
     );
   }
