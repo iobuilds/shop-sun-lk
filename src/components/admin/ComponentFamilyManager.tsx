@@ -684,58 +684,116 @@ const ComponentFamilyManager = () => {
   const totalVariants = Object.values(allVariants as Record<string, any[]>).reduce((s, a) => s + a.length, 0);
   const totalActive = (families as any[]).filter((f: any) => f.is_active).length;
 
+  // Per-type family & variant counts
+  const typeFamilyCount = (id: string) => (families as any[]).filter((f: any) => f.component_type === id).length;
+  const typeVariantCount = (id: string) => {
+    const fids = (families as any[]).filter((f: any) => f.component_type === id).map((f: any) => f.id);
+    return fids.reduce((s: number, id: string) => s + ((allVariants as any)[id]?.length || 0), 0);
+  };
+
   return (
     <div className="space-y-5">
 
-      {/* ── Stats bar ── */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Families", value: totalFamilies, icon: <Package className="w-4 h-4" />, color: "text-primary" },
-          { label: "Total Variants", value: totalVariants, icon: <Layers className="w-4 h-4" />, color: "text-secondary" },
-          { label: "Active Families", value: totalActive, icon: <CheckCircle2 className="w-4 h-4" />, color: "text-green-600" },
-        ].map(s => (
-          <div key={s.label} className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
-            <div className={`${s.color} opacity-70`}>{s.icon}</div>
-            <div>
-              <p className="text-xl font-bold text-foreground leading-none">{s.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-            placeholder="Search families…" className="pl-8 h-9 text-sm" />
+      {/* ── Global search + New Family ── */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input value={searchQ} onChange={e => { setSearchQ(e.target.value); if (e.target.value) setFilterType("all"); }}
+            placeholder="Search component families… e.g. 10kΩ, NE555" className="pl-9 h-10 text-sm" />
           {searchQ && (
             <button onClick={() => setSearchQ("")}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
         </div>
-        {/* Type filter */}
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="w-[150px] h-9 text-sm">
-            <SelectValue placeholder="All Types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            {COMPONENT_TYPES.map(t => <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {filteredFamilies.length} / {totalFamilies}
-        </span>
-        <Button size="sm" className="ml-auto gap-1.5"
+        <Button className="gap-1.5 h-10 shrink-0"
           onClick={() => { setEditingFamily(null); setFamilyForm(emptyFamily()); setShowFamilyModal(true); }}>
           <Plus className="w-4 h-4" /> New Family
         </Button>
       </div>
+
+      {/* ── Visual category navigation grid ── */}
+      {!searchQ && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {/* "All" card */}
+          <button
+            onClick={() => setFilterType("all")}
+            className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 hover:shadow-sm ${
+              filterType === "all"
+                ? "bg-secondary/10 border-secondary shadow-sm"
+                : "bg-card border-border hover:border-secondary/50"
+            }`}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${filterType === "all" ? "bg-secondary/20 text-secondary" : "bg-muted text-muted-foreground"}`}>
+                <Package className="w-5 h-5" />
+              </div>
+              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${filterType === "all" ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"}`}>
+                {totalFamilies}
+              </span>
+            </div>
+            <p className="font-bold text-sm text-foreground leading-tight">All Types</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">{totalVariants} variants total</p>
+          </button>
+
+          {COMPONENT_TYPES.map(type => {
+            const fc = typeFamilyCount(type.id);
+            const vc = typeVariantCount(type.id);
+            const isActive = filterType === type.id;
+            return (
+              <motion.button
+                key={type.id}
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setFilterType(isActive ? "all" : type.id)}
+                className={`relative text-left p-4 rounded-xl border-2 transition-all duration-150 ${
+                  isActive
+                    ? `${type.color} shadow-sm ring-1 ring-inset ring-current/20`
+                    : `${type.color} opacity-80 hover:opacity-100`
+                } ${fc === 0 ? "opacity-40" : ""}`}
+              >
+                {/* Count badge */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-white/60 ${type.iconColor}`}>
+                    {type.icon}
+                  </div>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${type.badgeColor}`}>
+                    {fc}
+                  </span>
+                </div>
+                <p className="font-bold text-sm text-foreground leading-tight">{type.label}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{type.shortDesc}</p>
+                {vc > 0 && (
+                  <p className="text-[10px] text-muted-foreground mt-1 font-medium">{vc} variants</p>
+                )}
+                {isActive && (
+                  <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-current opacity-60" />
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Active filter indicator */}
+      {!searchQ && filterType !== "all" && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-foreground">
+            {COMPONENT_TYPES.find(t => t.id === filterType)?.label}
+          </span>
+          <span className="text-xs text-muted-foreground">— {filteredFamilies.length} famil{filteredFamilies.length !== 1 ? "ies" : "y"}</span>
+          <button onClick={() => setFilterType("all")}
+            className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <X className="w-3 h-3" /> Show all
+          </button>
+        </div>
+      )}
+      {searchQ && (
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">{filteredFamilies.length}</span> result{filteredFamilies.length !== 1 ? "s" : ""} for "<span className="text-foreground">{searchQ}</span>"
+        </p>
+      )}
 
       {/* ── Family Form Modal ── */}
       <Dialog open={showFamilyModal} onOpenChange={v => !v && (setShowFamilyModal(false), setEditingFamily(null))}>
