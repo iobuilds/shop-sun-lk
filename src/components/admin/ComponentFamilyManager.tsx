@@ -449,7 +449,7 @@ const ComponentFamilyManager = () => {
                               </div>
                               <div className="text-xs font-mono text-muted-foreground">{v.package || "—"}</div>
                               <div>
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${v.mount_type === "SMD" ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${v.mount_type === "SMD" ? "bg-primary/10 text-primary" : "bg-secondary/10 text-secondary"}`}>
                                   {v.mount_type}
                                 </span>
                               </div>
