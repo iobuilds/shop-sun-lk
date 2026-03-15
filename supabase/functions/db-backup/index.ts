@@ -67,6 +67,22 @@ async function getPgClient() {
   return client;
 }
 
+// Converts any signed URL (absolute or relative) to a fully-qualified public URL.
+// Handles three cases:
+//   1. Relative path like "db/storage/v1/..." → prepend publicBase
+//   2. Internal host like "http://kong:8000/..." → replace host with publicBase
+//   3. Already correct absolute URL → returned as-is
+function resolvePublicUrl(signedUrl: string, publicBase: string): string {
+  const base = publicBase.replace(/\/$/, "");
+  if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
+    // Replace any host (internal or external) with our known-good public base
+    return signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, base);
+  }
+  // Relative URL — prepend base (strip leading slash if both have one)
+  const path = signedUrl.startsWith("/") ? signedUrl : `/${signedUrl}`;
+  return `${base}${path}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -375,9 +391,13 @@ Deno.serve(async (req) => {
       if (uploadedData) {
         backupData = uploadedData;
       } else if (file_name) {
-        const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-        if (dlError || !fileData) return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const text = await fileData.text();
+        // Use signed URL via publicSupabaseUrl to avoid internal-hostname issues on Lovable Cloud
+        const { data: signedData, error: signErr } = await adminClient.storage.from("db-backups").createSignedUrl(file_name, 300);
+        if (signErr || !signedData) return new Response(JSON.stringify({ error: "Could not create signed URL: " + signErr?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const publicSignedUrl = resolvePublicUrl(signedData.signedUrl, publicSupabaseUrl);
+        const fetchRes = await fetch(publicSignedUrl);
+        if (!fetchRes.ok) return new Response(JSON.stringify({ error: `File download failed: ${fetchRes.status}` }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const text = await fetchRes.text();
         backupData = JSON.parse(text);
       } else {
         return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -505,10 +525,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: error?.message || "Could not create signed URL" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Replace internal host (kong:8000, localhost, etc.) with the public URL
-    const publicUrl = data.signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, publicSupabaseUrl);
-
-    return new Response(JSON.stringify({ url: publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ url: resolvePublicUrl(data.signedUrl, publicSupabaseUrl) }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
