@@ -305,9 +305,6 @@ const ComponentFamilyManager = () => {
   const [variantModalFamilyId, setVariantModalFamilyId] = useState<string | null>(null);
   const [editingVariant, setEditingVariant] = useState<any | null>(null);
   const variantModalOpen = !!variantModalFamilyId;
-  const variantModalFamily = variantModalFamilyId
-    ? (families as any[]).find((f: any) => f.id === variantModalFamilyId) || null
-    : null;
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: families = [], isLoading } = useQuery({
