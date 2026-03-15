@@ -481,7 +481,7 @@ export default function EmailTemplatesManager() {
             <DialogTitle>{previewTemplate?.name}</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground mb-2">Subject: {previewTemplate?.subject}</p>
-          <div className="border border-border rounded-md h-[60vh] overflow-auto bg-white">
+          <div className="border border-border rounded-md h-[60vh] overflow-auto bg-background">
             <iframe srcDoc={previewTemplate?.html_body || ""} title="Email Preview" className="w-full h-full" sandbox="allow-same-origin" />
           </div>
         </DialogContent>
