@@ -262,10 +262,225 @@ const VALUE_LABELS: Record<string, string> = {
 
 const MicroElectronicsPage = () => {
   const { storeName } = useBranding();
-  const { addItem } = useCart();
 
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState("");
+
+  // ── Queries ──────────────────────────────────────────────────────────────
+  const { data: allFamilyCounts = {} } = useQuery({
+    queryKey: ["component-family-counts"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("component_families").select("component_type").eq("is_active", true);
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data || []).forEach((r: any) => { counts[r.component_type] = (counts[r.component_type] || 0) + 1; });
+      return counts;
+    },
+  });
+
+  const { data: families = [], isLoading: familiesLoading } = useQuery({
+    queryKey: ["component-families", selectedType],
+    queryFn: async () => {
+      let q = supabase.from("component_families").select("*").eq("is_active", true).order("sort_order");
+      if (selectedType) q = q.eq("component_type", selectedType);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedType,
+  });
+
+  // Global search filter
+  const globalQ = globalSearch.trim().toLowerCase();
+  const filteredTypes = useMemo(() => {
+    if (!globalQ) return COMPONENT_TYPES;
+    return COMPONENT_TYPES.filter(t =>
+      t.label.toLowerCase().includes(globalQ) || t.description.toLowerCase().includes(globalQ)
+    );
+  }, [globalQ]);
+
+  const typeConfig = COMPONENT_TYPES.find(t => t.id === selectedType);
+  const totalFamilies = Object.values(allFamilyCounts as Record<string, number>).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <SEOHead
+        title={`Micro Electronics — Components & ICs | ${storeName}`}
+        description="Browse resistors, capacitors, ICs, transistors, sensors and more. Parametric search by value, package & mount type."
+        canonical={`${window.location.origin}/micro-electronics`}
+      />
+      <Navbar />
+      <main className="pt-[136px] md:pt-[160px]">
+        <div className="container mx-auto px-4 py-8 max-w-6xl">
+
+          {/* Breadcrumb */}
+          <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2 flex-wrap">
+            <Link to="/" className="hover:text-secondary transition-colors">Home</Link>
+            <ChevronRight className="w-3 h-3" />
+            <button onClick={() => setSelectedType(null)}
+              className="hover:text-secondary transition-colors">Micro Electronics</button>
+            {selectedType && (
+              <>
+                <ChevronRight className="w-3 h-3" />
+                <span className="text-foreground font-medium">{typeConfig?.label}</span>
+              </>
+            )}
+          </nav>
+
+          <AnimatePresence mode="wait">
+
+            {/* ── LEVEL 0 : Category Grid ──────────────────────────────────── */}
+            {!selectedType && (
+              <motion.div key="type-grid"
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.25 }}
+              >
+                <div className="flex items-end justify-between mb-8">
+                  <div>
+                    <h1 className="text-3xl font-bold font-display text-foreground">
+                      Parts by <span className="text-secondary">Category</span>
+                    </h1>
+                    <p className="text-muted-foreground mt-1.5 text-sm">
+                      {totalFamilies > 0
+                        ? `${totalFamilies} component famil${totalFamilies !== 1 ? "ies" : "y"} across ${COMPONENT_TYPES.filter(t => (allFamilyCounts as any)[t.id] > 0).length} types`
+                        : "Parametric search by value, package & mount type"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Global search bar */}
+                <div className="relative mb-7">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    value={globalSearch}
+                    onChange={e => setGlobalSearch(e.target.value)}
+                    placeholder="Search component types… e.g. Resistor, IC, MOSFET, LED"
+                    className="w-full h-12 pl-11 pr-10 rounded-xl border-2 border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-secondary transition-colors"
+                  />
+                  {globalSearch && (
+                    <button onClick={() => setGlobalSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {filteredTypes.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <Search className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">No categories match "<span className="text-foreground">{globalSearch}</span>"</p>
+                    <button onClick={() => setGlobalSearch("")} className="mt-2 text-xs text-secondary hover:underline">Clear search</button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {filteredTypes.map((type, i) => {
+                      const count = (allFamilyCounts as any)[type.id] || 0;
+                      return (
+                        <motion.button
+                          key={type.id}
+                          initial={{ opacity: 0, y: 16 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: i * 0.04 }}
+                          onClick={() => setSelectedType(type.id)}
+                          className={`relative group text-left p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${type.bg}`}
+                        >
+                          {count > 0 && (
+                            <span className={`absolute top-3 right-3 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${type.badge}`}>
+                              {count}
+                            </span>
+                          )}
+                          <div className="mb-3 flex items-center justify-center w-14 h-14">
+                            {type.icon}
+                          </div>
+                          <p className="font-bold text-foreground text-sm leading-tight">{type.label}</p>
+                          <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{type.description}</p>
+                          <ChevronRight className="absolute bottom-4 right-4 w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </motion.button>
+                      );
+                    })}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* ── LEVEL 1 : Family List ────────────────────────────────────── */}
+            {selectedType && (
+              <motion.div key="family-list"
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.25 }}
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <button onClick={() => setSelectedType(null)}
+                    className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1">
+                    <h1 className="text-2xl font-bold font-display text-foreground">{typeConfig?.label}</h1>
+                    <p className="text-sm text-muted-foreground">Click a component family to view full details</p>
+                  </div>
+                </div>
+
+                {familiesLoading && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {[...Array(6)].map((_, i) => <div key={i} className="h-28 rounded-xl bg-muted animate-pulse" />)}
+                  </div>
+                )}
+
+                {!familiesLoading && families.length === 0 && (
+                  <div className="text-center py-20 text-muted-foreground border border-dashed border-border rounded-xl">
+                    <Package2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="font-medium">No component families added yet</p>
+                    <p className="text-sm mt-1">Check back soon or browse another category.</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {families.map((family: any, i: number) => {
+                    const detailUrl = `/micro-electronics/${family.component_type}/${family.slug}`;
+                    return (
+                      <motion.div
+                        key={family.id}
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="relative text-left p-5 rounded-xl border-2 border-border bg-card hover:border-secondary/50 hover:shadow-md transition-all duration-200 group cursor-pointer"
+                        onClick={() => window.open(detailUrl, "_blank", "noopener,noreferrer")}
+                      >
+                        <div className="flex items-start gap-4">
+                          {family.images?.[0] ? (
+                            <img src={family.images[0]} alt={family.name}
+                              className="w-16 h-16 object-contain rounded-lg bg-muted/50 flex-shrink-0 border border-border" />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 border border-border">
+                              <div className="opacity-40 scale-75">{typeConfig?.icon}</div>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-foreground group-hover:text-secondary transition-colors leading-tight pr-7">{family.name}</h3>
+                            {family.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{family.description}</p>
+                            )}
+                            <div className="flex items-center gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <span className="text-xs text-secondary font-semibold">View variants</span>
+                              <ExternalLink className="w-3 h-3 text-secondary" />
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+};
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: allFamilyCounts = {} } = useQuery({
