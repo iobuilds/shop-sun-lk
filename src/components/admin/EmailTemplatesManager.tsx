@@ -64,28 +64,59 @@ function getCategory(templateKey: string) {
 const VARIABLE_TOKENS = [
   "{{customer_name}}", "{{order_id}}", "{{total}}", "{{status}}",
   "{{tracking_number}}", "{{payment_method}}", "{{items}}", "{{site_name}}",
+  "{{tracking_link}}", "{{eta}}", "{{quantity}}", "{{unit_cost}}",
+  "{{shipping_fee}}", "{{tax_amount}}", "{{admin_notes}}",
 ];
 
-const DEFAULT_HTML = `<!DOCTYPE html>
+const DEFAULT_HTML = `<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#344054;">Hi {{customer_name}},</p>
+<p style="margin:0 0 14px;font-size:15px;line-height:1.7;color:#344054;">Your update from <strong style="color:#111827;">NanoCircuit.lk</strong> is ready.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 0;">
+  <tr>
+    <td style="border-radius:999px;background:#1a1a2e;">
+      <a href="https://nanocircuit.lk/profile" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:600;line-height:1;color:#ffffff;text-decoration:none;">View details</a>
+    </td>
+  </tr>
+</table>`;
+
+const TEST_TEMPLATE_DATA: Record<string, string> = {
+  customer_name: "Supun Chathuranga",
+  order_id: "NC-240316",
+  total: "12,500",
+  status: "confirmed",
+  tracking_number: "TRK-458921",
+  payment_method: "Card Payment",
+  items: "ESP32 Dev Board ×1, Soldering Kit ×1",
+  site_name: "NanoCircuit.lk",
+  tracking_link: "https://nanocircuit.lk/track-order",
+  eta: "2-3 business days",
+  quantity: "10",
+  unit_cost: "8,900",
+  shipping_fee: "1,400",
+  tax_amount: "2,200",
+  admin_notes: "Your files were checked and are ready for production.",
+};
+
+function buildPreviewHtml(subject: string, body: string) {
+  return `<!DOCTYPE html>
 <html>
-<head><meta charset="UTF-8"><style>
-  body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
-  .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; }
-  .header { background: #1a1a2e; color: white; padding: 24px; text-align: center; }
-  .body { padding: 24px; color: #333; }
-  .footer { background: #f9f9f9; padding: 16px; text-align: center; font-size: 12px; color: #999; }
-</style></head>
-<body>
-  <div class="container">
-    <div class="header"><h2>NanoCircuit</h2></div>
-    <div class="body">
-      <p>Hi {{customer_name}},</p>
-      <p>Your message here.</p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body style="margin:0;padding:24px;background:#f5f7fb;font-family:Arial,sans-serif;">
+  <div style="max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #e6e8ef;border-radius:24px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08);">
+    <div style="padding:28px 32px 18px;background:linear-gradient(180deg,#eef2ff 0%,#ffffff 100%);border-bottom:1px solid #e6e8ef;">
+      <p style="margin:0 0 10px;font-size:11px;line-height:1.4;letter-spacing:0.24em;text-transform:uppercase;color:#667085;">NanoCircuit.lk</p>
+      <h1 style="margin:0;font-size:26px;line-height:1.2;color:#101828;font-weight:700;">${subject || "Email preview"}</h1>
     </div>
-    <div class="footer">© NanoCircuit · shop-sun-lk.lovable.app</div>
+    <div style="padding:32px;">${body}</div>
+    <div style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e6e8ef;font-size:12px;line-height:1.6;color:#667085;text-align:center;">
+      NanoCircuit.lk · Clean transactional email preview
+    </div>
   </div>
 </body>
 </html>`;
+}
 
 const emptyForm = {
   template_key: "", name: "", subject: "", html_body: DEFAULT_HTML,
@@ -209,18 +240,21 @@ export default function EmailTemplatesManager() {
       toast({ title: "Enter a test email address", variant: "destructive" });
       return;
     }
+
     setTestSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-smtp-email", {
+      const { data, error } = await supabase.functions.invoke("send-customer-email", {
         body: {
           to: testEmail,
-          subject: `[TEST] ${testTemplate.subject}`,
-          html: testTemplate.html_body,
-          text: testTemplate.text_body || `Test email: ${testTemplate.name}`,
+          template_key: testTemplate.template_key,
+          template_data: TEST_TEMPLATE_DATA,
         },
       });
-      if (error || !data?.success) throw new Error(error?.message || data?.error || "Failed");
-      toast({ title: "✅ Test email sent!", description: `Sent to ${testEmail}` });
+
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.message || data?.error || "Failed");
+
+      toast({ title: "✅ Test email sent!", description: `Sent to ${testEmail} using the live template sender` });
       setTestDialog(false);
     } catch (e: any) {
       toast({ title: "Failed to send", description: e.message, variant: "destructive" });
@@ -444,7 +478,7 @@ export default function EmailTemplatesManager() {
                 />
               ) : (
           <div className="border border-border rounded-md h-72 overflow-auto bg-background">
-                  <iframe srcDoc={form.html_body} title="Preview" className="w-full h-full" sandbox="allow-same-origin" />
+                  <iframe srcDoc={buildPreviewHtml(form.subject, form.html_body)} title="Preview" className="w-full h-full" sandbox="allow-same-origin" />
                 </div>
               )}
             </div>
@@ -482,7 +516,7 @@ export default function EmailTemplatesManager() {
           </DialogHeader>
           <p className="text-xs text-muted-foreground mb-2">Subject: {previewTemplate?.subject}</p>
           <div className="border border-border rounded-md h-[60vh] overflow-auto bg-background">
-            <iframe srcDoc={previewTemplate?.html_body || ""} title="Email Preview" className="w-full h-full" sandbox="allow-same-origin" />
+            <iframe srcDoc={buildPreviewHtml(previewTemplate?.subject || "Email Preview", previewTemplate?.html_body || "")} title="Email Preview" className="w-full h-full" sandbox="allow-same-origin" />
           </div>
         </DialogContent>
       </Dialog>
