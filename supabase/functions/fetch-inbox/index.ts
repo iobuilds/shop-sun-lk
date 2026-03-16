@@ -41,12 +41,13 @@ serve(async (req) => {
 
   const client = new ImapFlow({
     host,
-    port: 993,
-    secure: true,
+    port: 143,
+    secure: false,
     auth: { user, pass },
     logger: false,
-    tls: { rejectUnauthorized: false }, // allow self-signed certs on shared hosting
-  });
+    tls: { rejectUnauthorized: false },
+    requireTLS: true, // upgrade to STARTTLS on port 143
+  } as any);
 
   try {
     await client.connect();
