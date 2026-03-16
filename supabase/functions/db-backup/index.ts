@@ -316,6 +316,18 @@ Deno.serve(async (req) => {
       if (tablesFile) {
         const tablesJson = await tablesFile.async("string");
         const backupData: Record<string, any[]> = JSON.parse(tablesJson);
+
+        // Use postgres client to disable FK checks so we can restore profiles/user_roles
+        // even when auth.users don't exist yet on a fresh VPS install.
+        let pgClient: any = null;
+        try {
+          pgClient = await getPgClient();
+          await pgClient.queryArray(`SET session_replication_role = 'replica'`);
+        } catch (e) {
+          console.error("Could not disable FK checks via pg:", (e as Error).message);
+          pgClient = null;
+        }
+
         const deleteOrder = [...TABLES].reverse();
         for (const table of deleteOrder) {
           if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
@@ -336,6 +348,16 @@ Deno.serve(async (req) => {
                 if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
               }
             }
+          }
+        }
+
+        // Re-enable FK checks
+        if (pgClient) {
+          try {
+            await pgClient.queryArray(`SET session_replication_role = 'origin'`);
+            await pgClient.end();
+          } catch (e) {
+            console.error("Could not re-enable FK checks:", (e as Error).message);
           }
         }
       }
@@ -433,6 +455,16 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // Disable FK checks so profiles/user_roles can be restored without auth.users existing
+      let pgClientRestore: any = null;
+      try {
+        pgClientRestore = await getPgClient();
+        await pgClientRestore.queryArray(`SET session_replication_role = 'replica'`);
+      } catch (e) {
+        console.error("Could not disable FK checks via pg:", (e as Error).message);
+        pgClientRestore = null;
+      }
+
       const deleteOrder = [...TABLES].reverse();
       for (const table of deleteOrder) {
         if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
@@ -452,6 +484,15 @@ Deno.serve(async (req) => {
               if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
             }
           }
+        }
+      }
+
+      if (pgClientRestore) {
+        try {
+          await pgClientRestore.queryArray(`SET session_replication_role = 'origin'`);
+          await pgClientRestore.end();
+        } catch (e) {
+          console.error("Could not re-enable FK checks:", (e as Error).message);
         }
       }
 
