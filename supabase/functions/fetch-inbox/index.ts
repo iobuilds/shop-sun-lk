@@ -46,7 +46,11 @@ serve(async (req) => {
     auth: { user, pass },
     logger: false,
     disableAutoIdle: true,
-  });
+    disableCompression: true,
+    starttls: false as any,
+    ignoreTLS: true as any,
+    tls: { rejectUnauthorized: false },
+  } as any);
 
   try {
     await client.connect();
