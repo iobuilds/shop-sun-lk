@@ -45,9 +45,8 @@ serve(async (req) => {
     secure: false,
     auth: { user, pass },
     logger: false,
-    tls: { rejectUnauthorized: false },
-    requireTLS: true, // upgrade to STARTTLS on port 143
-  } as any);
+    disableAutoIdle: true,
+  });
 
   try {
     await client.connect();
