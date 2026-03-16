@@ -240,18 +240,21 @@ export default function EmailTemplatesManager() {
       toast({ title: "Enter a test email address", variant: "destructive" });
       return;
     }
+
     setTestSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("send-smtp-email", {
+      const { data, error } = await supabase.functions.invoke("send-customer-email", {
         body: {
           to: testEmail,
-          subject: `[TEST] ${testTemplate.subject}`,
-          html: testTemplate.html_body,
-          text: testTemplate.text_body || `Test email: ${testTemplate.name}`,
+          template_key: testTemplate.template_key,
+          template_data: TEST_TEMPLATE_DATA,
         },
       });
-      if (error || !data?.success) throw new Error(error?.message || data?.error || "Failed");
-      toast({ title: "✅ Test email sent!", description: `Sent to ${testEmail}` });
+
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.message || data?.error || "Failed");
+
+      toast({ title: "✅ Test email sent!", description: `Sent to ${testEmail} using the live template sender` });
       setTestDialog(false);
     } catch (e: any) {
       toast({ title: "Failed to send", description: e.message, variant: "destructive" });
