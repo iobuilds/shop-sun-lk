@@ -72,14 +72,18 @@ const Auth = () => {
     try {
       const formattedPhone = formatPhone(phone);
 
-      // Check if phone is already registered
+      // Check if phone is already registered (including suspended accounts)
       const { data: existingProfile } = await supabase
         .from("profiles")
-        .select("user_id")
+        .select("user_id, is_suspended")
         .eq("phone", formattedPhone)
         .maybeSingle();
       if (existingProfile) {
-        toast.error("This phone number is already registered. Please log in instead.");
+        if (existingProfile.is_suspended) {
+          toast.error("This phone number is associated with a suspended account. Please contact support.");
+        } else {
+          toast.error("This phone number is already registered. Please log in instead.");
+        }
         setOtpSending(false);
         return;
       }
