@@ -59,16 +59,31 @@ function buildInboxFriendlyHtml(subject: string, bodyContent: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
 </head>
-<body style="font-family:Arial,sans-serif;background:#f5f5f5;margin:0;padding:20px;">
-  <div class="c" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-    <div style="padding:24px 32px;">
-      <h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#1a1a2e;">${escapeHtml(subject)}</h1>
-      ${bodyContent}
-    </div>
-    <div style="background:#f0f0f0;padding:16px 32px;text-align:center;font-size:12px;color:#888888;">
-      NanoCircuit.lk - Your trusted electronics partner
-    </div>
-  </div>
+<body style="margin:0;padding:0;background-color:#f5f7fb;font-family:Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5f7fb;margin:0;padding:0;width:100%;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <div class="c" style="max-width:640px;margin:0 auto;background-color:#ffffff;border:1px solid #e6e8ef;border-radius:24px;overflow:hidden;box-shadow:0 18px 48px rgba(15,23,42,0.08);">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="padding:28px 32px 18px;background:linear-gradient(180deg,#eef2ff 0%,#ffffff 100%);border-bottom:1px solid #e6e8ef;">
+                <p style="margin:0 0 10px;font-size:11px;line-height:1.4;letter-spacing:0.24em;text-transform:uppercase;color:#667085;">NanoCircuit.lk</p>
+                <h1 style="margin:0;font-size:26px;line-height:1.2;color:#101828;font-weight:700;">${escapeHtml(subject)}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">${bodyContent}</td>
+            </tr>
+            <tr>
+              <td style="padding:16px 32px;background:#f8fafc;border-top:1px solid #e6e8ef;text-align:center;font-size:12px;line-height:1.6;color:#667085;">
+                NanoCircuit.lk · Trusted electronics parts, PCB services, and order updates.
+              </td>
+            </tr>
+          </table>
+        </div>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
