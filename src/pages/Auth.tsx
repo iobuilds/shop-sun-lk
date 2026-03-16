@@ -72,14 +72,18 @@ const Auth = () => {
     try {
       const formattedPhone = formatPhone(phone);
 
-      // Check if phone is already registered
+      // Check if phone is already registered (including suspended accounts)
       const { data: existingProfile } = await supabase
         .from("profiles")
-        .select("user_id")
+        .select("user_id, is_suspended")
         .eq("phone", formattedPhone)
         .maybeSingle();
       if (existingProfile) {
-        toast.error("This phone number is already registered. Please log in instead.");
+        if (existingProfile.is_suspended) {
+          toast.error("This phone number is associated with a suspended account. Please contact support.");
+        } else {
+          toast.error("This phone number is already registered. Please log in instead.");
+        }
         setOtpSending(false);
         return;
       }
@@ -189,8 +193,8 @@ const Auth = () => {
       } else if (isLogin) {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
-          if (error.message?.includes("banned") || error.message?.includes("ban")) {
-            throw new Error("Your account is suspended. Please contact support.");
+          if (error.message?.toLowerCase().includes("banned") || error.message?.toLowerCase().includes("ban") || error.message?.toLowerCase().includes("suspend")) {
+            throw new Error("🚫 Your account has been suspended. Please contact support for assistance.");
           }
           throw error;
         }
@@ -198,13 +202,14 @@ const Auth = () => {
         // Double-check suspension in profile
         const { data: profileCheck } = await supabase
           .from("profiles")
-          .select("is_suspended")
+          .select("is_suspended, suspended_reason")
           .eq("user_id", signInData.user.id)
           .maybeSingle();
         
         if (profileCheck?.is_suspended) {
           await supabase.auth.signOut();
-          throw new Error("Your account is suspended. Please contact support.");
+          const reason = profileCheck.suspended_reason;
+          throw new Error(`🚫 Your account has been suspended${reason ? `: ${reason}` : ""}. Please contact support for assistance.`);
         }
         
         const { data: roleData } = await supabase

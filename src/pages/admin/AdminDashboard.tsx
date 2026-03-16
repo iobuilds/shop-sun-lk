@@ -1187,9 +1187,11 @@ const AdminDashboard = () => {
   const handleSuspendUser = (u: any) => { setSuspendTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setSuspendReason(""); setSuspendDialog(true); };
   const handleUnsuspendUser = async (userId: string) => {
     setUserActionLoading(true);
-    const { error } = await supabase.from("profiles").update({ is_suspended: false, suspended_at: null, suspended_reason: null } as any).eq("user_id", userId);
+    const { data: unsuspendResult, error } = await supabase.functions.invoke("admin-user-management", {
+      body: { action: "unsuspend", target_user_id: userId }
+    });
     setUserActionLoading(false);
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (error || !unsuspendResult?.success) toast({ title: "Error", description: error?.message || unsuspendResult?.error || "Failed to unsuspend user", variant: "destructive" });
     else { toast({ title: "User unsuspended" }); await logAdminAction("user_unsuspended", "user", userId); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
   };
   const handleDeleteUser = (u: any) => { setDeleteTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setDeleteDialog(true); };
@@ -2339,10 +2341,12 @@ const AdminDashboard = () => {
                     <AlertDialogAction onClick={async () => {
                       if (!suspendTarget) return;
                       setUserActionLoading(true);
-                      const { error } = await supabase.from("profiles").update({ is_suspended: true, suspended_at: new Date().toISOString(), suspended_reason: suspendReason || null } as any).eq("user_id", suspendTarget.id);
+                      const { data: suspendResult, error } = await supabase.functions.invoke("admin-user-management", {
+                        body: { action: "suspend", target_user_id: suspendTarget.id, reason: suspendReason || "Suspended by admin" }
+                      });
                       setUserActionLoading(false);
-                      if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-                      else { toast({ title: "User suspended" }); await logAdminAction("user_suspended", "user", suspendTarget.id, { reason: suspendReason || "No reason given", name: suspendTarget.name }); setSuspendDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
+                      if (error || !suspendResult?.success) toast({ title: "Error", description: error?.message || suspendResult?.error || "Failed to suspend user", variant: "destructive" });
+                      else { toast({ title: "User suspended", description: "User has been banned and will be logged out immediately." }); await logAdminAction("user_suspended", "user", suspendTarget.id, { reason: suspendReason || "No reason given", name: suspendTarget.name }); setSuspendDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
                     }} disabled={userActionLoading} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                       {userActionLoading ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Ban className="w-4 h-4 mr-1" />} Suspend
                     </AlertDialogAction>
@@ -2365,9 +2369,9 @@ const AdminDashboard = () => {
                       onClick={async () => {
                         if (!deleteTarget) return;
                         setUserActionLoading(true);
-                        const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete_user", userId: deleteTarget.id } });
+                        const { data: deleteResult, error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete", target_user_id: deleteTarget.id } });
                         setUserActionLoading(false);
-                        if (error) toast({ title: "Error deleting", description: error.message, variant: "destructive" });
+                        if (error || !deleteResult?.success) toast({ title: "Error deleting", description: error?.message || deleteResult?.error || "Failed to delete user", variant: "destructive" });
                         else { toast({ title: "User deleted" }); await logAdminAction("user_deleted", "user", deleteTarget.id, { name: deleteTarget.name }); setDeleteDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
                       }}
                       disabled={userActionLoading}
