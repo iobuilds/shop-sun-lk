@@ -1187,9 +1187,11 @@ const AdminDashboard = () => {
   const handleSuspendUser = (u: any) => { setSuspendTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setSuspendReason(""); setSuspendDialog(true); };
   const handleUnsuspendUser = async (userId: string) => {
     setUserActionLoading(true);
-    const { error } = await supabase.from("profiles").update({ is_suspended: false, suspended_at: null, suspended_reason: null } as any).eq("user_id", userId);
+    const { data: unsuspendResult, error } = await supabase.functions.invoke("admin-user-management", {
+      body: { action: "unsuspend", target_user_id: userId }
+    });
     setUserActionLoading(false);
-    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (error || !unsuspendResult?.success) toast({ title: "Error", description: error?.message || unsuspendResult?.error || "Failed to unsuspend user", variant: "destructive" });
     else { toast({ title: "User unsuspended" }); await logAdminAction("user_unsuspended", "user", userId); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
   };
   const handleDeleteUser = (u: any) => { setDeleteTarget({ id: u.user_id, name: u.full_name || u.phone || "User" }); setDeleteDialog(true); };
