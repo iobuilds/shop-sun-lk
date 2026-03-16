@@ -2369,9 +2369,9 @@ const AdminDashboard = () => {
                       onClick={async () => {
                         if (!deleteTarget) return;
                         setUserActionLoading(true);
-                        const { error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete_user", userId: deleteTarget.id } });
+                        const { data: deleteResult, error } = await supabase.functions.invoke("admin-user-management", { body: { action: "delete", target_user_id: deleteTarget.id } });
                         setUserActionLoading(false);
-                        if (error) toast({ title: "Error deleting", description: error.message, variant: "destructive" });
+                        if (error || !deleteResult?.success) toast({ title: "Error deleting", description: error?.message || deleteResult?.error || "Failed to delete user", variant: "destructive" });
                         else { toast({ title: "User deleted" }); await logAdminAction("user_deleted", "user", deleteTarget.id, { name: deleteTarget.name }); setDeleteDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-users"] }); }
                       }}
                       disabled={userActionLoading}
