@@ -26,14 +26,14 @@ const TABLES = [
   "image_designs",
 ];
 
-// Tables that should use upsert (conflict on unique key) instead of insert during restore
-const UPSERT_TABLES: Record<string, string> = {
-  site_settings: "key",
-  sms_templates: "template_key",
-  email_templates: "template_key",
-};
-
 const STORAGE_BUCKETS = ["images"];
+
+function log(level: string, msg: string, detail?: any) {
+  const ts = new Date().toISOString();
+  const line = detail ? `[${ts}] [${level.toUpperCase()}] ${msg} ${JSON.stringify(detail)}` : `[${ts}] [${level.toUpperCase()}] ${msg}`;
+  if (level === "error") console.error(line);
+  else console.log(line);
+}
 
 async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): Promise<string[]> {
   const files: string[] = [];
@@ -41,24 +41,31 @@ async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): 
   if (error || !data) return files;
   for (const item of data) {
     const fullPath = path ? `${path}/${item.name}` : item.name;
-    if (item.id) {
-      files.push(fullPath);
-    } else {
-      const subFiles = await getAllStorageFiles(adminClient, bucket, fullPath);
-      files.push(...subFiles);
+    if (item.id) files.push(fullPath);
+    else {
+      const sub = await getAllStorageFiles(adminClient, bucket, fullPath);
+      files.push(...sub);
     }
   }
   return files;
 }
 
-async function exportAllTableData(adminClient: any): Promise<Record<string, any[]>> {
+async function exportAllTableData(adminClient: any): Promise<{ data: Record<string, any[]>; stats: { table: string; rows: number }[] }> {
   const backup: Record<string, any[]> = {};
+  const stats: { table: string; rows: number }[] = [];
   for (const table of TABLES) {
     const { data, error } = await adminClient.from(table).select("*");
-    if (error) { console.error(`Error fetching ${table}:`, error.message); backup[table] = []; }
-    else { backup[table] = data || []; }
+    if (error) {
+      log("error", `Error fetching ${table}`, { error: error.message });
+      backup[table] = [];
+      stats.push({ table, rows: 0 });
+    } else {
+      backup[table] = data || [];
+      stats.push({ table, rows: (data || []).length });
+      log("info", `Exported ${table}`, { rows: (data || []).length });
+    }
   }
-  return backup;
+  return { data: backup, stats };
 }
 
 async function getPgClient() {
@@ -69,79 +76,83 @@ async function getPgClient() {
   return client;
 }
 
-// Converts any signed URL (absolute or relative) to a fully-qualified public URL.
-// Handles three cases:
-//   1. Relative path like "db/storage/v1/..." → prepend publicBase
-//   2. Internal host like "http://kong:8000/..." → replace host with publicBase
-//   3. Already correct absolute URL → returned as-is
-function resolvePublicUrl(signedUrl: string, publicBase: string): string {
-  const base = publicBase.replace(/\/$/, "");
-  if (signedUrl.startsWith("http://") || signedUrl.startsWith("https://")) {
-    // Replace any host (internal or external) with our known-good public base
-    return signedUrl.replace(/^https?:\/\/[^/]+(?::\d+)?/, base);
-  }
-  // Relative URL — prepend base (strip leading slash if both have one)
-  const path = signedUrl.startsWith("/") ? signedUrl : `/${signedUrl}`;
-  return `${base}${path}`;
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  // PUBLIC_SUPABASE_URL = the externally-reachable base URL of this Supabase instance
-  // e.g. https://your-vps-domain.com  (no trailing slash)
-  // Falls back to supabaseUrl so cloud-hosted deployments work without setting it
   const publicSupabaseUrl = (Deno.env.get("PUBLIC_SUPABASE_URL") || supabaseUrl).replace(/\/$/, "");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const adminClient = createClient(supabaseUrl, serviceKey);
 
-  const body = await req.json();
-  const { action } = body;
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
 
-  // ── Scheduled backup from pg_cron ──
+  const { action } = body;
+  log("info", `db-backup called`, { action });
+
+  // ── Scheduled backup from pg_cron (no JWT required) ──
   if (action === "scheduled_backup") {
     try {
-      const backup = await exportAllTableData(adminClient);
+      log("info", "Starting scheduled backup");
+      const { data: backup, stats } = await exportAllTableData(adminClient);
       const jsonStr = JSON.stringify(backup, null, 2);
       const blob = new Uint8Array(new TextEncoder().encode(jsonStr));
       const fileName = `scheduled-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+
       const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, blob, { contentType: "application/json", upsert: false });
       if (uploadError) {
+        log("error", "Scheduled backup upload failed", { error: uploadError.message });
         return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      await adminClient.from("db_backup_logs").insert({ action: "backup", file_name: fileName, file_size: blob.length, created_by_email: "system (scheduled)" });
 
-      // Clean up old scheduled backups - keep only the last 10
+      const totalRows = stats.reduce((sum, s) => sum + s.rows, 0);
+      log("info", "Scheduled backup uploaded", { fileName, size: blob.length, totalRows });
+
+      await adminClient.from("db_backup_logs").insert({
+        action: "backup",
+        file_name: fileName,
+        file_size: blob.length,
+        created_by_email: "system (scheduled)",
+        note: `Scheduled: ${totalRows} total rows across ${stats.filter(s => s.rows > 0).length} tables`,
+      });
+
+      // Keep only the last 10 scheduled backups
       const { data: allFiles } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
       const scheduledFiles = (allFiles || []).filter((f: any) => f.name.startsWith("scheduled-backup-"));
       if (scheduledFiles.length > 10) {
         const toDelete = scheduledFiles.slice(10).map((f: any) => f.name);
         await adminClient.storage.from("db-backups").remove(toDelete);
+        log("info", "Cleaned up old scheduled backups", { deleted: toDelete.length });
       }
 
-      // Auto-cleanup: unschedule the pg_cron job if job_name provided
+      // Auto-unschedule cron job if job_name provided
       const { job_name } = body;
       if (job_name) {
         try {
           const pgClient = await getPgClient();
           await pgClient.queryArray(`SELECT cron.unschedule($1)`, [job_name]);
           await pgClient.end();
+          log("info", "Unscheduled cron job", { job_name });
         } catch (e) {
-          console.error("Failed to unschedule job:", (e as Error).message);
+          log("error", "Failed to unschedule job", { error: (e as Error).message });
         }
       }
 
-      return new Response(JSON.stringify({ success: true, file_name: fileName }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ success: true, file_name: fileName, stats }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "Scheduled backup failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
 
-  // All other actions require admin authentication
+  // ── All other actions require admin authentication ──
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -166,9 +177,7 @@ Deno.serve(async (req) => {
   if (action === "schedule_backup") {
     try {
       const { scheduled_at, label } = body;
-      if (!scheduled_at) {
-        return new Response(JSON.stringify({ error: "scheduled_at required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
+      if (!scheduled_at) return new Response(JSON.stringify({ error: "scheduled_at required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
       const d = new Date(scheduled_at);
       if (isNaN(d.getTime()) || d <= new Date()) {
@@ -182,10 +191,11 @@ Deno.serve(async (req) => {
       const jobName = `manual-backup-${Date.now()}`;
       const cronExpr = `${minute} ${hour} ${dayOfMonth} ${month} *`;
 
-      const fnUrl = `${publicSupabaseUrl.replace(/\/$/, "")}/functions/v1/db-backup`;
+      const fnUrl = `${publicSupabaseUrl}/functions/v1/db-backup`;
       const jobBody = JSON.stringify({ action: "scheduled_backup", job_name: jobName });
       const headersStr = `{"Content-Type": "application/json", "Authorization": "Bearer ${anonKey}"}`;
 
+      log("info", "Scheduling backup", { jobName, cronExpr, fnUrl });
       const pgClient = await getPgClient();
       await pgClient.queryArray(
         `SELECT cron.schedule($1, $2, $3)`,
@@ -201,8 +211,10 @@ Deno.serve(async (req) => {
         note: `${d.toISOString()}${label ? ` | ${label}` : ""}`,
       });
 
+      log("info", "Backup scheduled", { jobName, cronExpr });
       return new Response(JSON.stringify({ success: true, job_name: jobName, cron_expr: cronExpr, scheduled_at: d.toISOString() }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "schedule_backup failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
@@ -224,6 +236,7 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({ jobs: result.rows, logs: logs || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "list_scheduled failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
@@ -231,15 +244,15 @@ Deno.serve(async (req) => {
   // ── Cancel a scheduled job ──
   if (action === "cancel_scheduled") {
     const { job_name } = body;
-    if (!job_name) {
-      return new Response(JSON.stringify({ error: "job_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    if (!job_name) return new Response(JSON.stringify({ error: "job_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     try {
       const pgClient = await getPgClient();
       await pgClient.queryArray(`SELECT cron.unschedule($1)`, [job_name]);
       await pgClient.end();
+      log("info", "Cancelled scheduled job", { job_name });
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "cancel_scheduled failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
@@ -247,17 +260,33 @@ Deno.serve(async (req) => {
   // ── Regular JSON backup ──
   if (action === "backup") {
     try {
-      const backup = await exportAllTableData(adminClient);
+      log("info", "Starting manual JSON backup", { user: user.email });
+      const { data: backup, stats } = await exportAllTableData(adminClient);
       const jsonStr = JSON.stringify(backup, null, 2);
       const blob = new Uint8Array(new TextEncoder().encode(jsonStr));
       const fileName = `backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+
       const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, blob, { contentType: "application/json", upsert: false });
       if (uploadError) {
+        log("error", "JSON backup upload failed", { error: uploadError.message });
         return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      await adminClient.from("db_backup_logs").insert({ action: "backup", file_name: fileName, file_size: blob.length, created_by: user.id, created_by_email: user.email });
-      return new Response(JSON.stringify({ success: true, file_name: fileName, size: blob.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const totalRows = stats.reduce((sum, s) => sum + s.rows, 0);
+      log("info", "JSON backup complete", { fileName, size: blob.length, totalRows });
+
+      await adminClient.from("db_backup_logs").insert({
+        action: "backup",
+        file_name: fileName,
+        file_size: blob.length,
+        created_by: user.id,
+        created_by_email: user.email,
+        note: `${totalRows} total rows across ${stats.filter(s => s.rows > 0).length} tables`,
+      });
+
+      return new Response(JSON.stringify({ success: true, file_name: fileName, size: blob.length, stats }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "JSON backup failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
@@ -265,303 +294,94 @@ Deno.serve(async (req) => {
   // ── Full ZIP backup (DB + all storage files) ──
   if (action === "full_backup") {
     try {
+      log("info", "Starting full ZIP backup", { user: user.email });
       const zip = new JSZip();
-      const backup = await exportAllTableData(adminClient);
+      const { data: backup, stats } = await exportAllTableData(adminClient);
       zip.file("database/tables.json", JSON.stringify(backup, null, 2));
 
       let totalFiles = 0;
       for (const bucket of STORAGE_BUCKETS) {
         const filePaths = await getAllStorageFiles(adminClient, bucket);
+        log("info", `Downloading ${filePaths.length} files from ${bucket}`);
         for (const filePath of filePaths) {
           try {
             const { data: fileData, error: dlError } = await adminClient.storage.from(bucket).download(filePath);
-            if (dlError || !fileData) { console.error(`Failed to download ${bucket}/${filePath}:`, dlError?.message); continue; }
+            if (dlError || !fileData) {
+              log("error", `Failed to download ${bucket}/${filePath}`, { error: dlError?.message });
+              continue;
+            }
             const arrayBuffer = await fileData.arrayBuffer();
             zip.file(`storage/${bucket}/${filePath}`, new Uint8Array(arrayBuffer));
             totalFiles++;
           } catch (err) {
-            console.error(`Error downloading ${bucket}/${filePath}:`, (err as Error).message);
+            log("error", `Error downloading ${bucket}/${filePath}`, { error: (err as Error).message });
           }
         }
       }
 
+      log("info", "Compressing ZIP", { totalFiles });
       const zipData = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE", compressionOptions: { level: 6 } });
       const fileName = `full-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`;
+
       const { error: uploadError } = await adminClient.storage.from("db-backups").upload(fileName, zipData, { contentType: "application/zip", upsert: false });
       if (uploadError) {
+        log("error", "ZIP backup upload failed", { error: uploadError.message });
         return new Response(JSON.stringify({ error: "Upload failed: " + uploadError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      await adminClient.from("db_backup_logs").insert({ action: "full_backup", file_name: fileName, file_size: zipData.length, created_by: user.id, created_by_email: user.email });
-      return new Response(JSON.stringify({ success: true, file_name: fileName, size: zipData.length, total_files: totalFiles }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      const totalRows = stats.reduce((sum, s) => sum + s.rows, 0);
+      log("info", "Full ZIP backup complete", { fileName, size: zipData.length, totalFiles, totalRows });
+
+      await adminClient.from("db_backup_logs").insert({
+        action: "full_backup",
+        file_name: fileName,
+        file_size: zipData.length,
+        created_by: user.id,
+        created_by_email: user.email,
+        note: `${totalRows} rows + ${totalFiles} storage files`,
+      });
+
+      return new Response(JSON.stringify({ success: true, file_name: fileName, size: zipData.length, total_files: totalFiles, stats }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "Full ZIP backup failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
 
-  // ── Full ZIP restore ──
-  // ── Full ZIP restore — Phase 1: DB tables only (fast, no timeout risk) ──
-  if (action === "full_restore") {
-    try {
-      const { file_name } = body;
-      if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-      const arrayBuffer = await fileData.arrayBuffer();
-      const zip = await JSZip.loadAsync(arrayBuffer);
-
-      // Restore DB tables
-      const tablesFile = zip.file("database/tables.json");
-      if (tablesFile) {
-        const tablesJson = await tablesFile.async("string");
-        const backupData: Record<string, any[]> = JSON.parse(tablesJson);
-
-        // Use postgres client to disable FK checks so we can restore profiles/user_roles
-        // even when auth.users don't exist yet on a fresh VPS install.
-        let pgClient: any = null;
-        try {
-          pgClient = await getPgClient();
-          await pgClient.queryArray(`SET session_replication_role = 'replica'`);
-        } catch (e) {
-          console.error("Could not disable FK checks via pg:", (e as Error).message);
-          pgClient = null;
-        }
-
-        const deleteOrder = [...TABLES].reverse();
-        for (const table of deleteOrder) {
-          if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
-            const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-            if (error) console.error(`Delete ${table}:`, error.message);
-          }
-        }
-        for (const table of TABLES) {
-          const rows = backupData[table];
-          if (rows && rows.length > 0) {
-            for (let i = 0; i < rows.length; i += 100) {
-              const batch = rows.slice(i, i + 100);
-              if (UPSERT_TABLES[table]) {
-                const { error } = await adminClient.from(table).upsert(batch, { onConflict: UPSERT_TABLES[table] });
-                if (error) console.error(`Upsert ${table} batch ${i}:`, error.message);
-              } else {
-                const { error } = await adminClient.from(table).insert(batch);
-                if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
-              }
-            }
-          }
-        }
-
-        // Re-enable FK checks
-        if (pgClient) {
-          try {
-            await pgClient.queryArray(`SET session_replication_role = 'origin'`);
-            await pgClient.end();
-          } catch (e) {
-            console.error("Could not re-enable FK checks:", (e as Error).message);
-          }
-        }
-      }
-
-      // Count how many storage files are in the ZIP so the client knows what to restore
-      const storageFilePaths: Record<string, string[]> = {};
-      for (const bucket of STORAGE_BUCKETS) {
-        const prefix = `storage/${bucket}/`;
-        storageFilePaths[bucket] = Object.keys(zip.files)
-          .filter(f => f.startsWith(prefix) && !zip.files[f].dir)
-          .map(f => f.substring(prefix.length));
-      }
-      const totalStorageFiles = Object.values(storageFilePaths).flat().length;
-
-      await adminClient.from("db_backup_logs").insert({ action: "full_restore_db", file_name, created_by: user.id, created_by_email: user.email, note: `DB restored. ${totalStorageFiles} storage files pending.` });
-      return new Response(JSON.stringify({ success: true, storage_files: storageFilePaths, total_storage_files: totalStorageFiles }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  // ── List backups + logs ──
+  if (action === "list") {
+    const { data: files, error } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
+    if (error) {
+      log("error", "list failed", { error: error.message });
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
+    const { data: logs } = await adminClient.from("db_backup_logs").select("*").order("created_at", { ascending: false });
+    return new Response(JSON.stringify({ files: files || [], logs: logs || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // ── Full ZIP restore — Phase 2: Storage files in batches ──
-  // Called multiple times by the client with offset/batchSize to avoid timeout
-  if (action === "restore_storage_batch") {
-    try {
-      const { file_name, offset = 0, batch_size = 20, clear_first = false } = body;
-      if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-      const arrayBuffer = await fileData.arrayBuffer();
-      const zip = await JSZip.loadAsync(arrayBuffer);
-
-      let restoredFiles = 0;
-      let errorCount = 0;
-      const results: { path: string; status: string }[] = [];
-
-      for (const bucket of STORAGE_BUCKETS) {
-        const prefix = `storage/${bucket}/`;
-        const allBucketFiles = Object.keys(zip.files)
-          .filter(f => f.startsWith(prefix) && !zip.files[f].dir);
-
-        // On first batch (offset=0), clear the bucket
-        if (offset === 0 && clear_first) {
-          const allExisting = await getAllStorageFiles(adminClient, bucket);
-          for (let i = 0; i < allExisting.length; i += 100) {
-            await adminClient.storage.from(bucket).remove(allExisting.slice(i, i + 100));
-          }
-        }
-
-        const batchFiles = allBucketFiles.slice(offset, offset + batch_size);
-        for (const zipPath of batchFiles) {
-          const storagePath = zipPath.substring(prefix.length);
-          const fileObj = zip.file(zipPath);
-          if (!fileObj) continue;
-          try {
-            const content = await fileObj.async("uint8array");
-            const ext = storagePath.split(".").pop()?.toLowerCase() || "";
-            const contentTypes: Record<string, string> = {
-              jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
-              webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf", json: "application/json",
-            };
-            const { error: upErr } = await adminClient.storage.from(bucket).upload(storagePath, content, { contentType: contentTypes[ext] || "application/octet-stream", upsert: true });
-            if (upErr) { errorCount++; results.push({ path: storagePath, status: "error: " + upErr.message }); }
-            else { restoredFiles++; results.push({ path: storagePath, status: "ok" }); }
-          } catch (err) {
-            errorCount++;
-            results.push({ path: storagePath, status: "error: " + (err as Error).message });
-          }
-        }
-      }
-
-      return new Response(JSON.stringify({ success: true, restored: restoredFiles, errors: errorCount, results }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  // ── Delete a backup file ──
+  if (action === "delete") {
+    const { file_name } = body;
+    if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const { error } = await adminClient.storage.from("db-backups").remove([file_name]);
+    if (error) {
+      log("error", "delete failed", { error: error.message });
+      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-  }
-
-  // ── Regular JSON restore ──
-  if (action === "restore") {
-    try {
-      const { file_name, data: uploadedData } = body;
-      let backupData: Record<string, any[]>;
-
-      if (uploadedData) {
-        backupData = uploadedData;
-      } else if (file_name) {
-        // Download directly via adminClient — avoids signed URL hostname issues on Lovable Cloud
-        const { data: fileBlob, error: dlErr } = await adminClient.storage.from("db-backups").download(file_name);
-        if (dlErr || !fileBlob) return new Response(JSON.stringify({ error: "Could not download file: " + dlErr?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const text = await fileBlob.text();
-        backupData = JSON.parse(text);
-      } else {
-        return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Disable FK checks so profiles/user_roles can be restored without auth.users existing
-      let pgClientRestore: any = null;
-      try {
-        pgClientRestore = await getPgClient();
-        await pgClientRestore.queryArray(`SET session_replication_role = 'replica'`);
-      } catch (e) {
-        console.error("Could not disable FK checks via pg:", (e as Error).message);
-        pgClientRestore = null;
-      }
-
-      const deleteOrder = [...TABLES].reverse();
-      for (const table of deleteOrder) {
-        if (backupData[table] !== undefined && !UPSERT_TABLES[table]) {
-          const { error } = await adminClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-          if (error) console.error(`Delete ${table}:`, error.message);
-        }
-      }
-      for (const table of TABLES) {
-        const rows = backupData[table];
-        if (rows && rows.length > 0) {
-          for (let i = 0; i < rows.length; i += 100) {
-            if (UPSERT_TABLES[table]) {
-              const { error } = await adminClient.from(table).upsert(rows.slice(i, i + 100), { onConflict: UPSERT_TABLES[table] });
-              if (error) console.error(`Upsert ${table} batch ${i}:`, error.message);
-            } else {
-              const { error } = await adminClient.from(table).insert(rows.slice(i, i + 100));
-              if (error) console.error(`Insert ${table} batch ${i}:`, error.message);
-            }
-          }
-        }
-      }
-
-      if (pgClientRestore) {
-        try {
-          await pgClientRestore.queryArray(`SET session_replication_role = 'origin'`);
-          await pgClientRestore.end();
-        } catch (e) {
-          console.error("Could not re-enable FK checks:", (e as Error).message);
-        }
-      }
-
-      await adminClient.from("db_backup_logs").insert({ action: "restore", file_name: file_name || "uploaded-file", created_by: user.id, created_by_email: user.email });
-      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-  }
-
-  // ── Log restore complete (called after storage batches are done) ──
-  if (action === "log_restore_complete") {
-    const { file_name, restored_files } = body;
-    await adminClient.from("db_backup_logs").insert({ action: "full_restore", file_name: file_name || "unknown", created_by: user.id, created_by_email: user.email, note: `${restored_files ?? 0} storage files restored.` });
+    log("info", "Deleted backup file", { file_name });
     return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // ── Get a signed upload URL so the browser can PUT the ZIP directly (no base64 / size limit) ──
-  if (action === "get_upload_url") {
-    try {
-      const { file_name } = body;
-      if (!file_name) {
-        return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      const { data, error } = await adminClient.storage.from("db-backups").createSignedUploadUrl(file_name);
-      if (error || !data) {
-        return new Response(JSON.stringify({ error: "Could not create signed upload URL: " + error?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
-      // Build the upload URL from scratch using the token.
-      // We NEVER use data.signedUrl directly because on Lovable Cloud it returns a
-      // relative path like "db/storage/v1/..." which is invalid for browser fetch.
-      const normalizedPublicBase = publicSupabaseUrl.replace(/\/$/, "");
-      const uploadToken = (data as any).token as string;
-      const uploadUrl = `${normalizedPublicBase}/storage/v1/object/upload/sign/db-backups/${encodeURIComponent(file_name)}?token=${uploadToken}`;
-
-      return new Response(JSON.stringify({ url: uploadUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-  }
-
-  // ── Upload ZIP from browser (multipart) and store in db-backups ──
-  if (action === "upload_zip") {
-    try {
-      const { file_name, file_data } = body; // file_data is base64
-      if (!file_name || !file_data) {
-        return new Response(JSON.stringify({ error: "file_name and file_data required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      const binaryStr = atob(file_data);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const { error: upErr } = await adminClient.storage.from("db-backups").upload(file_name, bytes, { contentType: "application/zip", upsert: false });
-      if (upErr) throw new Error("Storage upload failed: " + upErr.message);
-      return new Response(JSON.stringify({ success: true, file_name }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-  }
-
-  // ── Get recent logs (backup activity + any console errors recorded) ──
+  // ── Get recent backup logs ──
   if (action === "get_logs") {
     try {
-      const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+      const { hours = 24 } = body;
+      const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
       const { data: backupLogs } = await adminClient
         .from("db_backup_logs")
         .select("*")
         .gte("created_at", since)
+        .in("action", ["backup", "full_backup", "backup_scheduled"])
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -573,50 +393,11 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({ logs }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     } catch (e) {
+      log("error", "get_logs failed", { error: (e as Error).message });
       return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
   }
 
-  if (action === "list") {
-    const { data: files, error } = await adminClient.storage.from("db-backups").list("", { sortBy: { column: "created_at", order: "desc" } });
-    if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const { data: logs } = await adminClient.from("db_backup_logs").select("*").order("created_at", { ascending: false });
-    return new Response(JSON.stringify({ files: files || [], logs: logs || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-
-  if (action === "delete") {
-    const { file_name } = body;
-    if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    const { error } = await adminClient.storage.from("db-backups").remove([file_name]);
-    if (error) return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  }
-
-  if (action === "download_url") {
-    const { file_name } = body;
-    if (!file_name) {
-      return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    // Download the file server-side and stream it back — avoids all signed URL hostname issues on Lovable Cloud
-    const { data: fileBlob, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-    if (dlError || !fileBlob) {
-      return new Response(JSON.stringify({ error: dlError?.message || "Could not download file" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
-
-    const isZip = file_name.endsWith(".zip");
-    const contentType = isZip ? "application/zip" : "application/json";
-    const arrayBuffer = await fileBlob.arrayBuffer();
-
-    return new Response(arrayBuffer, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${file_name}"`,
-        "Content-Length": String(arrayBuffer.byteLength),
-      },
-    });
-  }
-
+  log("error", "Invalid action", { action });
   return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
