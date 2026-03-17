@@ -673,8 +673,8 @@ By default Supabase routes API calls through Kong on port 8000. Your \`PUBLIC_SU
       server_name supabase.your-domain.com;
       location / {
           proxy_pass http://localhost:8000;
-          proxy_set_header Host $host;
-          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header Host \${host};
+          proxy_set_header X-Real-IP \${remote_addr};
       }
   }
 
