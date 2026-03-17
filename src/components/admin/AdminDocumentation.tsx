@@ -699,7 +699,7 @@ Files uploaded through the app are stored inside the \`storage\` container volum
 **Option A — pg_dump the auth schema (recommended):**
 
 On your source Supabase instance:
-  pg_dump --schema=auth -t auth.users -t auth.identities -t auth.sessions "$SOURCE_DB_URL" > auth_users.sql
+  pg_dump --schema=auth -t auth.users -t auth.identities -t auth.sessions "\${SOURCE_DB_URL}" > auth_users.sql
 
 On your target VPS (inside Docker):
   docker compose exec db psql -U postgres -d postgres < auth_users.sql
