@@ -820,9 +820,9 @@ npm run build
         warnings: [
           "Never serve the shop over plain HTTP in production — customer data and session tokens must be encrypted.",
         ],
-      },
     ],
   },
+];
 
 const CopyableCode = ({ code }: { code: string }) => {
   const copy = () => {
