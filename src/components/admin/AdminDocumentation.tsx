@@ -767,7 +767,7 @@ Use the JSON-only restore option — upload a backup-*.json file. This is faster
       server_name shop.your-domain.com;
       root /var/www/shop/dist;
       index index.html;
-      location / { try_files $uri $uri/ /index.html; }
+      location / { try_files \${uri} \${uri}/ /index.html; }
       ssl_certificate /etc/letsencrypt/live/shop.your-domain.com/fullchain.pem;
       ssl_certificate_key /etc/letsencrypt/live/shop.your-domain.com/privkey.pem;
   }
