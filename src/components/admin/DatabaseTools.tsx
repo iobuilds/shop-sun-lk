@@ -439,8 +439,8 @@ const DatabaseTools = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const fnUrl = `https://${projectId}.supabase.co/functions/v1/db-restore`;
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const fnUrl = `${baseUrl}/functions/v1/db-restore`;
       const response = await fetch(fnUrl, {
         method: "POST",
         headers: {
