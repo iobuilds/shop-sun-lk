@@ -230,10 +230,17 @@ const DatabaseTools = () => {
   useEffect(() => () => { if (progressIntervalRef.current) clearInterval(progressIntervalRef.current); }, []);
 
   // ── Core ──
+  const RESTORE_ACTIONS = new Set([
+    "restore", "full_restore", "restore_storage_batch",
+    "log_restore_complete", "get_upload_url", "download_url",
+  ]);
+
   const callBackupFn = async (body: any) => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("Not authenticated");
-    const res = await supabase.functions.invoke("db-backup", { body });
+    // Route restore actions to the dedicated db-restore function
+    const fnName = RESTORE_ACTIONS.has(body.action) ? "db-restore" : "db-backup";
+    const res = await supabase.functions.invoke(fnName, { body });
     if (res.error) throw new Error(res.error.message);
     if (res.data?.error) throw new Error(res.data.error);
     return res.data;
