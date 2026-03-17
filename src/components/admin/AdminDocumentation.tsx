@@ -610,7 +610,219 @@ Use this to audit changes and investigate any unexpected data modifications.`,
       },
     ],
   },
-];
+  {
+    id: "self_hosting",
+    title: "Self-Hosting Guide",
+    icon: Building2,
+    color: "text-teal-500",
+    articles: [
+      {
+        title: "Docker Compose Setup",
+        content: `This guide explains how to run the full shop stack on your own VPS using Docker.
+
+**Prerequisites:**
+- A Linux VPS (Ubuntu 22.04 recommended) with at least 2GB RAM
+- Docker and Docker Compose installed
+- A domain name pointed at your server IP
+- Port 80 and 443 open in your firewall
+
+**Step 1 — Clone the repo:**
+\`\`\`
+git clone <YOUR_GIT_URL> shop
+cd shop
+\`\`\`
+
+**Step 2 — Create a \`.env\` file** in the project root:
+\`\`\`
+VITE_SUPABASE_URL=https://your-domain.com
+VITE_SUPABASE_PUBLISHABLE_KEY=<anon key>
+VITE_SUPABASE_PROJECT_ID=<project ref>
+PUBLIC_SUPABASE_URL=https://your-domain.com
+\`\`\`
+
+**Step 3 — Build and start:**
+\`\`\`
+docker compose up -d --build
+\`\`\`
+
+**Step 4 — Verify containers are running:**
+\`\`\`
+docker compose ps
+\`\`\`
+All services (app, kong, db, storage, auth, edge-runtime) should show **Up**.
+
+**Step 5 — Apply database migrations:**
+\`\`\`
+docker compose exec supabase-db psql -U postgres -d postgres -f /migrations/init.sql
+\`\`\``,
+        tips: [
+          "Use `docker compose logs -f edge-runtime` to tail edge function logs in real time.",
+          "Run `docker compose pull` periodically to update base images.",
+          "Back up your Docker volumes before any major upgrade.",
+        ],
+        warnings: [
+          "Never expose the Postgres or Kong admin ports (5432, 8001) directly to the internet — use a firewall.",
+        ],
+      },
+      {
+        title: "Self-Hosted Supabase Configuration",
+        content: `When running Supabase self-hosted (via Docker), you need to configure a few extra environment variables so the shop functions work correctly.
+
+**Required secrets to set in the Admin → Secrets panel:**
+
+- \`PUBLIC_SUPABASE_URL\` — The externally-reachable URL of your Supabase instance (e.g. \`https://supabase.your-domain.com\`). This is critical for backup/restore signed URLs to work correctly.
+- \`SUPABASE_DB_URL\` — The internal Postgres connection string. Format: \`postgresql://postgres:<password>@db:5432/postgres\`. Used for scheduled backup cron jobs and FK bypass during restore.
+
+**Kong / API gateway config:**
+By default Supabase routes API calls through Kong on port 8000. Your \`PUBLIC_SUPABASE_URL\` should point to Kong (e.g. via an Nginx reverse proxy).
+
+**Nginx reverse proxy example:**
+\`\`\`
+server {
+    listen 443 ssl;
+    server_name supabase.your-domain.com;
+
+    location / {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+\`\`\`
+
+**Edge Functions:**
+Edge functions run inside the \`edge-runtime\` container. They are deployed automatically when the container starts. To redeploy after code changes:
+\`\`\`
+docker compose restart edge-runtime
+\`\`\`
+
+**Storage:**
+Files uploaded through the app are stored inside the \`storage\` container volume. Ensure this volume is backed up separately from the database.`,
+        tips: [
+          "After setting PUBLIC_SUPABASE_URL, test the backup function — download a backup file to verify the URL resolves correctly.",
+          "If backup ZIP downloads fail with 'hostname' errors, PUBLIC_SUPABASE_URL is likely not set or pointing to an internal host.",
+        ],
+        warnings: [
+          "Do NOT use 'http://kong:8000' as PUBLIC_SUPABASE_URL — that is an internal Docker hostname unreachable from browsers.",
+        ],
+      },
+      {
+        title: "Migrating Auth Users to VPS",
+        content: `Auth users (email, phone, passwords) are stored in the \`auth.users\` table which is managed by Supabase internally. The standard backup/restore does NOT include auth users — you must migrate them separately.
+
+**Option A — pg_dump the auth schema (recommended):**
+
+On your source Supabase instance:
+\`\`\`
+pg_dump \\
+  --schema=auth \\
+  -t auth.users \\
+  -t auth.identities \\
+  -t auth.sessions \\
+  "$SOURCE_DB_URL" > auth_users.sql
+\`\`\`
+
+On your target VPS (inside Docker):
+\`\`\`
+docker compose exec db psql -U postgres -d postgres < auth_users.sql
+\`\`\`
+
+**Option B — Export from Supabase Dashboard:**
+- Go to your source project → Table Editor → auth.users
+- Export as CSV
+- Import into your target instance via \`psql COPY\` command
+
+**After migration:**
+1. Restore the main database backup via Admin → Backup & Restore → Restore.
+2. The restore will skip \`profiles\` and \`user_roles\` FK errors because \`session_replication_role = replica\` is used automatically.
+3. Verify user logins work by testing a known account.`,
+        tips: [
+          "You need direct database access (DATABASE_URL) to run pg_dump — get this from your Supabase project settings under Database.",
+          "Always restore auth users BEFORE restoring the main backup to avoid FK constraint issues.",
+        ],
+        warnings: [
+          "Auth user passwords are stored as bcrypt hashes — they will work correctly after migration without requiring password resets.",
+        ],
+      },
+      {
+        title: "Restore from Backup on VPS",
+        content: `After deploying to your VPS, restore your data using the Admin → Backup & Restore panel.
+
+**Full site restore workflow:**
+
+1. **Upload a ZIP backup** — Use the "Upload & Restore Full Site ZIP" option to upload a \`full-backup-*.zip\` file from your computer.
+2. The system automatically:
+   - Phase 1: Restores all database tables (with FK checks disabled to handle profiles/user_roles)
+   - Phase 2: Restores all storage images in batches of 15 files
+3. **Watch the progress bar** — each batch is shown. Total time depends on the number of images.
+4. After completion, reload the storefront to verify products and images appear.
+
+**Troubleshooting FK errors during restore:**
+If you still see FK constraint errors in the edge function logs:
+- Ensure \`SUPABASE_DB_URL\` secret is correctly set (needed for the pg bypass)
+- Check that the Postgres port (5432) is accessible from within the edge-runtime container
+- Verify the secret uses the internal Docker hostname \`db\` not \`localhost\`
+
+**Restoring only the database (no images):**
+Use the JSON-only restore option — upload a \`backup-*.json\` file. This is faster and suitable when you only need to restore table data.`,
+        tips: [
+          "After a full restore, clear your browser cache — some images may be served from old CDN cache.",
+          "Storage restore batches can be rerun if they time out — the system uses upsert so re-running is safe.",
+        ],
+      },
+      {
+        title: "SSL & Domain Setup",
+        content: `Secure your VPS deployment with HTTPS using Certbot (Let's Encrypt).
+
+**Step 1 — Install Certbot:**
+\`\`\`
+sudo apt install certbot python3-certbot-nginx -y
+\`\`\`
+
+**Step 2 — Obtain a certificate:**
+\`\`\`
+sudo certbot --nginx -d shop.your-domain.com -d supabase.your-domain.com
+\`\`\`
+
+**Step 3 — Auto-renewal:**
+\`\`\`
+sudo systemctl enable certbot.timer
+sudo systemctl start certbot.timer
+\`\`\`
+
+**Nginx config for the shop frontend:**
+\`\`\`
+server {
+    listen 443 ssl;
+    server_name shop.your-domain.com;
+    root /var/www/shop/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    ssl_certificate /etc/letsencrypt/live/shop.your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/shop.your-domain.com/privkey.pem;
+}
+\`\`\`
+
+**Building the frontend for production:**
+\`\`\`
+npm install
+npm run build
+# Output is in dist/ — copy to /var/www/shop/dist
+\`\`\``,
+        tips: [
+          "Set VITE_SUPABASE_URL to your public domain before running `npm run build` — this is baked into the frontend bundle.",
+          "Use `npm run build` locally and SCP the dist/ folder to your server, or set up a CI/CD pipeline.",
+        ],
+        warnings: [
+          "Never serve the shop over plain HTTP in production — customer data and session tokens must be encrypted.",
+        ],
+      },
+    ],
+  },
 
 const CopyableCode = ({ code }: { code: string }) => {
   const copy = () => {
