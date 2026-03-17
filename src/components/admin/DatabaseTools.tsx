@@ -435,12 +435,12 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      // Stream the file directly through the edge function to avoid signed URL hostname issues on Lovable Cloud
+      // Stream the file directly through the db-restore edge function to avoid signed URL hostname issues
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const fnUrl = `https://${projectId}.supabase.co/functions/v1/db-backup`;
+      const fnUrl = `https://${projectId}.supabase.co/functions/v1/db-restore`;
       const response = await fetch(fnUrl, {
         method: "POST",
         headers: {
