@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.lcsc-import]
 verify_jwt = false
+
+[functions.db-restore]
+verify_jwt = false
