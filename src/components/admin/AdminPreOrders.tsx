@@ -506,6 +506,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         arrival_shipping_fee: shipping,
         arrival_tax_amount: tax,
         arrival_payment_status: "unpaid",
+        status: "arrived", // Auto-advance to arrived, same as PCB flow
       }).eq("id", arrivalTarget.id);
       if (error) throw error;
 
@@ -513,8 +514,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       const total = shipping + tax;
       await supabase.from("user_notifications").insert({
         user_id: arrivalTarget.user_id,
-        title: "Arrival Charges Ready",
-        message: `Your pre-order PO-${shortId} has arrived! Shipping + Tax: Rs. ${total.toLocaleString()}. Please pay to complete.`,
+        title: "Items Arrived — Pay Arrival Charges",
+        message: `Your pre-order PO-${shortId} items have arrived! Arrival charges: Rs. ${total.toLocaleString()}. Please log in and pay to complete.`,
         type: "order",
         link_url: "/pre-order?tab=my",
       });
@@ -524,14 +525,14 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         await supabase.functions.invoke("send-sms", {
           body: {
             phone: profile.phone,
-            message: `NanoCircuit.lk: Your pre-order PO-${shortId} has arrived! Arrival charges: Rs. ${total.toLocaleString()}. Please log in and pay to complete your order.`,
+            message: `NanoCircuit.lk: Your pre-order PO-${shortId} items have arrived! Arrival charges: Rs. ${total.toLocaleString()}. Log in to pay & complete your order. nanocircuit.lk/pre-order`,
             order_id: arrivalTarget.id,
             user_id: arrivalTarget.user_id,
           },
         });
       }
 
-      toast({ title: "Arrival charges saved & user notified" });
+      toast({ title: "Arrival charges saved — order moved to 'Arrived' & user notified" });
       setArrivalDialog(false);
       onRefresh();
     } catch (err: any) {
