@@ -156,14 +156,17 @@ function usageBadge(pct: number | null) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
+const METRICS_URL = "https://db.nanocircuit.iobuilds.com/system-metrics.json";
+
 export default function SystemMetrics() {
   const { data, isLoading, error, isFetching, refetch } = useQuery<MetricsData>({
-    queryKey: ["system-metrics-proxy"],
+    queryKey: ["system-metrics-direct"],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("system-metrics");
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "Server returned success: false");
-      return data as MetricsData;
+      const res = await fetch(`${METRICS_URL}?ts=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Server returned success: false");
+      return json as MetricsData;
     },
     staleTime: 0,
     refetchInterval: 30_000,
