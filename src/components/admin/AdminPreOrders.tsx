@@ -245,10 +245,15 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  // Filter by status and search by order ID
+  // Filter by status and search by order ID, customer name, or phone
   const filtered = requests.filter(r => {
     const matchStatus = filterStatus === "all" || r.status === filterStatus;
-    const matchSearch = !searchQuery || r.id.toLowerCase().includes(searchQuery.toLowerCase().replace(/[^a-f0-9-]/g, ''));
+    const profile = getProfile(r.user_id);
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !searchQuery ||
+      r.id.toLowerCase().includes(q.replace(/[^a-f0-9-]/g, '')) ||
+      (profile?.full_name || "").toLowerCase().includes(q) ||
+      (profile?.phone || "").toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
