@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, Cpu, MemoryStick, HardDrive, Database, Clock, Server, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, Cpu, MemoryStick, HardDrive, Database, Clock, Server, AlertTriangle, Container, FolderOpen } from "lucide-react";
 
 interface Bucket {
   bucket_id: string;
@@ -57,6 +57,22 @@ interface MetricsData {
       free_human: string;
     } | null;
   };
+  docker?: {
+    root_dir: string;
+    usage_percent: number | null;
+    total_bytes: number;
+    used_bytes: number;
+    free_bytes: number;
+    total_human: string;
+    used_human: string;
+    free_human: string;
+  } | null;
+  app_storage?: {
+    postgres_data_bytes: number | null;
+    postgres_data_human: string | null;
+    storage_files_bytes: number | null;
+    storage_files_human: string | null;
+  } | null;
   storage_buckets: {
     error?: string;
     buckets: Bucket[];
@@ -73,7 +89,7 @@ interface MetricsData {
   } | null;
 }
 
-function ProgressBar({ value, color = "primary" }: { value: number | null; color?: string }) {
+function ProgressBar({ value }: { value: number | null }) {
   const pct = Math.min(100, Math.max(0, value ?? 0));
   const barColor =
     pct >= 90 ? "bg-destructive" :
@@ -140,6 +156,11 @@ export default function SystemMetrics() {
 
   const refresh = () => setRefreshKey(k => k + 1);
 
+  const hasCgroupData = data &&
+    (data.memory.cgroup_view.current_bytes != null ||
+     data.memory.cgroup_view.limit_bytes != null ||
+     data.memory.cgroup_view.usage_percent != null);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -195,18 +216,18 @@ export default function SystemMetrics() {
               <ProgressBar value={data.cpu.usage_percent} />
               <StatRow label="Usage" value={data.cpu.usage_percent != null ? `${data.cpu.usage_percent}%` : null} />
               <StatRow label="Cores detected" value={data.cpu.cores_detected} />
-              <StatRow label="cGroup limit" value={data.cpu.cgroup_limit_cores != null ? `${data.cpu.cgroup_limit_cores} cores` : null} />
+              {data.cpu.cgroup_limit_cores != null && (
+                <StatRow label="cGroup limit" value={`${data.cpu.cgroup_limit_cores} cores`} />
+              )}
               {data.cpu.load_average && (
-                <>
-                  <div className="border-t border-border pt-2 mt-1">
-                    <p className="text-xs text-muted-foreground mb-1">Load Average</p>
-                    <div className="flex gap-4">
-                      <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_1m}</p><p className="text-xs text-muted-foreground">1m</p></div>
-                      <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_5m}</p><p className="text-xs text-muted-foreground">5m</p></div>
-                      <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_15m}</p><p className="text-xs text-muted-foreground">15m</p></div>
-                    </div>
+                <div className="border-t border-border pt-2 mt-1">
+                  <p className="text-xs text-muted-foreground mb-1">Load Average</p>
+                  <div className="flex gap-4">
+                    <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_1m}</p><p className="text-xs text-muted-foreground">1m</p></div>
+                    <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_5m}</p><p className="text-xs text-muted-foreground">5m</p></div>
+                    <div className="text-center"><p className="font-medium">{data.cpu.load_average.load_15m}</p><p className="text-xs text-muted-foreground">15m</p></div>
                   </div>
-                </>
+                </div>
               )}
             </MetricCard>
 
@@ -223,19 +244,21 @@ export default function SystemMetrics() {
               <StatRow label="Available" value={data.memory.host_view?.available_human} />
             </MetricCard>
 
-            {/* RAM — container */}
-            <MetricCard
-              title="Memory (Container)"
-              icon={MemoryStick}
-              badge={usageBadge(data.memory.cgroup_view?.usage_percent ?? null)}
-            >
-              <ProgressBar value={data.memory.cgroup_view?.usage_percent ?? null} />
-              <StatRow label="Used" value={data.memory.cgroup_view?.current_human} />
-              <StatRow label="Limit" value={data.memory.cgroup_view?.limit_human} />
-              <StatRow label="Usage %" value={data.memory.cgroup_view?.usage_percent != null ? `${data.memory.cgroup_view.usage_percent}%` : null} />
-            </MetricCard>
+            {/* RAM — container (only if cgroup data is available) */}
+            {hasCgroupData && (
+              <MetricCard
+                title="Memory (Container)"
+                icon={MemoryStick}
+                badge={usageBadge(data.memory.cgroup_view?.usage_percent ?? null)}
+              >
+                <ProgressBar value={data.memory.cgroup_view?.usage_percent ?? null} />
+                <StatRow label="Used" value={data.memory.cgroup_view?.current_human} />
+                <StatRow label="Limit" value={data.memory.cgroup_view?.limit_human} />
+                <StatRow label="Usage %" value={data.memory.cgroup_view?.usage_percent != null ? `${data.memory.cgroup_view.usage_percent}%` : null} />
+              </MetricCard>
+            )}
 
-            {/* Disk */}
+            {/* Disk (Root) */}
             <MetricCard
               title="Disk (Root)"
               icon={HardDrive}
@@ -245,8 +268,32 @@ export default function SystemMetrics() {
               <StatRow label="Used" value={data.disk.root?.used_human} />
               <StatRow label="Free" value={data.disk.root?.free_human} />
               <StatRow label="Total" value={data.disk.root?.total_human} />
-              <StatRow label="Usage %" value={data.disk.root?.usage_percent != null ? `${data.disk.root.usage_percent}%` : null} />
             </MetricCard>
+
+            {/* Docker storage (if present) */}
+            {data.docker && (
+              <MetricCard
+                title="Docker Storage"
+                icon={Container}
+                badge={usageBadge(data.docker.usage_percent ?? null)}
+              >
+                <ProgressBar value={data.docker.usage_percent ?? null} />
+                <StatRow label="Used" value={data.docker.used_human} />
+                <StatRow label="Free" value={data.docker.free_human} />
+                <StatRow label="Total" value={data.docker.total_human} />
+                {data.docker.root_dir && (
+                  <StatRow label="Root dir" value={<span className="font-mono text-xs">{data.docker.root_dir}</span>} />
+                )}
+              </MetricCard>
+            )}
+
+            {/* App Storage (if present) */}
+            {data.app_storage && (
+              <MetricCard title="App Storage" icon={FolderOpen}>
+                <StatRow label="Postgres data" value={data.app_storage.postgres_data_human} />
+                <StatRow label="Storage files" value={data.app_storage.storage_files_human} />
+              </MetricCard>
+            )}
 
             {/* Uptime */}
             <MetricCard title="Uptime" icon={Clock}>
@@ -272,7 +319,9 @@ export default function SystemMetrics() {
                       {data.storage_buckets.buckets.map(b => (
                         <div key={b.bucket_id} className="flex justify-between items-center">
                           <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{b.bucket_id}</span>
-                          <span className="text-xs text-muted-foreground">{b.file_count} files · {b.total_human}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {b.file_count} files{b.total_human ? ` · ${b.total_human}` : ""}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -280,9 +329,11 @@ export default function SystemMetrics() {
                 </>
               )}
             </MetricCard>
+
           </div>
         </>
       )}
     </div>
   );
 }
+
