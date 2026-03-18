@@ -82,10 +82,45 @@ serve(async (req) => {
         }
       }
 
-      if (!profile?.phone) {
+      // Profile not found at all
+      if (!profile) {
         return new Response(
           JSON.stringify({ success: false, error: "No account found with this email or phone number." }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Profile found but no phone linked → send email reset link as fallback
+      if (!profile.phone) {
+        // Only possible for email-identified users (isPhone path always has phone in DB)
+        if (!isPhone) {
+          // Send Supabase built-in password reset email
+          const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+          const resetRes = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "apikey": Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+            },
+            body: JSON.stringify({
+              email: trimmed,
+              gotrue_meta_security: {},
+            }),
+          });
+          if (resetRes.ok || resetRes.status === 200) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                method: "email",
+                message: "A password reset link has been sent to your email address.",
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+        return new Response(
+          JSON.stringify({ success: false, error: "No phone number is linked to this account. Please contact support." }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -94,7 +129,7 @@ serve(async (req) => {
       const masked = rawPhone.slice(0, -4).replace(/\d/g, "*") + rawPhone.slice(-4);
 
       return new Response(
-        JSON.stringify({ success: true, phone: rawPhone, maskedPhone: masked }),
+        JSON.stringify({ success: true, method: "sms", phone: rawPhone, maskedPhone: masked }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

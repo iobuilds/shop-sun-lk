@@ -210,10 +210,18 @@ const Auth = () => {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || "Account not found");
 
+      // Email-reset fallback (user has no phone linked)
+      if (data.method === "email") {
+        toast.success("A password reset link has been sent to your email. Please check your inbox.");
+        setForgotPassword(false);
+        setResetStep("input");
+        setResetIdentifier("");
+        return;
+      }
+
+      // SMS OTP flow
       setResetPhone(data.phone);
       setResetMaskedPhone(data.maskedPhone);
-
-      // Send OTP immediately
       await sendResetOtp(data.phone);
     } catch (error: any) {
       toast.error(error.message);
