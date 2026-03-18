@@ -385,7 +385,16 @@ const Checkout = () => {
       });
 
       if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (data.error) {
+        // Handle stale cart items — remove them and prompt user
+        if (data.stale_product_ids?.length > 0) {
+          data.stale_product_ids.forEach((id: string) => removeItem(id));
+          toast.error("Some items in your cart are no longer available and have been removed. Please review your cart and try again.");
+          setSubmitting(false);
+          return;
+        }
+        throw new Error(data.error);
+      }
 
       clearCart();
       logSiteAction("order_placed", "order", data.order_id, { payment_method: paymentMethod, items: items.length });
