@@ -1,6 +1,89 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import JSZip from "jszip";
+
+// ── ZIP raw-scanner helpers ──────────────────────────────────────────────────
+// Reads a ZIP's local file entries sequentially (no central directory needed).
+// This lets us restore even truncated ZIPs where the EOCD at the end is cut off.
+
+async function decompressDeflateRaw(compressed: Uint8Array): Promise<Uint8Array> {
+  const ds = new DecompressionStream("deflate-raw");
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
+  writer.write(compressed);
+  await writer.close();
+  const chunks: Uint8Array[] = [];
+  let r = await reader.read();
+  while (!r.done) { chunks.push(r.value!); r = await reader.read(); }
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of chunks) { out.set(c, pos); pos += c.length; }
+  return out;
+}
+
+interface ZipLocalEntry { name: string; data: Uint8Array }
+
+async function scanZipLocalEntries(
+  buffer: ArrayBuffer,
+  filter?: (name: string) => boolean
+): Promise<ZipLocalEntry[]> {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const entries: ZipLocalEntry[] = [];
+  let offset = 0;
+
+  while (offset + 30 <= bytes.length) {
+    const sig = view.getUint32(offset, true);
+    // Local file header signature
+    if (sig !== 0x04034b50) break;
+
+    const flags        = view.getUint16(offset + 6,  true);
+    const compression  = view.getUint16(offset + 8,  true);
+    let compressedSize = view.getUint32(offset + 18, true);
+    const fileNameLen  = view.getUint16(offset + 26, true);
+    const extraLen     = view.getUint16(offset + 28, true);
+
+    const nameBytes = bytes.slice(offset + 30, offset + 30 + fileNameLen);
+    const name      = new TextDecoder("utf-8").decode(nameBytes);
+    const dataStart = offset + 30 + fileNameLen + extraLen;
+
+    // If data descriptor flag is set and size is 0, find next signature
+    if ((flags & 0x08) && compressedSize === 0) {
+      // Scan for next local file header or data descriptor signature
+      let scanPos = dataStart;
+      while (scanPos + 4 <= bytes.length) {
+        const s = view.getUint32(scanPos, true);
+        if (s === 0x04034b50 || s === 0x02014b50 || s === 0x06054b50) break;
+        if (s === 0x08074b50) { // data descriptor
+          compressedSize = scanPos - dataStart;
+          break;
+        }
+        scanPos++;
+      }
+      if (compressedSize === 0) compressedSize = scanPos - dataStart;
+    }
+
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > bytes.length) break; // truncated — stop scanning
+
+    if (!name.endsWith("/") && (!filter || filter(name))) {
+      const compressed = bytes.slice(dataStart, dataEnd);
+      try {
+        const data = compression === 0
+          ? compressed
+          : await decompressDeflateRaw(compressed);
+        entries.push({ name, data });
+      } catch (_) { /* skip undecompressable entry */ }
+    }
+
+    offset = dataEnd;
+    // Skip data descriptor if present
+    if ((flags & 0x08) && view.getUint32(offset, true) === 0x08074b50) offset += 16;
+  }
+  return entries;
+}
+// ────────────────────────────────────────────────────────────────────────────
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
