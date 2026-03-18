@@ -693,9 +693,9 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {req.status === "arrived" && (
+                    {(req.status === "sourcing" || req.status === "arrived") && (
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openArrivalCharges(req)}>
-                        <Truck className="w-3 h-3" /> Arrival Charges
+                        <Truck className="w-3 h-3" /> {req.status === "sourcing" ? "Items Arrived?" : "Edit Charges"}
                       </Button>
                     )}
                     {isQuoted && grandTotal > 0 && (
