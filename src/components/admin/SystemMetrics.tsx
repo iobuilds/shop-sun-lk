@@ -1,5 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -155,17 +156,14 @@ function usageBadge(pct: number | null) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-const METRICS_URL = "https://db.nanocircuit.iobuilds.com/system-metrics.json";
-
 export default function SystemMetrics() {
   const { data, isLoading, error, isFetching, refetch } = useQuery<MetricsData>({
-    queryKey: ["system-metrics-direct"],
+    queryKey: ["system-metrics-proxy"],
     queryFn: async () => {
-      const res = await fetch(`${METRICS_URL}?ts=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Server returned success: false");
-      return json as MetricsData;
+      const { data, error } = await supabase.functions.invoke("system-metrics");
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Invalid metrics response");
+      return data as MetricsData;
     },
     staleTime: 0,
     refetchInterval: 30_000,
