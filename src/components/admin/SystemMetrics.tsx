@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -157,23 +157,21 @@ function usageBadge(pct: number | null) {
 // ── Main component ─────────────────────────────────────────────────────────────
 
 export default function SystemMetrics() {
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const { data, isLoading, error, isFetching } = useQuery<MetricsData>({
-    queryKey: ["system-metrics-proxy", refreshKey],
+  const { data, isLoading, error, isFetching, refetch } = useQuery<MetricsData>({
+    queryKey: ["system-metrics-proxy"],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("system-metrics");
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || "Server returned success: false");
       return data as MetricsData;
     },
-    staleTime: 30_000,
+    staleTime: 0,
     refetchInterval: 30_000,
     retry: 1,
   });
 
   // Manual refresh
-  const refresh = () => setRefreshKey((k) => k + 1);
+  const refresh = () => refetch();
 
   const hasCgroupData =
     data &&
