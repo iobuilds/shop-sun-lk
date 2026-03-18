@@ -426,60 +426,132 @@ const DatabaseTools = () => {
     }
   };
 
-  // Two-phase full restore: Phase 1 = DB tables, Phase 2 = storage files in batches
-  const runFullRestoreFromFileName = async (fileName: string) => {
+  // ── Shared browser-side ZIP restore engine ───────────────────────────────
+  // Used by BOTH "restore from saved snapshot" and "restore from uploaded ZIP".
+  // The ZIP is always parsed in the browser — never on the server — so truncated
+  // ZIPs are handled by the raw local-header scanner fallback.
+  const restoreFromArrayBuffer = async (arrayBuffer: ArrayBuffer, displayName: string) => {
     const STORAGE_BATCH_SIZE = 15;
+    const storageBuckets = ["images"];
 
-    // Phase 1: Restore DB tables
+    // ── Extract database/tables.json (JSZip first, raw scanner fallback) ──
+    let tablesJson: string;
+    let rawEntries: ZipLocalEntry[] | null = null;
+    let zip: JSZip | null = null;
+
+    try {
+      zip = await JSZip.loadAsync(arrayBuffer);
+      const tablesFile = zip.file("database/tables.json");
+      if (!tablesFile) throw new Error("No database/tables.json found in ZIP");
+      tablesJson = await tablesFile.async("string");
+    } catch (zipErr: any) {
+      const isCorrupt =
+        zipErr.message.includes("End of data") ||
+        zipErr.message.includes("Corrupted zip") ||
+        zipErr.message.includes("database/tables.json");
+      if (!isCorrupt) throw zipErr;
+
+      console.warn("JSZip failed (truncated ZIP), falling back to raw local-header scan:", zipErr.message);
+      rawEntries = await scanZipLocalEntries(arrayBuffer);
+      const tablesEntry = rawEntries.find(e => e.name === "database/tables.json");
+      if (!tablesEntry)
+        throw new Error("Could not find database/tables.json — the ZIP appears too corrupted to recover.");
+      tablesJson = new TextDecoder("utf-8").decode(tablesEntry.data);
+    }
+
+    // ── Phase 1: Restore DB tables via edge function ──
     setProgress(p => ({ ...p, step: 1, currentStepLabel: "Restoring database tables..." }));
-    const phase1 = await callBackupFn({ action: "full_restore", file_name: fileName });
-    const totalStorageFiles: number = phase1.total_storage_files ?? 0;
+    const backupData = JSON.parse(tablesJson);
+    const phase1 = await callBackupFn({ action: "restore", data: backupData });
 
-    if (totalStorageFiles === 0) {
-      await callBackupFn({ action: "log_restore_complete", file_name: fileName, restored_files: 0 });
-      return { restored_files: 0 };
+    // ── Phase 2: Restore storage files from browser ──
+    type StorageItem = { storagePath: string; getData: () => Promise<Uint8Array> };
+    const storageItems: StorageItem[] = [];
+
+    if (zip) {
+      for (const bucket of storageBuckets) {
+        const prefix = `storage/${bucket}/`;
+        const files = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip!.files[f].dir);
+        for (const zipPath of files) {
+          storageItems.push({
+            storagePath: `${bucket}/${zipPath.substring(prefix.length)}`,
+            getData: async () => { const f = zip!.file(zipPath); return f ? await f.async("uint8array") : new Uint8Array(0); },
+          });
+        }
+      }
+    } else if (rawEntries) {
+      for (const bucket of storageBuckets) {
+        const prefix = `storage/${bucket}/`;
+        for (const entry of rawEntries.filter(e => e.name.startsWith(prefix))) {
+          const storagePath = `${bucket}/${entry.name.substring(prefix.length)}`;
+          storageItems.push({ storagePath, getData: async () => entry.data });
+        }
+      }
     }
 
-    // Phase 2: Restore storage files in batches
-    let offset = 0;
+    if (storageItems.length > 0) {
+      for (const bucket of storageBuckets) {
+        await callBackupFn({ action: "clear_storage_bucket", bucket });
+      }
+    }
+
     let totalRestored = 0;
-    let clearFirst = true;
-    while (offset < totalStorageFiles) {
+    for (let i = 0; i < storageItems.length; i += STORAGE_BATCH_SIZE) {
+      const batch = storageItems.slice(i, i + STORAGE_BATCH_SIZE);
       setProgress(p => ({
-        ...p,
-        step: 3,
-        currentStepLabel: `Restoring images… ${Math.min(offset + STORAGE_BATCH_SIZE, totalStorageFiles)}/${totalStorageFiles}`,
+        ...p, step: 2,
+        currentStepLabel: `Restoring images… ${Math.min(i + STORAGE_BATCH_SIZE, storageItems.length)}/${storageItems.length}`,
       }));
-      const batchResult = await callBackupFn({
-        action: "restore_storage_batch",
-        file_name: fileName,
-        offset,
-        batch_size: STORAGE_BATCH_SIZE,
-        clear_first: clearFirst,
-      });
-      totalRestored += batchResult.restored ?? 0;
-      offset += STORAGE_BATCH_SIZE;
-      clearFirst = false;
+      await Promise.all(batch.map(async ({ storagePath, getData }) => {
+        try {
+          const content = await getData();
+          if (content.length === 0) return;
+          const [bucket, ...rest] = storagePath.split("/");
+          const filePath = rest.join("/");
+          const ext = filePath.split(".").pop()?.toLowerCase() || "";
+          const ctMap: Record<string, string> = {
+            jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+            webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
+          };
+          await supabase.storage.from(bucket).upload(filePath, content, {
+            contentType: ctMap[ext] || "application/octet-stream", upsert: true,
+          });
+          totalRestored++;
+        } catch (_) { /* skip individual file errors */ }
+      }));
     }
 
-    // Log completion
-    await callBackupFn({
-      action: "log_restore_complete",
-      file_name: fileName,
-      restored_files: totalRestored,
-    });
+    setProgress(p => ({ ...p, step: 3, currentStepLabel: "Finalizing..." }));
+    await callBackupFn({ action: "log_restore_complete", file_name: displayName, restored_files: totalRestored });
 
-    return { restored_files: totalRestored };
+    return { rows_restored: phase1.rows_restored ?? 0, restored_files: totalRestored };
   };
 
   const executeFullRestore = async (fileName: string) => {
     setRestoring(true);
     setConfirmFullRestore(null);
-    startProgress("Restoring Full Site from ZIP", RESTORE_STEPS);
+    startProgress("Restoring Full Site from ZIP", [
+      "Authenticating...", "Downloading backup ZIP...", "Restoring database tables...",
+      "Restoring images...", "Finalizing...",
+    ]);
     try {
-      const result = await runFullRestoreFromFileName(fileName);
+      // Download the ZIP to the browser, then use the shared browser-side extractor.
+      // This avoids all server-side JSZip parsing and its "Corrupted zip" failures.
+      setProgress(p => ({ ...p, step: 1, currentStepLabel: "Downloading backup ZIP..." }));
+      const { data: dlData, error: dlError } = await supabase.functions.invoke("db-restore", {
+        body: { action: "download_url", file_name: fileName },
+      });
+      if (dlError) throw new Error(dlError.message);
+      const arrayBuffer = dlData instanceof Blob
+        ? await dlData.arrayBuffer()
+        : (dlData as ArrayBuffer);
+
+      const result = await restoreFromArrayBuffer(arrayBuffer, fileName);
       finishProgress(true);
-      toast({ title: "Full site restored", description: `Database + ${result.restored_files} storage files restored.` });
+      toast({
+        title: "Full site restored",
+        description: `Database (${result.rows_restored} rows) + ${result.restored_files} storage files restored.`,
+      });
       fetchBackups();
     } catch (e: any) {
       finishProgress(false, e.message);
