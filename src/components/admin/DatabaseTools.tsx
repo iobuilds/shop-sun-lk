@@ -1,6 +1,91 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import JSZip from "jszip";
+
+// ── ZIP raw-scanner helpers ──────────────────────────────────────────────────
+// Reads a ZIP's local file entries sequentially (no central directory needed).
+// This lets us restore even truncated ZIPs where the EOCD at the end is cut off.
+
+async function decompressDeflateRaw(compressed: Uint8Array): Promise<Uint8Array> {
+  const ds = new DecompressionStream("deflate-raw");
+  const writer = ds.writable.getWriter();
+  const reader = ds.readable.getReader();
+  // Copy into a plain ArrayBuffer to satisfy TypeScript's BufferSource constraint
+  const plain = compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength) as ArrayBuffer;
+  writer.write(new Uint8Array(plain));
+  await writer.close();
+  const chunks: Uint8Array[] = [];
+  let r = await reader.read();
+  while (!r.done) { chunks.push(r.value!); r = await reader.read(); }
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const c of chunks) { out.set(c, pos); pos += c.length; }
+  return out;
+}
+
+interface ZipLocalEntry { name: string; data: Uint8Array }
+
+async function scanZipLocalEntries(
+  buffer: ArrayBuffer,
+  filter?: (name: string) => boolean
+): Promise<ZipLocalEntry[]> {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const entries: ZipLocalEntry[] = [];
+  let offset = 0;
+
+  while (offset + 30 <= bytes.length) {
+    const sig = view.getUint32(offset, true);
+    // Local file header signature
+    if (sig !== 0x04034b50) break;
+
+    const flags        = view.getUint16(offset + 6,  true);
+    const compression  = view.getUint16(offset + 8,  true);
+    let compressedSize = view.getUint32(offset + 18, true);
+    const fileNameLen  = view.getUint16(offset + 26, true);
+    const extraLen     = view.getUint16(offset + 28, true);
+
+    const nameBytes = bytes.slice(offset + 30, offset + 30 + fileNameLen);
+    const name      = new TextDecoder("utf-8").decode(nameBytes);
+    const dataStart = offset + 30 + fileNameLen + extraLen;
+
+    // If data descriptor flag is set and size is 0, find next signature
+    if ((flags & 0x08) && compressedSize === 0) {
+      // Scan for next local file header or data descriptor signature
+      let scanPos = dataStart;
+      while (scanPos + 4 <= bytes.length) {
+        const s = view.getUint32(scanPos, true);
+        if (s === 0x04034b50 || s === 0x02014b50 || s === 0x06054b50) break;
+        if (s === 0x08074b50) { // data descriptor
+          compressedSize = scanPos - dataStart;
+          break;
+        }
+        scanPos++;
+      }
+      if (compressedSize === 0) compressedSize = scanPos - dataStart;
+    }
+
+    const dataEnd = dataStart + compressedSize;
+    if (dataEnd > bytes.length) break; // truncated — stop scanning
+
+    if (!name.endsWith("/") && (!filter || filter(name))) {
+      const compressed = bytes.slice(dataStart, dataEnd);
+      try {
+        const data = compression === 0
+          ? compressed
+          : await decompressDeflateRaw(compressed);
+        entries.push({ name, data });
+      } catch (_) { /* skip undecompressable entry */ }
+    }
+
+    offset = dataEnd;
+    // Skip data descriptor if present
+    if ((flags & 0x08) && view.getUint32(offset, true) === 0x08074b50) offset += 16;
+  }
+  return entries;
+}
+// ────────────────────────────────────────────────────────────────────────────
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -408,73 +493,114 @@ const DatabaseTools = () => {
     if (!uploadedZipFile) return;
     setRestoring(true);
     setConfirmUploadFullRestore(false);
-    startProgress("Restoring from Uploaded ZIP", UPLOAD_RESTORE_STEPS);
+    startProgress("Restoring from Uploaded ZIP", [
+      "Reading ZIP file...", "Restoring database tables...",
+      "Restoring images...", "Finalizing...",
+    ]);
     try {
-      // ── Parse the ZIP entirely in the browser to avoid storage upload/download truncation ──
-      setProgress(p => ({ ...p, step: 1, currentStepLabel: "Reading ZIP file..." }));
+      // ── Read the ZIP file from disk ──────────────────────────────────────
+      setProgress(p => ({ ...p, step: 0, currentStepLabel: "Reading ZIP file..." }));
       const arrayBuffer = await uploadedZipFile.arrayBuffer();
-      const zip = await JSZip.loadAsync(arrayBuffer);
 
-      // ── Phase 1: Restore DB tables from database/tables.json inside the ZIP ──
-      setProgress(p => ({ ...p, step: 2, currentStepLabel: "Restoring database tables..." }));
-      const tablesFile = zip.file("database/tables.json");
-      if (!tablesFile) throw new Error("No database/tables.json found in ZIP. Is this a valid full backup?");
-      const tablesJson = await tablesFile.async("string");
+      // ── Extract database/tables.json ─────────────────────────────────────
+      // Try JSZip first; fall back to raw local-header scan for truncated ZIPs
+      // where the central directory / EOCD at the end is cut off.
+      let tablesJson: string;
+      let rawEntries: ZipLocalEntry[] | null = null;
+      let zip: JSZip | null = null;
+
+      try {
+        zip = await JSZip.loadAsync(arrayBuffer);
+        const tablesFile = zip.file("database/tables.json");
+        if (!tablesFile) throw new Error("No database/tables.json found in ZIP");
+        tablesJson = await tablesFile.async("string");
+      } catch (zipErr: any) {
+        const isCorrupt = zipErr.message.includes("End of data") || zipErr.message.includes("Corrupted zip");
+        if (!isCorrupt) throw zipErr;
+
+        // Fallback: scan local file headers directly (no central directory needed)
+        console.warn("JSZip failed (truncated ZIP), falling back to raw local-header scan:", zipErr.message);
+        rawEntries = await scanZipLocalEntries(arrayBuffer);
+        const tablesEntry = rawEntries.find(e => e.name === "database/tables.json");
+        if (!tablesEntry) throw new Error("Could not find database/tables.json — the ZIP appears too corrupted to recover.");
+        tablesJson = new TextDecoder("utf-8").decode(tablesEntry.data);
+      }
+
+      // ── Phase 1: Restore DB tables ───────────────────────────────────────
+      setProgress(p => ({ ...p, step: 1, currentStepLabel: "Restoring database tables..." }));
       const backupData = JSON.parse(tablesJson);
-
       const phase1 = await callBackupFn({ action: "restore", data: backupData });
-      const dbResult = phase1;
 
-      // ── Phase 2: Restore storage files in batches ──
+      // ── Phase 2: Restore storage files ──────────────────────────────────
       const STORAGE_BATCH_SIZE = 15;
       const storageBuckets = ["images"];
       let totalRestored = 0;
-      let clearFirst = true;
 
-      for (const bucket of storageBuckets) {
-        const prefix = `storage/${bucket}/`;
-        const bucketFiles = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip.files[f].dir);
-        const total = bucketFiles.length;
+      // Build the list of storage entries from whichever source succeeded
+      type StorageItem = { storagePath: string; getData: () => Promise<Uint8Array>; };
+      const storageItems: StorageItem[] = [];
 
-        for (let offset = 0; offset < total; offset += STORAGE_BATCH_SIZE) {
-          const batchPaths = bucketFiles.slice(offset, offset + STORAGE_BATCH_SIZE);
-          setProgress(p => ({
-            ...p,
-            step: 3,
-            currentStepLabel: `Restoring images… ${Math.min(offset + STORAGE_BATCH_SIZE, total)}/${total}`,
-          }));
-
-          // Upload each file in this batch directly to storage from the browser
-          if (offset === 0 && clearFirst) {
-            // Clear existing files in bucket by calling edge function
-            await callBackupFn({ action: "clear_storage_bucket", bucket });
-            clearFirst = false;
+      if (zip) {
+        for (const bucket of storageBuckets) {
+          const prefix = `storage/${bucket}/`;
+          const files = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip!.files[f].dir);
+          for (const zipPath of files) {
+            storageItems.push({
+              storagePath: `${bucket}/${zipPath.substring(prefix.length)}`,
+              getData: async () => { const f = zip!.file(zipPath); return f ? await f.async("uint8array") : new Uint8Array(0); },
+            });
           }
-
-          await Promise.all(batchPaths.map(async (zipPath) => {
-            const storagePath = zipPath.substring(prefix.length);
-            const fileObj = zip.file(zipPath);
-            if (!fileObj) return;
-            const content = await fileObj.async("uint8array");
-            const ext = storagePath.split(".").pop()?.toLowerCase() || "";
-            const contentTypes: Record<string, string> = {
-              jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
-              webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
-            };
-            const contentType = contentTypes[ext] || "application/octet-stream";
-            await supabase.storage.from(bucket).upload(storagePath, content, { contentType, upsert: true });
-            totalRestored++;
-          }));
+        }
+      } else if (rawEntries) {
+        for (const bucket of storageBuckets) {
+          const prefix = `storage/${bucket}/`;
+          for (const entry of rawEntries.filter(e => e.name.startsWith(prefix))) {
+            const storagePath = `${bucket}/${entry.name.substring(prefix.length)}`;
+            storageItems.push({ storagePath, getData: async () => entry.data });
+          }
         }
       }
 
+      // Clear buckets first
+      if (storageItems.length > 0) {
+        for (const bucket of storageBuckets) {
+          await callBackupFn({ action: "clear_storage_bucket", bucket });
+        }
+      }
+
+      for (let i = 0; i < storageItems.length; i += STORAGE_BATCH_SIZE) {
+        const batch = storageItems.slice(i, i + STORAGE_BATCH_SIZE);
+        setProgress(p => ({
+          ...p, step: 2,
+          currentStepLabel: `Restoring images… ${Math.min(i + STORAGE_BATCH_SIZE, storageItems.length)}/${storageItems.length}`,
+        }));
+        await Promise.all(batch.map(async ({ storagePath, getData }) => {
+          try {
+            const content = await getData();
+            if (content.length === 0) return;
+            const [bucket, ...rest] = storagePath.split("/");
+            const filePath = rest.join("/");
+            const ext = filePath.split(".").pop()?.toLowerCase() || "";
+            const ctMap: Record<string, string> = {
+              jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+              webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
+            };
+            await supabase.storage.from(bucket).upload(filePath, content, {
+              contentType: ctMap[ext] || "application/octet-stream", upsert: true,
+            });
+            totalRestored++;
+          } catch (_) { /* skip individual file errors */ }
+        }));
+      }
+
       // Log completion
+      setProgress(p => ({ ...p, step: 3, currentStepLabel: "Finalizing..." }));
       await callBackupFn({ action: "log_restore_complete", file_name: uploadedZipFile.name, restored_files: totalRestored });
 
       finishProgress(true);
       toast({
         title: "Full site restored from uploaded ZIP",
-        description: `Database restored (${dbResult.rows_restored ?? 0} rows) + ${totalRestored} storage files.`,
+        description: `Database restored (${phase1.rows_restored ?? 0} rows) + ${totalRestored} storage files.`,
       });
       fetchBackups();
     } catch (e: any) {
