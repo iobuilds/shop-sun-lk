@@ -582,7 +582,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               className="pl-8 h-8 w-48 text-xs"
-              placeholder="Search by order ID..."
+              placeholder="Search by ID, name, phone..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
