@@ -112,9 +112,37 @@ serve(async (req) => {
     if (action === "send_otp") {
       if (!phone) throw new Error("phone is required");
 
-      // Generate 5-digit OTP
-      const otpCode = String(Math.floor(10000 + Math.random() * 90000));
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
+      const TEXTLK_API_KEY = Deno.env.get("TEXTLK_API_KEY");
+      const TEXTLK_SENDER_ID = Deno.env.get("TEXTLK_SENDER_ID") || "NanoCircuit";
+
+      if (!TEXTLK_API_KEY) throw new Error("SMS service not configured");
+
+      // Send OTP type SMS — Text.lk generates the OTP code
+      const smsRes = await fetch("https://app.text.lk/api/v3/sms/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${TEXTLK_API_KEY}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: phone,
+          sender_id: TEXTLK_SENDER_ID,
+          type: "otp",
+          message: "Your NanoCircuit password reset OTP is: {{otp}}. Valid for 10 minutes. Do not share this code.",
+        }),
+      });
+
+      const smsData = await smsRes.json();
+      console.log("SMS response:", JSON.stringify(smsData));
+
+      if (smsData.status !== "success") {
+        throw new Error(smsData.message || "Failed to send OTP via SMS");
+      }
+
+      // Store the OTP returned by Text.lk for verification
+      const otpCode = String(smsData.data?.otp ?? "");
+      if (!otpCode) throw new Error("OTP not returned by SMS provider");
 
       // Invalidate old OTPs for this phone
       await supabaseAdmin
@@ -123,33 +151,11 @@ serve(async (req) => {
         .eq("phone", phone)
         .eq("verified", false);
 
-      // Insert new OTP
       await supabaseAdmin.from("otp_verifications").insert({
         phone,
         otp_code: otpCode,
-        expires_at: expiresAt,
+        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       });
-
-      // Send via SMS
-      const message = `Your NanoCircuit password reset OTP is: ${otpCode}. Valid for 10 minutes. Do not share this code.`;
-
-      const TEXTLK_API_KEY = Deno.env.get("TEXTLK_API_KEY");
-      const TEXTLK_SENDER_ID = Deno.env.get("TEXTLK_SENDER_ID") || "NanoCircuit";
-
-      if (TEXTLK_API_KEY) {
-        const smsRes = await fetch("https://api.text.lk/api/v3/sms/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            recipient: phone,
-            sender_id: TEXTLK_SENDER_ID,
-            message,
-            api_key: TEXTLK_API_KEY,
-          }),
-        });
-        const smsData = await smsRes.json();
-        console.log("SMS response:", smsData);
-      }
 
       return new Response(
         JSON.stringify({ success: true, message: "OTP sent successfully" }),
