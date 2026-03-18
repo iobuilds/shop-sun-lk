@@ -409,20 +409,72 @@ const DatabaseTools = () => {
     setConfirmUploadFullRestore(false);
     startProgress("Restoring from Uploaded ZIP", UPLOAD_RESTORE_STEPS);
     try {
-      const tempName = `upload-restore-${Date.now()}.zip`;
+      // ── Parse the ZIP entirely in the browser to avoid storage upload/download truncation ──
+      setProgress(p => ({ ...p, step: 1, currentStepLabel: "Reading ZIP file..." }));
+      const arrayBuffer = await uploadedZipFile.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
 
-      // Upload directly via Supabase JS client — avoids all signed URL / host issues
-      setProgress(p => ({ ...p, step: 2, currentStepLabel: UPLOAD_RESTORE_STEPS[2] }));
-      const { error: uploadError } = await supabase.storage
-        .from("db-backups")
-        .upload(tempName, uploadedZipFile, { contentType: "application/zip", upsert: true });
+      // ── Phase 1: Restore DB tables from database/tables.json inside the ZIP ──
+      setProgress(p => ({ ...p, step: 2, currentStepLabel: "Restoring database tables..." }));
+      const tablesFile = zip.file("database/tables.json");
+      if (!tablesFile) throw new Error("No database/tables.json found in ZIP. Is this a valid full backup?");
+      const tablesJson = await tablesFile.async("string");
+      const backupData = JSON.parse(tablesJson);
 
-      if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
+      const phase1 = await callBackupFn({ action: "restore", data: backupData });
+      const dbResult = phase1;
 
-      setProgress(p => ({ ...p, step: 3, currentStepLabel: UPLOAD_RESTORE_STEPS[3] }));
-      const result = await runFullRestoreFromFileName(tempName);
+      // ── Phase 2: Restore storage files in batches ──
+      const STORAGE_BATCH_SIZE = 15;
+      const storageBuckets = ["images"];
+      let totalRestored = 0;
+      let clearFirst = true;
+
+      for (const bucket of storageBuckets) {
+        const prefix = `storage/${bucket}/`;
+        const bucketFiles = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip.files[f].dir);
+        const total = bucketFiles.length;
+
+        for (let offset = 0; offset < total; offset += STORAGE_BATCH_SIZE) {
+          const batchPaths = bucketFiles.slice(offset, offset + STORAGE_BATCH_SIZE);
+          setProgress(p => ({
+            ...p,
+            step: 3,
+            currentStepLabel: `Restoring images… ${Math.min(offset + STORAGE_BATCH_SIZE, total)}/${total}`,
+          }));
+
+          // Upload each file in this batch directly to storage from the browser
+          if (offset === 0 && clearFirst) {
+            // Clear existing files in bucket by calling edge function
+            await callBackupFn({ action: "clear_storage_bucket", bucket });
+            clearFirst = false;
+          }
+
+          await Promise.all(batchPaths.map(async (zipPath) => {
+            const storagePath = zipPath.substring(prefix.length);
+            const fileObj = zip.file(zipPath);
+            if (!fileObj) return;
+            const content = await fileObj.async("uint8array");
+            const ext = storagePath.split(".").pop()?.toLowerCase() || "";
+            const contentTypes: Record<string, string> = {
+              jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
+              webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
+            };
+            const contentType = contentTypes[ext] || "application/octet-stream";
+            await supabase.storage.from(bucket).upload(storagePath, content, { contentType, upsert: true });
+            totalRestored++;
+          }));
+        }
+      }
+
+      // Log completion
+      await callBackupFn({ action: "log_restore_complete", file_name: uploadedZipFile.name, restored_files: totalRestored });
+
       finishProgress(true);
-      toast({ title: "Full site restored from uploaded ZIP", description: `Database + ${result.restored_files} storage files restored.` });
+      toast({
+        title: "Full site restored from uploaded ZIP",
+        description: `Database restored (${dbResult.rows_restored ?? 0} rows) + ${totalRestored} storage files.`,
+      });
       fetchBackups();
     } catch (e: any) {
       finishProgress(false, e.message);
