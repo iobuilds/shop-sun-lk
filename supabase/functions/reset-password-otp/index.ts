@@ -123,66 +123,34 @@ serve(async (req) => {
     }
 
     // ─── ACTION: verify_and_reset ────────────────────────────────────────────
+    // OTP was already verified in the previous step (verify-otp edge fn marked it verified=true).
+    // We look up the most recent verified OTP for this phone that was verified within the last 15 minutes.
     if (action === "verify_and_reset") {
-      if (!phone || !otp || !newPassword) {
-        throw new Error("phone, otp, and newPassword are required");
+      if (!phone || !newPassword) {
+        throw new Error("phone and newPassword are required");
       }
       if (newPassword.length < 6) {
         throw new Error("Password must be at least 6 characters");
       }
 
-      // Verify OTP (reuse existing verify-otp logic inline)
+      // Check there is a recently verified OTP for this phone (within last 15 min)
+      const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString();
       const { data: otpRecord, error: otpErr } = await supabaseAdmin
         .from("otp_verifications")
         .select("*")
         .eq("phone", phone)
-        .eq("verified", false)
+        .eq("verified", true)
+        .gte("created_at", windowStart)
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
 
       if (otpErr || !otpRecord) {
         return new Response(
-          JSON.stringify({ success: false, error: "No OTP found. Please request a new one." }),
+          JSON.stringify({ success: false, error: "OTP session expired. Please start over." }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
         );
       }
-
-      if (otpRecord.locked_until && new Date(otpRecord.locked_until) > new Date()) {
-        const remaining = Math.ceil((new Date(otpRecord.locked_until).getTime() - Date.now()) / 60000);
-        return new Response(
-          JSON.stringify({ success: false, error: `Too many attempts. Try again in ${remaining} minutes.`, locked: true }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 429 }
-        );
-      }
-
-      if (new Date(otpRecord.expires_at) < new Date()) {
-        return new Response(
-          JSON.stringify({ success: false, error: "OTP has expired. Please request a new one.", expired: true }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-        );
-      }
-
-      if (String(otpRecord.otp_code) !== String(otp)) {
-        const newAttempts = otpRecord.attempts + 1;
-        const updateData: any = { attempts: newAttempts };
-        if (newAttempts >= 5) {
-          updateData.locked_until = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-        }
-        await supabaseAdmin.from("otp_verifications").update(updateData).eq("id", otpRecord.id);
-        const remaining = 5 - newAttempts;
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: remaining > 0 ? `Invalid OTP. ${remaining} attempt(s) remaining.` : "Too many failed attempts. Locked for 15 minutes.",
-            locked: remaining <= 0,
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-        );
-      }
-
-      // OTP correct — mark verified
-      await supabaseAdmin.from("otp_verifications").update({ verified: true }).eq("id", otpRecord.id);
 
       // Find the user by phone
       const { data: profile } = await supabaseAdmin
