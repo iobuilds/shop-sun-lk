@@ -474,8 +474,26 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ── Download a backup file (server-side streaming) ──
+  // ── Get a signed download URL (browser fetches directly — avoids SDK binary mangling) ──
   if (action === "download_url") {
+    const { file_name } = body;
+    if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    log("info", "Creating signed download URL", { file_name });
+    const { data: signedData, error: signErr } = await adminClient.storage
+      .from("db-backups")
+      .createSignedUrl(file_name, 300); // 5 min expiry — enough to fetch
+    if (signErr || !signedData?.signedUrl) {
+      log("error", "Could not create signed download URL", { error: signErr?.message });
+      return new Response(JSON.stringify({ error: "Could not create signed URL: " + signErr?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    log("info", "Signed download URL created", { file_name });
+    return new Response(JSON.stringify({ url: signedData.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  // ── Stream a backup file directly (legacy, kept for downloads to disk) ──
+  if (action === "stream_file") {
     const { file_name } = body;
     if (!file_name) return new Response(JSON.stringify({ error: "file_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
