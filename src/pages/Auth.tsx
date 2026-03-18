@@ -240,8 +240,8 @@ const Auth = () => {
   };
 
   const handleResetOtpVerify = async () => {
-    if (resetOtp.length !== 5) {
-      toast.error("Please enter the 5-digit OTP");
+    if (resetOtp.length !== 6) {
+      toast.error("Please enter the 6-digit OTP");
       return;
     }
     setLoading(true);
