@@ -7,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Eye, EyeOff, Mail, Lock, User, Phone, ShieldCheck, MapPin, ChevronLeft } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, Phone, ShieldCheck, MapPin, ChevronLeft, KeyRound } from "lucide-react";
 import { useBranding } from "@/hooks/useBranding";
 import { logSiteAction } from "@/lib/logSiteAction";
 
 type Step = "form" | "otp" | "address";
+type ResetStep = "input" | "otp" | "new_password";
 
 const Auth = () => {
   const { storeName, logoUrl, initial, company } = useBranding();
@@ -38,6 +39,18 @@ const Auth = () => {
   const [province, setProvince] = useState("");
   const [postalCode, setPostalCode] = useState("");
 
+  // Reset password flow state
+  const [resetStep, setResetStep] = useState<ResetStep>("input");
+  const [resetIdentifier, setResetIdentifier] = useState("");
+  const [resetPhone, setResetPhone] = useState(""); // actual phone to send OTP to
+  const [resetMaskedPhone, setResetMaskedPhone] = useState(""); // masked display
+  const [resetOtp, setResetOtp] = useState("");
+  const [resetOtpSending, setResetOtpSending] = useState(false);
+  const [resetResendTimer, setResetResendTimer] = useState(0);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const formatPhone = (raw: string) => {
     let p = raw.replace(/\D/g, "");
     if (p.startsWith("0")) p = "94" + p.slice(1);
@@ -49,6 +62,16 @@ const Auth = () => {
     setResendTimer(60);
     const interval = setInterval(() => {
       setResendTimer((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const startResetResendTimer = () => {
+    setResetResendTimer(60);
+    const interval = setInterval(() => {
+      setResetResendTimer((prev) => {
         if (prev <= 1) { clearInterval(interval); return 0; }
         return prev - 1;
       });
@@ -72,7 +95,6 @@ const Auth = () => {
     try {
       const formattedPhone = formatPhone(phone);
 
-      // Check if phone is already registered (including suspended accounts)
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("user_id, is_suspended")
@@ -173,9 +195,122 @@ const Auth = () => {
     }
   };
 
+  // ── Reset Password Flow ──────────────────────────────────────────────────
+
+  const handleResetLookup = async () => {
+    if (!resetIdentifier.trim()) {
+      toast.error("Please enter your email or phone number");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("reset-password-otp", {
+        body: { action: "lookup", identifier: resetIdentifier.trim() },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Account not found");
+
+      setResetPhone(data.phone);
+      setResetMaskedPhone(data.maskedPhone);
+
+      // Send OTP immediately
+      await sendResetOtp(data.phone);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendResetOtp = async (phoneOverride?: string) => {
+    const targetPhone = phoneOverride || resetPhone;
+    setResetOtpSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("reset-password-otp", {
+        body: { action: "send_otp", phone: targetPhone },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to send OTP");
+      toast.success("OTP sent to your phone!");
+      setResetStep("otp");
+      startResetResendTimer();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send OTP");
+    } finally {
+      setResetOtpSending(false);
+    }
+  };
+
+  const handleResetOtpVerify = async () => {
+    if (resetOtp.length !== 5) {
+      toast.error("Please enter the 5-digit OTP");
+      return;
+    }
+    setLoading(true);
+    try {
+      // We verify OTP inline with verify-otp edge function just to check it first
+      const { data, error } = await supabase.functions.invoke("verify-otp", {
+        body: { phone: resetPhone, otp: resetOtp },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "OTP verification failed");
+
+      toast.success("OTP verified! Enter your new password.");
+      setResetStep("new_password");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    setLoading(true);
+    try {
+      // Re-send OTP implicitly — the verify_and_reset action handles a fresh OTP check
+      // But since OTP was already verified in previous step, we use a special verified flag approach
+      // Instead, use admin edge function to update password directly since phone was verified
+      const { data, error } = await supabase.functions.invoke("reset-password-otp", {
+        body: {
+          action: "verify_and_reset",
+          phone: resetPhone,
+          otp: resetOtp, // re-submit same OTP (already verified, so it's marked verified in DB — we use admin reset)
+          newPassword,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Failed to reset password");
+
+      toast.success("Password reset successfully! Please sign in.");
+      setForgotPassword(false);
+      setResetStep("input");
+      setResetIdentifier("");
+      setResetPhone("");
+      setResetMaskedPhone("");
+      setResetOtp("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setIsLogin(true);
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────────────────────────
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!isLogin && !forgotPassword && step === "form") {
       await sendOtp();
       return;
@@ -183,14 +318,7 @@ const Auth = () => {
 
     setLoading(true);
     try {
-      if (forgotPassword) {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw error;
-        toast.success("Password reset email sent! Check your inbox.");
-        setForgotPassword(false);
-      } else if (isLogin) {
+      if (isLogin) {
         const { data: signInData, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           if (error.message?.toLowerCase().includes("banned") || error.message?.toLowerCase().includes("ban") || error.message?.toLowerCase().includes("suspend")) {
@@ -199,27 +327,26 @@ const Auth = () => {
           throw error;
         }
 
-        // Double-check suspension in profile
         const { data: profileCheck } = await supabase
           .from("profiles")
           .select("is_suspended, suspended_reason")
           .eq("user_id", signInData.user.id)
           .maybeSingle();
-        
+
         if (profileCheck?.is_suspended) {
           await supabase.auth.signOut();
           const reason = profileCheck.suspended_reason;
           throw new Error(`🚫 Your account has been suspended${reason ? `: ${reason}` : ""}. Please contact support for assistance.`);
         }
-        
+
         const { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", signInData.user.id);
-        
+
         const roles = roleData?.map((r: any) => r.role) || [];
         const isAdminOrMod = roles.includes("admin") || roles.includes("moderator");
-        
+
         toast.success("Welcome back!");
         logSiteAction("user_login", "user", signInData.user.id, { email: signInData.user.email, role: roles[0] || "user" });
         navigate(isAdminOrMod ? "/admin" : "/");
@@ -267,6 +394,52 @@ const Auth = () => {
     );
   };
 
+  const resetStepIndicator = () => {
+    const steps = [
+      { key: "input", label: "Find Account" },
+      { key: "otp", label: "Verify" },
+      { key: "new_password", label: "New Password" },
+    ];
+    const currentIndex = steps.findIndex(s => s.key === resetStep);
+    return (
+      <div className="flex items-center justify-center gap-2 mb-6">
+        {steps.map((s, i) => (
+          <div key={s.key} className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+              i <= currentIndex ? "bg-secondary text-secondary-foreground" : "bg-muted text-muted-foreground"
+            }`}>
+              {i + 1}
+            </div>
+            <span className={`text-xs hidden sm:inline ${i <= currentIndex ? "text-foreground font-medium" : "text-muted-foreground"}`}>{s.label}</span>
+            {i < steps.length - 1 && <div className={`w-8 h-px ${i < currentIndex ? "bg-secondary" : "bg-border"}`} />}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const getTitle = () => {
+    if (forgotPassword) {
+      if (resetStep === "input") return "Reset Password";
+      if (resetStep === "otp") return "Verify Your Phone";
+      return "Set New Password";
+    }
+    if (step === "otp") return "Verify Your Phone";
+    if (step === "address") return "Your Address";
+    return isLogin ? "Welcome Back" : "Create Account";
+  };
+
+  const getSubtitle = () => {
+    if (forgotPassword) {
+      if (resetStep === "input") return "Enter your email or phone number to find your account";
+      if (resetStep === "otp") return `Enter the 5-digit code sent to ${resetMaskedPhone}`;
+      return "Choose a strong password for your account";
+    }
+    if (step === "otp") return `Enter the 5-digit code sent to ${phone}`;
+    if (step === "address") return "Almost done! Enter your shipping address";
+    return isLogin ? "Sign in to access your account" : "Join NanoCircuit.lk for exclusive deals";
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <motion.div
@@ -287,34 +460,140 @@ const Auth = () => {
               <span className="text-2xl font-bold font-display text-foreground">{storeName}</span>
             ) : null}
           </Link>
-          <h1 className="text-2xl font-bold font-display text-foreground">
-            {step === "otp"
-              ? "Verify Your Phone"
-              : step === "address"
-              ? "Your Address"
-              : forgotPassword
-              ? "Reset Password"
-              : isLogin
-              ? "Welcome Back"
-              : "Create Account"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {step === "otp"
-              ? `Enter the 5-digit code sent to ${phone}`
-              : step === "address"
-              ? "Almost done! Enter your shipping address"
-              : forgotPassword
-              ? "Enter your email to receive a reset link"
-              : isLogin
-              ? "Sign in to access your account"
-              : "Join NanoCircuit.lk for exclusive deals"}
-          </p>
+          <h1 className="text-2xl font-bold font-display text-foreground">{getTitle()}</h1>
+          <p className="text-sm text-muted-foreground mt-1">{getSubtitle()}</p>
         </div>
 
-        {stepIndicator()}
+        {forgotPassword ? resetStepIndicator() : stepIndicator()}
 
         <AnimatePresence mode="wait">
-          {step === "otp" ? (
+
+          {/* ── FORGOT PASSWORD FLOW ── */}
+          {forgotPassword ? (
+            <>
+              {resetStep === "input" && (
+                <motion.div key="reset-input" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                  className="bg-card rounded-xl border border-border p-6 space-y-4 card-elevated">
+                  <div className="flex justify-center mb-2">
+                    <KeyRound className="w-10 h-10 text-secondary" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email or Phone Number</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        placeholder="you@example.com or 07X XXXXXXX"
+                        value={resetIdentifier}
+                        onChange={(e) => setResetIdentifier(e.target.value)}
+                        className="pl-10"
+                        onKeyDown={(e) => e.key === "Enter" && handleResetLookup()}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">We'll send an OTP to the phone number linked to your account</p>
+                  </div>
+                  <Button onClick={handleResetLookup} className="w-full" disabled={loading || resetOtpSending}>
+                    {loading || resetOtpSending ? "Looking up..." : "Continue"}
+                  </Button>
+                  <div className="text-center">
+                    <button type="button" onClick={() => { setForgotPassword(false); setResetStep("input"); setResetIdentifier(""); }}
+                      className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                      <ChevronLeft className="w-3 h-3" /> Back to sign in
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {resetStep === "otp" && (
+                <motion.div key="reset-otp" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                  className="bg-card rounded-xl border border-border p-6 space-y-6 card-elevated">
+                  <div className="flex justify-center">
+                    <ShieldCheck className="w-12 h-12 text-secondary" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      OTP sent to <span className="font-semibold text-foreground">{resetMaskedPhone}</span>
+                    </p>
+                  </div>
+                  <div className="flex justify-center">
+                    <InputOTP maxLength={5} value={resetOtp} onChange={setResetOtp}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button onClick={handleResetOtpVerify} className="w-full" disabled={loading || resetOtp.length !== 5}>
+                    {loading ? "Verifying..." : "Verify OTP"}
+                  </Button>
+                  <div className="text-center space-y-2">
+                    <button type="button" onClick={() => sendResetOtp()} disabled={resetResendTimer > 0 || resetOtpSending}
+                      className="text-sm text-secondary hover:text-secondary/80 disabled:text-muted-foreground disabled:cursor-not-allowed">
+                      {resetOtpSending ? "Sending..." : resetResendTimer > 0 ? `Resend OTP in ${resetResendTimer}s` : "Resend OTP"}
+                    </button>
+                    <br />
+                    <button type="button" onClick={() => setResetStep("input")}
+                      className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                      <ChevronLeft className="w-3 h-3" /> Back
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+
+              {resetStep === "new_password" && (
+                <motion.div key="reset-newpw" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                  className="bg-card rounded-xl border border-border p-6 space-y-4 card-elevated">
+                  <div className="flex justify-center mb-2">
+                    <Lock className="w-10 h-10 text-secondary" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        minLength={6}
+                      />
+                      <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Confirm New Password</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={confirmNewPassword}
+                        onChange={(e) => setConfirmNewPassword(e.target.value)}
+                        className="pl-10"
+                        minLength={6}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleResetPassword} className="w-full" disabled={loading}>
+                    {loading ? "Resetting..." : "Reset Password"}
+                  </Button>
+                  <div className="text-center">
+                    <button type="button" onClick={() => setResetStep("otp")}
+                      className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                      <ChevronLeft className="w-3 h-3" /> Back
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </>
+          ) : step === "otp" ? (
             <motion.div key="otp" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-card rounded-xl border border-border p-6 space-y-6 card-elevated">
               <div className="flex justify-center">
                 <ShieldCheck className="w-12 h-12 text-secondary" />
@@ -397,7 +676,7 @@ const Auth = () => {
           ) : (
             <motion.div key="form" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
               <form onSubmit={handleAuth} className="bg-card rounded-xl border border-border p-6 space-y-4 card-elevated">
-                {!isLogin && !forgotPassword && (
+                {!isLogin && (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2">
                       <Label htmlFor="firstName">First Name <span className="text-destructive">*</span></Label>
@@ -421,7 +700,7 @@ const Auth = () => {
                   </div>
                 </div>
 
-                {!isLogin && !forgotPassword && (
+                {!isLogin && (
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
                     <div className="relative">
@@ -432,21 +711,20 @@ const Auth = () => {
                   </div>
                 )}
 
-                {!forgotPassword && (
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required minLength={6} />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input id="password" type={showPassword ? "text" : "password"} placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="pl-10 pr-10" required minLength={6} />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                )}
+                </div>
 
-                {isLogin && !forgotPassword && (
-                  <button type="button" onClick={() => setForgotPassword(true)} className="text-xs text-secondary hover:text-secondary/80 transition-colors">
+                {isLogin && (
+                  <button type="button" onClick={() => { setForgotPassword(true); setResetStep("input"); setResetIdentifier(""); }}
+                    className="text-xs text-secondary hover:text-secondary/80 transition-colors">
                     Forgot your password?
                   </button>
                 )}
@@ -454,19 +732,13 @@ const Auth = () => {
                 <Button type="submit" className="w-full" disabled={loading || otpSending}>
                   {loading || otpSending
                     ? "Please wait..."
-                    : forgotPassword
-                    ? "Send Reset Link"
                     : isLogin
                     ? "Sign In"
                     : "Send OTP & Verify"}
                 </Button>
 
                 <div className="text-center text-sm text-muted-foreground">
-                  {forgotPassword ? (
-                    <button type="button" onClick={() => setForgotPassword(false)} className="text-secondary hover:text-secondary/80">
-                      Back to sign in
-                    </button>
-                  ) : isLogin ? (
+                  {isLogin ? (
                     <span>
                       Don't have an account?{" "}
                       <button type="button" onClick={() => { setIsLogin(false); resetForm(); }} className="text-secondary hover:text-secondary/80 font-medium">
@@ -492,3 +764,4 @@ const Auth = () => {
 };
 
 export default Auth;
+
