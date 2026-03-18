@@ -56,6 +56,19 @@ async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): 
   return files;
 }
 
+// Download a storage file using a signed URL + raw fetch to avoid Blob truncation on large files
+async function downloadStorageFileAsBuffer(adminClient: any, bucket: string, fileName: string): Promise<ArrayBuffer> {
+  const { data: signedData, error: signErr } = await adminClient.storage
+    .from(bucket)
+    .createSignedUrl(fileName, 300); // 5 min expiry
+  if (signErr || !signedData?.signedUrl) {
+    throw new Error(`Could not create signed URL: ${signErr?.message}`);
+  }
+  const resp = await fetch(signedData.signedUrl);
+  if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
+  return await resp.arrayBuffer();
+}
+
 async function getPgClient() {
   const { Client } = await import("https://deno.land/x/postgres@v0.17.0/mod.ts");
   const dbUrl = Deno.env.get("SUPABASE_DB_URL")!;
