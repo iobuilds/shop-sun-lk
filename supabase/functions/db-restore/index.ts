@@ -56,6 +56,19 @@ async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): 
   return files;
 }
 
+// Download a storage file using a signed URL + raw fetch to avoid Blob truncation on large files
+async function downloadStorageFileAsBuffer(adminClient: any, bucket: string, fileName: string): Promise<ArrayBuffer> {
+  const { data: signedData, error: signErr } = await adminClient.storage
+    .from(bucket)
+    .createSignedUrl(fileName, 300); // 5 min expiry
+  if (signErr || !signedData?.signedUrl) {
+    throw new Error(`Could not create signed URL: ${signErr?.message}`);
+  }
+  const resp = await fetch(signedData.signedUrl);
+  if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
+  return await resp.arrayBuffer();
+}
+
 async function getPgClient() {
   const { Client } = await import("https://deno.land/x/postgres@v0.17.0/mod.ts");
   const dbUrl = Deno.env.get("SUPABASE_DB_URL")!;
@@ -191,13 +204,13 @@ Deno.serve(async (req) => {
         log("info", "Using uploaded data for restore");
       } else if (file_name) {
         log("info", "Downloading backup file", { file_name });
-        const { data: fileBlob, error: dlErr } = await adminClient.storage.from("db-backups").download(file_name);
-        if (dlErr || !fileBlob) {
-          log("error", "Could not download file", { error: dlErr?.message });
-          return new Response(JSON.stringify({ error: "Could not download file: " + dlErr?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        try {
+          const buf = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+          backupData = JSON.parse(new TextDecoder().decode(buf));
+        } catch (dlErr: any) {
+          log("error", "Could not download file", { error: dlErr.message });
+          return new Response(JSON.stringify({ error: "Could not download file: " + dlErr.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        const text = await fileBlob.text();
-        backupData = JSON.parse(text);
         log("info", "Backup file downloaded and parsed", { tables: Object.keys(backupData).length });
       } else {
         return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -229,13 +242,13 @@ Deno.serve(async (req) => {
 
       log("info", "Starting full ZIP restore (Phase 1: DB)", { file_name, user: user.email });
 
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) {
-        log("error", "Could not download backup file", { error: dlError?.message });
-        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let arrayBuffer: ArrayBuffer;
+      try {
+        arrayBuffer = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+      } catch (dlError: any) {
+        log("error", "Could not download backup file", { error: dlError.message });
+        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const arrayBuffer = await fileData.arrayBuffer();
       log("info", "Backup ZIP downloaded", { bytes: arrayBuffer.byteLength });
       const zip = await JSZip.loadAsync(arrayBuffer);
 
@@ -290,13 +303,13 @@ Deno.serve(async (req) => {
 
       log("info", "Restoring storage batch", { file_name, offset, batch_size, clear_first });
 
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) {
-        log("error", "Could not download backup for storage batch", { error: dlError?.message });
-        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let arrayBuffer: ArrayBuffer;
+      try {
+        arrayBuffer = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+      } catch (dlError: any) {
+        log("error", "Could not download backup for storage batch", { error: dlError.message });
+        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const arrayBuffer = await fileData.arrayBuffer();
       const zip = await JSZip.loadAsync(arrayBuffer);
 
       let restoredFiles = 0;
