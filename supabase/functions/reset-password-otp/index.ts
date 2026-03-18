@@ -90,36 +90,10 @@ serve(async (req) => {
         );
       }
 
-      // Profile found but no phone linked → send email reset link as fallback
+      // Profile found but no phone linked
       if (!profile.phone) {
-        // Only possible for email-identified users (isPhone path always has phone in DB)
-        if (!isPhone) {
-          // Send Supabase built-in password reset email
-          const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
-          const resetRes = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "apikey": Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-            },
-            body: JSON.stringify({
-              email: trimmed,
-              gotrue_meta_security: {},
-            }),
-          });
-          if (resetRes.ok || resetRes.status === 200) {
-            return new Response(
-              JSON.stringify({
-                success: true,
-                method: "email",
-                message: "A password reset link has been sent to your email address.",
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        }
         return new Response(
-          JSON.stringify({ success: false, error: "No phone number is linked to this account. Please contact support." }),
+          JSON.stringify({ success: false, error: "No mobile number linked to this account. Please contact the admin." }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
