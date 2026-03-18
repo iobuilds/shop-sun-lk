@@ -242,13 +242,13 @@ Deno.serve(async (req) => {
 
       log("info", "Starting full ZIP restore (Phase 1: DB)", { file_name, user: user.email });
 
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) {
-        log("error", "Could not download backup file", { error: dlError?.message });
-        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let arrayBuffer: ArrayBuffer;
+      try {
+        arrayBuffer = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+      } catch (dlError: any) {
+        log("error", "Could not download backup file", { error: dlError.message });
+        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const arrayBuffer = await fileData.arrayBuffer();
       log("info", "Backup ZIP downloaded", { bytes: arrayBuffer.byteLength });
       const zip = await JSZip.loadAsync(arrayBuffer);
 
