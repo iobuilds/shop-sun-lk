@@ -162,15 +162,12 @@ export default function SystemMetrics() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { data, isLoading, error, isFetching } = useQuery<MetricsData>({
-    queryKey: ["system-metrics-external", refreshKey],
+    queryKey: ["system-metrics-proxy", refreshKey],
     queryFn: async () => {
-      const res = await fetch(`${METRICS_URL}?ts=${Date.now()}`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || "Server returned success: false");
-      return json as MetricsData;
+      const { data, error } = await supabase.functions.invoke("system-metrics");
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Server returned success: false");
+      return data as MetricsData;
     },
     staleTime: 30_000,
     refetchInterval: 30_000,
