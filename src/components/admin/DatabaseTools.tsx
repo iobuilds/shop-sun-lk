@@ -234,6 +234,7 @@ const DatabaseTools = () => {
   const RESTORE_ACTIONS = new Set([
     "restore", "full_restore", "restore_storage_batch",
     "log_restore_complete", "get_upload_url", "download_url",
+    "clear_storage_bucket",
   ]);
 
   const callBackupFn = async (body: any) => {
