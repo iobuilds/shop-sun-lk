@@ -282,7 +282,6 @@ const Auth = () => {
         body: {
           action: "verify_and_reset",
           phone: resetPhone,
-          otp: resetOtp, // re-submit same OTP (already verified, so it's marked verified in DB — we use admin reset)
           newPassword,
         },
       });
