@@ -43,8 +43,9 @@ import ImageEditor from "@/components/admin/ImageEditor";
 import ComponentFamilyManager from "@/components/admin/ComponentFamilyManager";
 import EmailTemplatesManager from "@/components/admin/EmailTemplatesManager";
 import EmailInboxViewer from "@/components/admin/EmailInboxViewer";
+import SystemMetrics from "@/components/admin/SystemMetrics";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_inbox" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_inbox" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor" | "system_metrics";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -733,6 +734,7 @@ const AdminDashboard = () => {
       items: [
         { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+        { id: "system_metrics" as Tab, label: "System Metrics", icon: Activity, count: 0 },
         { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
         { id: "system_logs" as Tab, label: "System Logs", icon: Terminal, count: 0 },
         { id: "search_analytics" as Tab, label: "Search Analytics", icon: Search, count: 0 },
@@ -3824,6 +3826,13 @@ const AdminDashboard = () => {
           {tab === "documentation" && (
             <div className="animate-in fade-in duration-200">
               <AdminDocumentation />
+            </div>
+          )}
+
+          {/* ═══ System Metrics Tab ═══ */}
+          {tab === "system_metrics" && (
+            <div className="animate-in fade-in duration-200">
+              <SystemMetrics />
             </div>
           )}
 
