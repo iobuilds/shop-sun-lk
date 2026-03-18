@@ -734,6 +734,7 @@ const AdminDashboard = () => {
       items: [
         { id: "moderator_permissions" as Tab, label: "Moderator Permissions", icon: Shield, count: 0 },
         { id: "db_tools" as Tab, label: "Backup & Restore", icon: Database, count: 0 },
+        { id: "system_metrics" as Tab, label: "System Metrics", icon: Activity, count: 0 },
         { id: "activity_logs" as Tab, label: "Activity Logs", icon: Activity, count: 0 },
         { id: "system_logs" as Tab, label: "System Logs", icon: Terminal, count: 0 },
         { id: "search_analytics" as Tab, label: "Search Analytics", icon: Search, count: 0 },
