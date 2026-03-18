@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.db-restore]
 verify_jwt = false
+
+[functions.reset-password-otp]
+verify_jwt = false
