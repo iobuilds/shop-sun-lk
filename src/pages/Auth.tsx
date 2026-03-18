@@ -240,8 +240,8 @@ const Auth = () => {
   };
 
   const handleResetOtpVerify = async () => {
-    if (resetOtp.length !== 5) {
-      toast.error("Please enter the 5-digit OTP");
+    if (resetOtp.length !== 6) {
+      toast.error("Please enter the 6-digit OTP");
       return;
     }
     setLoading(true);
@@ -513,17 +513,18 @@ const Auth = () => {
                     </p>
                   </div>
                   <div className="flex justify-center">
-                    <InputOTP maxLength={5} value={resetOtp} onChange={setResetOtp}>
+                    <InputOTP maxLength={6} value={resetOtp} onChange={setResetOtp}>
                       <InputOTPGroup>
                         <InputOTPSlot index={0} />
                         <InputOTPSlot index={1} />
                         <InputOTPSlot index={2} />
                         <InputOTPSlot index={3} />
                         <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
                       </InputOTPGroup>
                     </InputOTP>
                   </div>
-                  <Button onClick={handleResetOtpVerify} className="w-full" disabled={loading || resetOtp.length !== 5}>
+                  <Button onClick={handleResetOtpVerify} className="w-full" disabled={loading || resetOtp.length !== 6}>
                     {loading ? "Verifying..." : "Verify OTP"}
                   </Button>
                   <div className="text-center space-y-2">

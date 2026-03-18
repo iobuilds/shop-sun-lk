@@ -117,7 +117,10 @@ serve(async (req) => {
 
       if (!TEXTLK_API_KEY) throw new Error("SMS service not configured");
 
-      // Send OTP type SMS — Text.lk generates the OTP code
+      // Generate our own 6-digit OTP and send as plain message
+      const otpCode = String(Math.floor(100000 + Math.random() * 900000));
+      const message = `Your password reset OTP is: ${otpCode}. Valid for 10 minutes. Do not share this code.`;
+
       const smsRes = await fetch("https://app.text.lk/api/v3/sms/send", {
         method: "POST",
         headers: {
@@ -128,8 +131,8 @@ serve(async (req) => {
         body: JSON.stringify({
           recipient: phone,
           sender_id: TEXTLK_SENDER_ID,
-          type: "otp",
-          message: "Your NanoCircuit password reset OTP is: {{otp}}. Valid for 10 minutes. Do not share this code.",
+          type: "plain",
+          message,
         }),
       });
 
@@ -140,11 +143,7 @@ serve(async (req) => {
         throw new Error(smsData.message || "Failed to send OTP via SMS");
       }
 
-      // Store the OTP returned by Text.lk for verification
-      const otpCode = String(smsData.data?.otp ?? "");
-      if (!otpCode) throw new Error("OTP not returned by SMS provider");
-
-      // Invalidate old OTPs for this phone
+      // Invalidate old OTPs for this phone then store new one
       await supabaseAdmin
         .from("otp_verifications")
         .update({ verified: true })
