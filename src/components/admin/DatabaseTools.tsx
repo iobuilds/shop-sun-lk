@@ -435,26 +435,13 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      // Stream the file directly through the db-restore edge function to avoid signed URL hostname issues
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-
-      const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const fnUrl = `${baseUrl}/functions/v1/db-restore`;
-      const response = await fetch(fnUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ action: "download_url", file_name: fileName }),
+      // Use supabase.functions.invoke so it works on both Lovable Cloud and self-hosted VPS
+      const { data, error } = await supabase.functions.invoke("db-restore", {
+        body: { action: "download_url", file_name: fileName },
       });
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Download failed: ${response.status} — ${errText}`);
-      }
-      const blob = await response.blob();
+      if (error) throw new Error(error.message);
+      // The response is a binary blob (arraybuffer)
+      const blob = data instanceof Blob ? data : new Blob([data]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
