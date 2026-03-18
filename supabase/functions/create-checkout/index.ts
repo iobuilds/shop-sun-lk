@@ -43,9 +43,17 @@ serve(async (req) => {
 
     const productMap = new Map(products!.map((p: any) => [p.id, p]));
 
+    // Check for stale/deleted cart items
+    const missingIds = items.filter((i: any) => !productMap.has(i.id)).map((i: any) => i.id);
+    if (missingIds.length > 0) {
+      return new Response(
+        JSON.stringify({ error: "Some items in your cart are no longer available. Please refresh your cart and try again.", stale_product_ids: missingIds }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
     for (const item of items) {
       const product = productMap.get(item.id);
-      if (!product) throw new Error(`Product ${item.id} not found`);
       if ((product.stock_quantity || 0) < item.quantity) {
         throw new Error(`${product.name} is out of stock (only ${product.stock_quantity} available)`);
       }
