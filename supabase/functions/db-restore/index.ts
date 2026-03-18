@@ -488,12 +488,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Could not create signed URL: " + signErr?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Replace internal host with public URL so the browser can reach it
-    const publicUrl = (Deno.env.get("PUBLIC_SUPABASE_URL") || supabaseUrl).replace(/\/$/, "");
-    const internalUrl = supabaseUrl.replace(/\/$/, "");
-    const publicSignedUrl = signedData.signedUrl.replace(internalUrl, publicUrl);
+    // Determine the correct public base URL.
+    // PUBLIC_SUPABASE_URL may be misconfigured (e.g. just "db") so validate it first.
+    // Fall back to SUPABASE_URL which is always the correct project URL on Lovable Cloud.
+    const rawPublic = Deno.env.get("PUBLIC_SUPABASE_URL") || "";
+    let publicBase: string;
+    try {
+      // Will throw if rawPublic is not a valid absolute URL (e.g. "db")
+      new URL(rawPublic);
+      publicBase = rawPublic.replace(/\/$/, "");
+    } catch {
+      // Not valid — use SUPABASE_URL directly (correct for Lovable Cloud & self-hosted)
+      publicBase = supabaseUrl.replace(/\/$/, "");
+    }
+    const internalBase = supabaseUrl.replace(/\/$/, "");
+    const publicSignedUrl = signedData.signedUrl.replace(internalBase, publicBase);
 
-    log("info", "Signed download URL created", { file_name, publicUrl });
+    log("info", "Signed download URL created", { file_name, publicBase, internalBase });
     return new Response(JSON.stringify({ url: publicSignedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
