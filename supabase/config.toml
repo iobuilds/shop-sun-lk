@@ -29,3 +29,7 @@ verify_jwt = false
 
 [functions.reset-password-otp]
 verify_jwt = false
+
+[functions.system-metrics]
+verify_jwt = false
+
