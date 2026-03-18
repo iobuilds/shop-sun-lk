@@ -10,7 +10,9 @@ async function decompressDeflateRaw(compressed: Uint8Array): Promise<Uint8Array>
   const ds = new DecompressionStream("deflate-raw");
   const writer = ds.writable.getWriter();
   const reader = ds.readable.getReader();
-  writer.write(compressed);
+  // Copy into a plain ArrayBuffer to satisfy TypeScript's BufferSource constraint
+  const plain = compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength) as ArrayBuffer;
+  writer.write(new Uint8Array(plain));
   await writer.close();
   const chunks: Uint8Array[] = [];
   let r = await reader.read();
