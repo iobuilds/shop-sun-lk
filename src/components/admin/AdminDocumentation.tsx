@@ -837,7 +837,7 @@ Use this to audit changes and investigate any unexpected data modifications.`,
       },
       {
         title: "Migrating Auth Users to VPS",
-        content: `Auth users (email, passwords) live in Supabase's internal \`auth.users\` table and are NOT included in the standard backup. Migrate them separately using **pg_dump**.
+        content: `Auth users (email, passwords) live in Supabase's internal auth.users table and are NOT included in the standard backup. Migrate them separately using **pg_dump**.
 
 **On your source Supabase Cloud project:**
 
@@ -848,7 +848,7 @@ Get the direct DB connection string from your Cloud project → Settings → Dat
     -t auth.users \\
     -t auth.identities \\
     -t auth.sessions \\
-    "postgresql://postgres.<PROJECT-REF>:<PASSWORD>@db.<PROJECT-REF>.supabase.com:5432/postgres" \\
+    postgresql://postgres.<PROJECT-REF>:<PASSWORD>@db.<PROJECT-REF>.supabase.com:5432/postgres \\
     > auth_users.sql
 
 **On your VPS, import into the self-hosted DB:**
@@ -866,7 +866,7 @@ After the ZIP restore, all images from your backup are re-uploaded automatically
         tips: [
           "Passwords are bcrypt hashes — they work immediately after migration, no password resets needed.",
           "Always import auth users BEFORE running the main DB restore to prevent FK errors.",
-          "Run `docker compose exec supabase-db psql -U postgres -c '\\dt auth.*'` to verify auth tables exist.",
+          "Run: docker compose exec supabase-db psql -U postgres -c '\\dt auth.*' — to verify auth tables exist.",
         ],
         warnings: [
           "Never skip the auth migration — without it, all user data (orders, profiles) will be orphaned.",
@@ -877,28 +877,28 @@ After the ZIP restore, all images from your backup are re-uploaded automatically
         content: `The backup/restore system is fully compatible with the self-hosted VPS. Key differences from Cloud:
 
 **What changes on VPS:**
-- Signed URLs for ZIP downloads are generated against \`PUBLIC_SUPABASE_URL\` — must be HTTPS and publicly reachable
+- Signed URLs for ZIP downloads are generated against PUBLIC_SUPABASE_URL — must be HTTPS and publicly reachable
 - Chunked downloads use 5 MB Range requests to bypass Kong's default proxy buffer cap
-- FK checks are disabled via \`SUPABASE_DB_URL\` direct Postgres connection during restore
+- FK checks are disabled via SUPABASE_DB_URL direct Postgres connection during restore
 
 **Full restore workflow on fresh VPS:**
 1. Open Admin → System Tools → Backup & Restore
-2. Click **"Upload & Restore Full Site ZIP"** and pick your \`full-backup-*.zip\`
-3. Phase 1 (DB): All tables restored with FK checks disabled — takes ~10–30 seconds
+2. Click **"Upload & Restore Full Site ZIP"** and pick your full-backup-*.zip
+3. Phase 1 (DB): All tables restored with FK checks disabled — takes ~10-30 seconds
 4. Phase 2 (Storage): Images uploaded in batches of 20 — progress bar shows completion
 5. Reload the storefront and verify products/images appear
 
 **Troubleshooting:**
-- "Could not create signed URL" → \`PUBLIC_SUPABASE_URL\` secret is wrong or not set
-- "Corrupted zip" → Nginx proxy_buffer_size too small (see Nginx config article)
-- "FK constraint error" → \`SUPABASE_DB_URL\` secret not set or using wrong hostname
-- "Upload failed: 413" → Nginx \`client_max_body_size\` is too small (set to 500m)
+- "Could not create signed URL" — PUBLIC_SUPABASE_URL secret is wrong or not set
+- "Corrupted zip" — Nginx proxy_buffer_size too small (see Nginx config article)
+- "FK constraint error" — SUPABASE_DB_URL secret not set or using wrong hostname
+- "Upload failed: 413" — Nginx client_max_body_size is too small (set to 500m)
 
 **Scheduled auto-backups:**
-The pg_cron job calls the \`db-backup\` Edge Function via HTTP. Ensure:
-- \`MANAGEMENT_API_TOKEN\` secret is set (used by the cron scheduler)
-- pg_net extension is enabled: \`CREATE EXTENSION IF NOT EXISTS pg_net;\`
-- pg_cron extension is enabled: \`CREATE EXTENSION IF NOT EXISTS pg_cron;\``,
+The pg_cron job calls the db-backup Edge Function via HTTP. Ensure:
+- MANAGEMENT_API_TOKEN secret is set (used by the cron scheduler)
+- pg_net extension is enabled: CREATE EXTENSION IF NOT EXISTS pg_net;
+- pg_cron extension is enabled: CREATE EXTENSION IF NOT EXISTS pg_cron;`,
         tips: [
           "Test a backup download first before relying on restore — it validates your entire Nginx + signed URL chain.",
           "Storage batches use upsert — safe to re-run if a batch times out.",
