@@ -3829,6 +3829,13 @@ const AdminDashboard = () => {
             </div>
           )}
 
+          {/* ═══ System Metrics Tab ═══ */}
+          {tab === "system_metrics" && (
+            <div className="animate-in fade-in duration-200">
+              <SystemMetrics />
+            </div>
+          )}
+
           {/* ═══ Image Editor Tab ═══ */}
           {tab === "image_editor" && (
             <div className="animate-in fade-in duration-200 -mx-4 -mt-2 h-[calc(100vh-8rem)]">
