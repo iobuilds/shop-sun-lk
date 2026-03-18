@@ -654,9 +654,9 @@ Use this to audit changes and investigate any unexpected data modifications.`,
   # supabase-storage, supabase-edge-runtime — all should be Up`,
         tips: [
           "Generate JWT keys: npx supabase@latest gen keys --project-ref local",
-          "Use `docker compose logs -f supabase-edge-runtime` to tail Edge Function logs.",
-          "Run `docker compose pull && docker compose up -d` to update Supabase images.",
-          "Back up docker volumes (`supabase_db_data`, `supabase_storage_data`) before any upgrade.",
+          "Use 'docker compose logs -f supabase-edge-runtime' to tail Edge Function logs.",
+          "Run 'docker compose pull && docker compose up -d' to update Supabase images.",
+          "Back up docker volumes (supabase_db_data, supabase_storage_data) before any upgrade.",
         ],
         warnings: [
           "Never expose port 5432 (Postgres) or 8001 (Kong admin) to the public internet.",
