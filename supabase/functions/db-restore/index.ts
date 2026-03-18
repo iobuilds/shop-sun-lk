@@ -488,8 +488,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Could not create signed URL: " + signErr?.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    log("info", "Signed download URL created", { file_name });
-    return new Response(JSON.stringify({ url: signedData.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Replace internal host with public URL so the browser can reach it
+    const publicUrl = (Deno.env.get("PUBLIC_SUPABASE_URL") || supabaseUrl).replace(/\/$/, "");
+    const internalUrl = supabaseUrl.replace(/\/$/, "");
+    const publicSignedUrl = signedData.signedUrl.replace(internalUrl, publicUrl);
+
+    log("info", "Signed download URL created", { file_name, publicUrl });
+    return new Response(JSON.stringify({ url: publicSignedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   // ── Stream a backup file directly (legacy, kept for downloads to disk) ──
