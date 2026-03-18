@@ -418,6 +418,24 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Clear a storage bucket (called from browser-side restore) ──
+  if (action === "clear_storage_bucket") {
+    try {
+      const { bucket } = body;
+      if (!bucket) return new Response(JSON.stringify({ error: "bucket required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      log("info", `Clearing bucket: ${bucket}`);
+      const allExisting = await getAllStorageFiles(adminClient, bucket);
+      for (let i = 0; i < allExisting.length; i += 100) {
+        await adminClient.storage.from(bucket).remove(allExisting.slice(i, i + 100));
+      }
+      log("info", `Cleared ${allExisting.length} files from ${bucket}`);
+      return new Response(JSON.stringify({ success: true, cleared: allExisting.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      log("error", "clear_storage_bucket failed", { error: (e as Error).message });
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   // ── Log restore complete ──
   if (action === "log_restore_complete") {
     const { file_name, restored_files } = body;
