@@ -1092,7 +1092,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
           <DialogHeader>
             <DialogTitle>Arrival Charges #{arrivalTarget?.id?.slice(0, 8).toUpperCase()}</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">Add shipping & tax charges after item arrival. User will be notified to pay.</p>
+          <p className="text-xs text-muted-foreground">Set shipping & tax charges once items have arrived. This will <strong>move the order to "Arrived"</strong> and notify the user to pay.</p>
           <div className="space-y-3 mt-2">
             <div>
               <Label className="text-sm">Shipping Fee (Rs.)</Label>
