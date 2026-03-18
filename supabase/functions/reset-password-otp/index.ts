@@ -25,41 +25,67 @@ serve(async (req) => {
     if (action === "lookup") {
       if (!identifier) throw new Error("identifier is required");
 
-      const isPhone = /^\d/.test(identifier.replace(/^\+/, ""));
+      const trimmed = identifier.trim();
+      // Detect phone: starts with digit, +, or 0
+      const isPhone = /^[+0]?\d/.test(trimmed) && !trimmed.includes("@");
       let profile: any = null;
 
       if (isPhone) {
-        // Direct phone lookup
-        let p = identifier.replace(/\D/g, "");
-        if (p.startsWith("0")) p = "94" + p.slice(1);
-        if (!p.startsWith("94")) p = "94" + p;
+        // Normalise phone — try multiple formats stored in DB
+        let digits = trimmed.replace(/\D/g, "");
+        // Build candidate formats
+        const candidates: string[] = [];
+        if (digits.startsWith("94") && digits.length === 11) {
+          candidates.push(digits);               // 94XXXXXXXXX
+          candidates.push("0" + digits.slice(2)); // 07XXXXXXXX
+        } else if (digits.startsWith("0") && digits.length === 10) {
+          candidates.push(digits);               // 07XXXXXXXX
+          candidates.push("94" + digits.slice(1)); // 94XXXXXXXXX
+        } else {
+          // 9-digit bare number
+          candidates.push(digits);
+          candidates.push("94" + digits);
+          candidates.push("0" + digits);
+        }
 
-        const { data } = await supabaseAdmin
-          .from("profiles")
-          .select("phone, user_id")
-          .eq("phone", p)
-          .maybeSingle();
-        profile = data;
-      } else {
-        // Email lookup — find user then their profile
-        const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-        const user = users?.users?.find(
-          (u) => u.email?.toLowerCase() === identifier.toLowerCase()
-        );
-        if (user) {
+        for (const candidate of candidates) {
           const { data } = await supabaseAdmin
             .from("profiles")
             .select("phone, user_id")
-            .eq("user_id", user.id)
+            .eq("phone", candidate)
             .maybeSingle();
-          profile = data;
+          if (data?.phone) { profile = data; break; }
+        }
+      } else {
+        // Email lookup — paginate through all auth users to find matching email
+        let page = 1;
+        const perPage = 1000;
+        let found = false;
+        while (!found) {
+          const { data: usersPage } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+          const users = usersPage?.users ?? [];
+          const user = users.find(
+            (u: any) => u.email?.toLowerCase() === trimmed.toLowerCase()
+          );
+          if (user) {
+            const { data } = await supabaseAdmin
+              .from("profiles")
+              .select("phone, user_id")
+              .eq("user_id", user.id)
+              .maybeSingle();
+            profile = data;
+            found = true;
+          }
+          // If returned fewer than perPage, we've reached the end
+          if (users.length < perPage) break;
+          page++;
         }
       }
 
       if (!profile?.phone) {
         return new Response(
           JSON.stringify({ success: false, error: "No account found with this email or phone number." }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 404 }
+          { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
         );
       }
 
