@@ -59,6 +59,9 @@ async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): 
 // Download a storage file in 5 MB chunks using HTTP Range requests.
 // This bypasses Kong's proxy buffer limit (~10 MB on self-hosted VPS) which
 // silently truncates large responses and causes "Corrupted zip" errors.
+// NOTE: We do NOT use Content-Range totalSize to cap requests — the metadata
+// size can differ from the actual ZIP content length on multipart uploads,
+// causing truncation. Instead we rely purely on partial-chunk / 416 detection.
 async function downloadStorageFileAsBuffer(adminClient: any, bucket: string, fileName: string): Promise<ArrayBuffer> {
   const { data: signedData, error: signErr } = await adminClient.storage
     .from(bucket)
@@ -71,38 +74,36 @@ async function downloadStorageFileAsBuffer(adminClient: any, bucket: string, fil
   const CHUNK = 5 * 1024 * 1024; // 5 MB per request — well below Kong's 10 MB buffer cap
   const chunks: Uint8Array[] = [];
   let offset = 0;
-  let totalSize = -1;
 
   while (true) {
-    const rangeEnd = totalSize > 0 ? Math.min(offset + CHUNK - 1, totalSize - 1) : offset + CHUNK - 1;
+    const rangeEnd = offset + CHUNK - 1;
     const resp = await fetch(url, {
       headers: { Range: `bytes=${offset}-${rangeEnd}` },
     });
 
     // 416 = Range Not Satisfiable → we've read past the end, stop
-    if (resp.status === 416) break;
+    if (resp.status === 416) {
+      await resp.text(); // drain body
+      break;
+    }
 
     if (resp.status !== 206 && resp.status !== 200) {
       await resp.text(); // drain body
       throw new Error(`Download failed: HTTP ${resp.status}`);
     }
 
-    // Parse total size from Content-Range header (e.g. "bytes 0-5242879/17570532")
-    if (totalSize < 0) {
-      const cr = resp.headers.get("content-range");
-      if (cr) {
-        const m = cr.match(/\/(\d+)$/);
-        if (m) totalSize = parseInt(m[1], 10);
-      }
+    const chunk = new Uint8Array(await resp.arrayBuffer());
+    if (chunk.byteLength > 0) {
+      chunks.push(chunk);
+      offset += chunk.byteLength;
     }
 
-    const chunk = new Uint8Array(await resp.arrayBuffer());
-    chunks.push(chunk);
-    offset += chunk.byteLength;
-
-    // If server returned 200 (no range support) or we've reached the end, stop
-    if (resp.status === 200 || (totalSize > 0 && offset >= totalSize)) break;
-    if (chunk.byteLength < CHUNK) break; // last partial chunk
+    // If server returned 200 (no range support), we got the full file in one shot
+    if (resp.status === 200) break;
+    // Partial chunk means we've hit the end of file
+    if (chunk.byteLength < CHUNK) break;
+    // Empty chunk guard
+    if (chunk.byteLength === 0) break;
   }
 
   if (chunks.length === 0) throw new Error("Downloaded 0 bytes from storage");
