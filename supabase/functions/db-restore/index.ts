@@ -303,13 +303,13 @@ Deno.serve(async (req) => {
 
       log("info", "Restoring storage batch", { file_name, offset, batch_size, clear_first });
 
-      const { data: fileData, error: dlError } = await adminClient.storage.from("db-backups").download(file_name);
-      if (dlError || !fileData) {
-        log("error", "Could not download backup for storage batch", { error: dlError?.message });
-        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      let arrayBuffer: ArrayBuffer;
+      try {
+        arrayBuffer = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+      } catch (dlError: any) {
+        log("error", "Could not download backup for storage batch", { error: dlError.message });
+        return new Response(JSON.stringify({ error: "Could not download backup file: " + dlError.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const arrayBuffer = await fileData.arrayBuffer();
       const zip = await JSZip.loadAsync(arrayBuffer);
 
       let restoredFiles = 0;
