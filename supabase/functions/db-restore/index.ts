@@ -56,17 +56,64 @@ async function getAllStorageFiles(adminClient: any, bucket: string, path = ""): 
   return files;
 }
 
-// Download a storage file using a signed URL + raw fetch to avoid Blob truncation on large files
+// Download a storage file in 5 MB chunks using HTTP Range requests.
+// This bypasses Kong's proxy buffer limit (~10 MB on self-hosted VPS) which
+// silently truncates large responses and causes "Corrupted zip" errors.
 async function downloadStorageFileAsBuffer(adminClient: any, bucket: string, fileName: string): Promise<ArrayBuffer> {
   const { data: signedData, error: signErr } = await adminClient.storage
     .from(bucket)
-    .createSignedUrl(fileName, 300); // 5 min expiry
+    .createSignedUrl(fileName, 600); // 10 min expiry
   if (signErr || !signedData?.signedUrl) {
     throw new Error(`Could not create signed URL: ${signErr?.message}`);
   }
-  const resp = await fetch(signedData.signedUrl);
-  if (!resp.ok) throw new Error(`Download failed: HTTP ${resp.status}`);
-  return await resp.arrayBuffer();
+
+  const url = signedData.signedUrl;
+  const CHUNK = 5 * 1024 * 1024; // 5 MB per request — well below Kong's 10 MB buffer cap
+  const chunks: Uint8Array[] = [];
+  let offset = 0;
+  let totalSize = -1;
+
+  while (true) {
+    const rangeEnd = totalSize > 0 ? Math.min(offset + CHUNK - 1, totalSize - 1) : offset + CHUNK - 1;
+    const resp = await fetch(url, {
+      headers: { Range: `bytes=${offset}-${rangeEnd}` },
+    });
+
+    // 416 = Range Not Satisfiable → we've read past the end, stop
+    if (resp.status === 416) break;
+
+    if (resp.status !== 206 && resp.status !== 200) {
+      await resp.text(); // drain body
+      throw new Error(`Download failed: HTTP ${resp.status}`);
+    }
+
+    // Parse total size from Content-Range header (e.g. "bytes 0-5242879/17570532")
+    if (totalSize < 0) {
+      const cr = resp.headers.get("content-range");
+      if (cr) {
+        const m = cr.match(/\/(\d+)$/);
+        if (m) totalSize = parseInt(m[1], 10);
+      }
+    }
+
+    const chunk = new Uint8Array(await resp.arrayBuffer());
+    chunks.push(chunk);
+    offset += chunk.byteLength;
+
+    // If server returned 200 (no range support) or we've reached the end, stop
+    if (resp.status === 200 || (totalSize > 0 && offset >= totalSize)) break;
+    if (chunk.byteLength < CHUNK) break; // last partial chunk
+  }
+
+  if (chunks.length === 0) throw new Error("Downloaded 0 bytes from storage");
+
+  // Concatenate all chunks into one ArrayBuffer
+  const total = chunks.reduce((s, c) => s + c.byteLength, 0);
+  log("info", "Chunked download complete", { chunks: chunks.length, totalBytes: total });
+  const result = new Uint8Array(total);
+  let pos = 0;
+  for (const c of chunks) { result.set(c, pos); pos += c.byteLength; }
+  return result.buffer;
 }
 
 async function getPgClient() {
