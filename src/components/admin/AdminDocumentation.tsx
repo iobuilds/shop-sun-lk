@@ -618,55 +618,294 @@ Use this to audit changes and investigate any unexpected data modifications.`,
     articles: [
       {
         title: "Docker Compose Setup",
-        content: "This guide explains how to run the full shop stack on your own VPS using Docker.\n\n**Prerequisites:**\n- A Linux VPS (Ubuntu 22.04 recommended) with at least 2GB RAM\n- Docker and Docker Compose installed\n- A domain name pointed at your server IP\n- Port 80 and 443 open in your firewall\n\n**Step 1 — Clone the repo:**\n  git clone <YOUR_GIT_URL> shop\n  cd shop\n\n**Step 2 — Create a .env file in the project root:**\n  VITE_SUPABASE_URL=https://your-domain.com\n  VITE_SUPABASE_PUBLISHABLE_KEY=<anon_key>\n  VITE_SUPABASE_PROJECT_ID=<project_ref>\n  PUBLIC_SUPABASE_URL=https://your-domain.com\n\n**Step 3 — Build and start:**\n  docker compose up -d --build\n\n**Step 4 — Verify containers are running:**\n  docker compose ps\n\nAll services (kong, db, storage, auth, edge-runtime) should show **Up**.\n\n**Step 5 — Apply database migrations:**\n  docker compose exec db psql -U postgres -d postgres -f /migrations/init.sql",
+        content: `This guide runs the full NanoCircuit stack on your VPS at **db.nanocircuit.iobuilds.com** using the official Supabase Docker Compose setup.
+
+**Prerequisites:**
+- Ubuntu 22.04 VPS, minimum 4 GB RAM, 2 vCPUs
+- Docker Engine ≥ 24 + Docker Compose v2
+- Domain \`db.nanocircuit.iobuilds.com\` A-record → your server IP
+- Ports 80, 443 open in firewall (block 5432, 8001 externally)
+
+**Step 1 — Install Docker:**
+  curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker $USER && newgrp docker
+
+**Step 2 — Clone Supabase self-hosted:**
+  git clone --depth 1 https://github.com/supabase/supabase
+  cd supabase/docker
+  cp .env.example .env
+
+**Step 3 — Edit supabase/docker/.env (critical keys):**
+  POSTGRES_PASSWORD=<strong-password>
+  JWT_SECRET=<min-32-char-secret>
+  ANON_KEY=<generate-with-supabase-cli>
+  SERVICE_ROLE_KEY=<generate-with-supabase-cli>
+  SITE_URL=https://nanocircuit.iobuilds.com
+  API_EXTERNAL_URL=https://db.nanocircuit.iobuilds.com
+  SUPABASE_PUBLIC_URL=https://db.nanocircuit.iobuilds.com
+  STUDIO_DEFAULT_PROJECT=NanoCircuit
+
+**Step 4 — Start all services:**
+  docker compose up -d
+
+**Step 5 — Verify all containers:**
+  docker compose ps
+  # supabase-db, supabase-kong, supabase-auth, supabase-rest,
+  # supabase-storage, supabase-edge-runtime — all should be Up`,
         tips: [
-          "Use `docker compose logs -f edge-runtime` to tail edge function logs in real time.",
-          "Run `docker compose pull` periodically to update base images.",
-          "Back up your Docker volumes before any major upgrade.",
+          "Generate JWT keys: npx supabase@latest gen keys --project-ref local",
+          "Use 'docker compose logs -f supabase-edge-runtime' to tail Edge Function logs.",
+          "Run 'docker compose pull && docker compose up -d' to update Supabase images.",
+          "Back up docker volumes (supabase_db_data, supabase_storage_data) before any upgrade.",
         ],
         warnings: [
-          "Never expose the Postgres or Kong admin ports (5432, 8001) directly to the internet — use a firewall.",
+          "Never expose port 5432 (Postgres) or 8001 (Kong admin) to the public internet.",
+          "POSTGRES_PASSWORD and JWT_SECRET must be strong — regenerate them, never use defaults.",
         ],
       },
       {
-        title: "Self-Hosted Supabase Configuration",
-        content: "When running Supabase self-hosted (via Docker), configure these extra environment variables so the shop functions work correctly.\n\n**Required secrets to set in Admin → Secrets panel:**\n- `PUBLIC_SUPABASE_URL` — The externally-reachable URL of your Supabase instance (e.g. https://supabase.your-domain.com). Critical for backup/restore signed URLs.\n- `SUPABASE_DB_URL` — The internal Postgres connection string: postgresql://postgres:PASSWORD@db:5432/postgres. Used for scheduled backups and FK bypass during restore.\n\n**Kong / API gateway config:**\nBy default Supabase routes API calls through Kong on port 8000. Your `PUBLIC_SUPABASE_URL` should point to Kong via an Nginx reverse proxy.\n\n**Nginx reverse proxy example:**\n  server {\n      listen 443 ssl;\n      server_name supabase.your-domain.com;\n      location / {\n          proxy_pass http://localhost:8000;\n          proxy_set_header Host $http_host;\n      }\n  }\n\n**Redeploying Edge Functions after code changes:**\n  docker compose restart edge-runtime\n\n**Storage:**\nFiles are stored inside the `storage` container volume. Back up this volume separately from the database.",
+        title: "Nginx Configuration",
+        content: `Complete Nginx config for **db.nanocircuit.iobuilds.com** (Supabase API + Storage) and the shop frontend.
+
+**Install Nginx & Certbot:**
+  sudo apt install nginx certbot python3-certbot-nginx -y
+
+**Get SSL certificates:**
+  sudo certbot --nginx -d db.nanocircuit.iobuilds.com -d nanocircuit.iobuilds.com
+
+**File: /etc/nginx/sites-available/nanocircuit**
+
+  # ── Supabase API (Kong) ──────────────────────────────────
+  server {
+      listen 80;
+      server_name db.nanocircuit.iobuilds.com;
+      return 301 https://$host$request_uri;
+  }
+  server {
+      listen 443 ssl http2;
+      server_name db.nanocircuit.iobuilds.com;
+
+      ssl_certificate     /etc/letsencrypt/live/db.nanocircuit.iobuilds.com/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/db.nanocircuit.iobuilds.com/privkey.pem;
+      ssl_protocols       TLSv1.2 TLSv1.3;
+      ssl_prefer_server_ciphers on;
+
+      # Increase buffer sizes — critical for backup ZIP downloads
+      proxy_buffering         on;
+      proxy_buffer_size       16k;
+      proxy_buffers           64 16k;
+      proxy_busy_buffers_size 64k;
+      client_max_body_size    500m;
+
+      # Extend timeouts for long-running Edge Functions (backup/restore)
+      proxy_connect_timeout   120s;
+      proxy_send_timeout      300s;
+      proxy_read_timeout      300s;
+      send_timeout            300s;
+
+      location / {
+          proxy_pass         http://127.0.0.1:8000;
+          proxy_http_version 1.1;
+          proxy_set_header   Host              $http_host;
+          proxy_set_header   X-Real-IP         $remote_addr;
+          proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+          proxy_set_header   X-Forwarded-Proto $scheme;
+          proxy_set_header   Upgrade           $http_upgrade;
+          proxy_set_header   Connection        "upgrade";
+
+          # Forward auth headers required by Supabase
+          proxy_set_header   apikey            $http_apikey;
+          proxy_set_header   Authorization     $http_authorization;
+      }
+  }
+
+  # ── Shop Frontend ────────────────────────────────────────
+  server {
+      listen 80;
+      server_name nanocircuit.iobuilds.com;
+      return 301 https://$host$request_uri;
+  }
+  server {
+      listen 443 ssl http2;
+      server_name nanocircuit.iobuilds.com;
+
+      ssl_certificate     /etc/letsencrypt/live/nanocircuit.iobuilds.com/fullchain.pem;
+      ssl_certificate_key /etc/letsencrypt/live/nanocircuit.iobuilds.com/privkey.pem;
+      ssl_protocols       TLSv1.2 TLSv1.3;
+
+      root  /var/www/nanocircuit/dist;
+      index index.html;
+
+      gzip on;
+      gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+      location / {
+          try_files $uri $uri/ /index.html;
+      }
+
+      # Cache static assets aggressively
+      location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2)$ {
+          expires 1y;
+          add_header Cache-Control "public, immutable";
+      }
+  }
+
+**Enable and reload:**
+  sudo ln -s /etc/nginx/sites-available/nanocircuit /etc/nginx/sites-enabled/
+  sudo nginx -t && sudo systemctl reload nginx`,
         tips: [
-          "After setting PUBLIC_SUPABASE_URL, test by downloading a backup file to verify the URL resolves correctly.",
-          "If backup ZIP downloads fail with hostname errors, PUBLIC_SUPABASE_URL is likely pointing to an internal host.",
+          "The 'proxy_buffers 64 16k' setting is critical — without it Kong truncates large backup ZIP responses at ~10 MB.",
+          "client_max_body_size 500m allows uploading large backup ZIPs via the restore panel.",
+          "Auto-renewal: sudo systemctl enable certbot.timer && sudo systemctl start certbot.timer",
         ],
         warnings: [
-          "Do NOT use http://kong:8000 as PUBLIC_SUPABASE_URL — that is an internal Docker hostname unreachable from browsers.",
+          "Without increased proxy_buffer_size, backup ZIP downloads will be silently truncated causing 'Corrupted zip' errors.",
+          "Never skip proxy_set_header Host — Supabase Storage uses the Host header to build signed URLs.",
+        ],
+      },
+      {
+        title: "Edge Function Secrets",
+        content: `After the VPS is running, configure all secrets in the Supabase Studio at **db.nanocircuit.iobuilds.com** → Edge Functions → Secrets, OR via the Supabase CLI:
+
+**Required secrets for this project:**
+
+  supabase secrets set --project-ref local \\
+    SUPABASE_URL=https://db.nanocircuit.iobuilds.com \\
+    PUBLIC_SUPABASE_URL=https://db.nanocircuit.iobuilds.com \\
+    SUPABASE_ANON_KEY=<your-anon-key> \\
+    SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \\
+    SUPABASE_DB_URL=postgresql://postgres:<POSTGRES_PASSWORD>@supabase-db:5432/postgres \\
+    PAYHERE_MERCHANT_ID=<your-id> \\
+    PAYHERE_MERCHANT_SECRET=<your-secret> \\
+    STRIPE_SECRET_KEY=<your-stripe-key> \\
+    TEXTLK_API_KEY=<your-textlk-key> \\
+    TEXTLK_SENDER_ID=<your-sender-id> \\
+    SMTP_HOST=<your-smtp-host> \\
+    SMTP_PORT=587 \\
+    SMTP_USERNAME=<your-email> \\
+    SMTP_PASSWORD=<your-password> \\
+    SMTP_FROM_EMAIL=info@nanocircuit.lk \\
+    MANAGEMENT_API_TOKEN=<supabase-management-token>
+
+**Critical notes:**
+- SUPABASE_DB_URL must use supabase-db (Docker container name), NOT localhost
+- PUBLIC_SUPABASE_URL must be the externally-reachable HTTPS URL — used for signed storage URLs in backup downloads
+- SUPABASE_URL is used inside Edge Functions to call the API — set to the public HTTPS URL
+
+**Deploy Edge Functions:**
+  supabase functions deploy --project-ref local db-backup
+  supabase functions deploy --project-ref local db-restore
+  # Deploy all functions at once:
+  supabase functions deploy --project-ref local`,
+        tips: [
+          "Test secrets by calling an Edge Function: curl https://db.nanocircuit.iobuilds.com/functions/v1/sms-balance",
+          "Use 'docker compose exec supabase-edge-runtime deno info' to verify the runtime is healthy.",
+        ],
+        warnings: [
+          "If SUPABASE_DB_URL uses localhost instead of supabase-db, scheduled backups and FK-bypass restore will silently fail.",
+        ],
+      },
+      {
+        title: "Frontend .env & Build",
+        content: `Build the NanoCircuit shop frontend pointing at your self-hosted backend.
+
+**Create .env in your shop repo root:**
+  VITE_SUPABASE_URL=https://db.nanocircuit.iobuilds.com
+  VITE_SUPABASE_PUBLISHABLE_KEY=<your-anon-key>
+  VITE_SUPABASE_PROJECT_ID=<your-project-ref>
+
+**Build:**
+  npm ci
+  npm run build
+  # dist/ folder is produced
+
+**Deploy to server:**
+  rsync -avz dist/ user@your-vps:/var/www/nanocircuit/dist/
+  # Or SCP:
+  scp -r dist/* user@your-vps:/var/www/nanocircuit/dist/
+
+**Make sure the folder exists on the server:**
+  sudo mkdir -p /var/www/nanocircuit/dist
+  sudo chown -R $USER:$USER /var/www/nanocircuit`,
+        tips: [
+          "VITE_SUPABASE_URL is baked into the JS bundle at build time — rebuild after changing it.",
+          "After deploy, hard-refresh (Ctrl+Shift+R) to clear cached JS files.",
+        ],
+        warnings: [
+          "If VITE_SUPABASE_URL is wrong in the build, ALL API calls (auth, products, orders) will fail silently.",
         ],
       },
       {
         title: "Migrating Auth Users to VPS",
-        content: "Auth users (email, phone, passwords) are stored in the auth.users table managed by Supabase internally. The standard backup/restore does NOT include auth users — migrate them separately.\n\n**Option A — pg_dump the auth schema (recommended):**\n\nOn your source Supabase instance (replace DB_URL with your database URL):\n  pg_dump --schema=auth -t auth.users -t auth.identities -t auth.sessions DB_URL > auth_users.sql\n\nOn your target VPS (inside Docker):\n  docker compose exec db psql -U postgres -d postgres < auth_users.sql\n\n**Option B — Export from Dashboard:**\n- Go to your source project → Table Editor → auth.users\n- Export as CSV\n- Import into your target instance via psql COPY command\n\n**After migration:**\n1. Restore the main database backup via Admin → Backup & Restore → Restore.\n2. The restore skips `profiles` and `user_roles` FK errors automatically using `session_replication_role = replica`.\n3. Verify user logins work by testing a known account.",
+        content: `Auth users (email, passwords) live in Supabase's internal auth.users table and are NOT included in the standard backup. Migrate them separately using **pg_dump**.
+
+**On your source Supabase Cloud project:**
+
+Get the direct DB connection string from your Cloud project → Settings → Database → Connection string (Direct).
+
+  pg_dump \\
+    --schema=auth \\
+    -t auth.users \\
+    -t auth.identities \\
+    -t auth.sessions \\
+    postgresql://postgres.<PROJECT-REF>:<PASSWORD>@db.<PROJECT-REF>.supabase.com:5432/postgres \\
+    > auth_users.sql
+
+**On your VPS, import into the self-hosted DB:**
+  docker compose exec -T supabase-db \\
+    psql -U postgres -d postgres < auth_users.sql
+
+**Full migration order:**
+1. Import auth users (above)
+2. Go to Admin → Backup & Restore → Upload & Restore Full Site ZIP
+3. The restore automatically disables FK checks so profiles/user_roles link correctly
+4. Test login with a known account
+
+**Migrate storage objects (images):**
+After the ZIP restore, all images from your backup are re-uploaded automatically. No extra steps needed.`,
         tips: [
-          "You need direct database access (DATABASE_URL) to run pg_dump — get it from your Supabase project settings under Database.",
-          "Always restore auth users BEFORE restoring the main backup to avoid FK constraint issues.",
+          "Passwords are bcrypt hashes — they work immediately after migration, no password resets needed.",
+          "Always import auth users BEFORE running the main DB restore to prevent FK errors.",
+          "Run: docker compose exec supabase-db psql -U postgres -c '\\dt auth.*' — to verify auth tables exist.",
         ],
         warnings: [
-          "Auth user passwords are stored as bcrypt hashes — they work correctly after migration without password resets.",
+          "Never skip the auth migration — without it, all user data (orders, profiles) will be orphaned.",
         ],
       },
       {
-        title: "Restore from Backup on VPS",
-        content: "After deploying to your VPS, restore your data using Admin → Backup & Restore.\n\n**Full site restore workflow:**\n1. **Upload a ZIP backup** — Use 'Upload & Restore Full Site ZIP' to upload a full-backup-*.zip from your computer.\n2. The system automatically:\n   - Phase 1: Restores all database tables (FK checks disabled to handle profiles/user_roles)\n   - Phase 2: Restores all storage images in batches of 15 files\n3. **Watch the progress bar** — each batch is shown. Total time depends on the number of images.\n4. After completion, reload the storefront to verify products and images appear.\n\n**Troubleshooting FK errors during restore:**\nIf you see FK constraint errors in the edge function logs:\n- Ensure `SUPABASE_DB_URL` secret is correctly set (needed for the pg bypass)\n- Check that Postgres port 5432 is accessible from within the edge-runtime container\n- Verify the secret uses the internal Docker hostname `db` not `localhost`\n\n**Restoring only the database (no images):**\nUse the JSON-only restore option — upload a backup-*.json file. Faster and suitable when you only need to restore table data.",
+        title: "Backup & Restore on VPS",
+        content: `The backup/restore system is fully compatible with the self-hosted VPS. Key differences from Cloud:
+
+**What changes on VPS:**
+- Signed URLs for ZIP downloads are generated against PUBLIC_SUPABASE_URL — must be HTTPS and publicly reachable
+- Chunked downloads use 5 MB Range requests to bypass Kong's default proxy buffer cap
+- FK checks are disabled via SUPABASE_DB_URL direct Postgres connection during restore
+
+**Full restore workflow on fresh VPS:**
+1. Open Admin → System Tools → Backup & Restore
+2. Click **"Upload & Restore Full Site ZIP"** and pick your full-backup-*.zip
+3. Phase 1 (DB): All tables restored with FK checks disabled — takes ~10-30 seconds
+4. Phase 2 (Storage): Images uploaded in batches of 20 — progress bar shows completion
+5. Reload the storefront and verify products/images appear
+
+**Troubleshooting:**
+- "Could not create signed URL" — PUBLIC_SUPABASE_URL secret is wrong or not set
+- "Corrupted zip" — Nginx proxy_buffer_size too small (see Nginx config article)
+- "FK constraint error" — SUPABASE_DB_URL secret not set or using wrong hostname
+- "Upload failed: 413" — Nginx client_max_body_size is too small (set to 500m)
+
+**Scheduled auto-backups:**
+The pg_cron job calls the db-backup Edge Function via HTTP. Ensure:
+- MANAGEMENT_API_TOKEN secret is set (used by the cron scheduler)
+- pg_net extension is enabled: CREATE EXTENSION IF NOT EXISTS pg_net;
+- pg_cron extension is enabled: CREATE EXTENSION IF NOT EXISTS pg_cron;`,
         tips: [
-          "After a full restore, clear your browser cache — some images may be served from old CDN cache.",
-          "Storage restore batches can be rerun if they time out — the system uses upsert so re-running is safe.",
-        ],
-      },
-      {
-        title: "SSL & Domain Setup",
-        content: "Secure your VPS deployment with HTTPS using Certbot (Let's Encrypt).\n\n**Step 1 — Install Certbot:**\n  sudo apt install certbot python3-certbot-nginx -y\n\n**Step 2 — Obtain a certificate:**\n  sudo certbot --nginx -d shop.your-domain.com -d supabase.your-domain.com\n\n**Step 3 — Auto-renewal:**\n  sudo systemctl enable certbot.timer\n  sudo systemctl start certbot.timer\n\n**Building the frontend for production:**\n  npm install && npm run build\n  # Copy dist/ folder to /var/www/shop/dist on your server\n\n**Nginx config for the shop frontend:**\n  server {\n      listen 443 ssl;\n      server_name shop.your-domain.com;\n      root /var/www/shop/dist;\n      index index.html;\n      location / { try_files PATH PATH/ /index.html; }\n      ssl_certificate /etc/letsencrypt/live/shop.your-domain.com/fullchain.pem;\n      ssl_certificate_key /etc/letsencrypt/live/shop.your-domain.com/privkey.pem;\n  }",
-        tips: [
-          "Set VITE_SUPABASE_URL to your public domain before running `npm run build` — this is baked into the frontend bundle.",
-          "Use `npm run build` locally and SCP the dist/ folder to your server, or set up a CI/CD pipeline.",
+          "Test a backup download first before relying on restore — it validates your entire Nginx + signed URL chain.",
+          "Storage batches use upsert — safe to re-run if a batch times out.",
+          "Keep 3+ backup copies: one on VPS storage, one downloaded locally, one on an external cloud bucket.",
         ],
         warnings: [
-          "Never serve the shop over plain HTTP in production — customer data and session tokens must be encrypted.",
+          "Restore overwrites all existing data — only run on a fresh VPS or during emergency recovery.",
         ],
       },
     ],
