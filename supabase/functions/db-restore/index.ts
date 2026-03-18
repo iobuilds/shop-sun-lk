@@ -204,13 +204,13 @@ Deno.serve(async (req) => {
         log("info", "Using uploaded data for restore");
       } else if (file_name) {
         log("info", "Downloading backup file", { file_name });
-        const { data: fileBlob, error: dlErr } = await adminClient.storage.from("db-backups").download(file_name);
-        if (dlErr || !fileBlob) {
-          log("error", "Could not download file", { error: dlErr?.message });
-          return new Response(JSON.stringify({ error: "Could not download file: " + dlErr?.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        try {
+          const buf = await downloadStorageFileAsBuffer(adminClient, "db-backups", file_name);
+          backupData = JSON.parse(new TextDecoder().decode(buf));
+        } catch (dlErr: any) {
+          log("error", "Could not download file", { error: dlErr.message });
+          return new Response(JSON.stringify({ error: "Could not download file: " + dlErr.message }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        const text = await fileBlob.text();
-        backupData = JSON.parse(text);
         log("info", "Backup file downloaded and parsed", { tables: Object.keys(backupData).length });
       } else {
         return new Response(JSON.stringify({ error: "No file_name or data provided" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
