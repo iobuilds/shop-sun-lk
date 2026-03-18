@@ -175,9 +175,6 @@ export default function SystemMetrics() {
   // Manual refresh
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  // Reset interval on manual refresh
-  useEffect(() => { /* refetchInterval handles auto-refresh */ }, [refreshKey]);
-
   const hasCgroupData =
     data &&
     (data.memory.cgroup_view.current_bytes != null ||
