@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +8,6 @@ import {
   Loader2, RefreshCw, Cpu, MemoryStick, HardDrive,
   Database, Clock, Server, AlertTriangle, Container, FolderOpen,
 } from "lucide-react";
-
-const METRICS_URL = "https://db.nanocircuit.iobuilds.com/system-metrics.json";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
