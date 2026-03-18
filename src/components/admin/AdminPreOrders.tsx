@@ -245,10 +245,15 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  // Filter by status and search by order ID
+  // Filter by status and search by order ID, customer name, or phone
   const filtered = requests.filter(r => {
     const matchStatus = filterStatus === "all" || r.status === filterStatus;
-    const matchSearch = !searchQuery || r.id.toLowerCase().includes(searchQuery.toLowerCase().replace(/[^a-f0-9-]/g, ''));
+    const profile = getProfile(r.user_id);
+    const q = searchQuery.toLowerCase();
+    const matchSearch = !searchQuery ||
+      r.id.toLowerCase().includes(q.replace(/[^a-f0-9-]/g, '')) ||
+      (profile?.full_name || "").toLowerCase().includes(q) ||
+      (profile?.phone || "").toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
@@ -506,6 +511,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         arrival_shipping_fee: shipping,
         arrival_tax_amount: tax,
         arrival_payment_status: "unpaid",
+        status: "arrived", // Auto-advance to arrived, same as PCB flow
       }).eq("id", arrivalTarget.id);
       if (error) throw error;
 
@@ -513,8 +519,8 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       const total = shipping + tax;
       await supabase.from("user_notifications").insert({
         user_id: arrivalTarget.user_id,
-        title: "Arrival Charges Ready",
-        message: `Your pre-order PO-${shortId} has arrived! Shipping + Tax: Rs. ${total.toLocaleString()}. Please pay to complete.`,
+        title: "Items Arrived — Pay Arrival Charges",
+        message: `Your pre-order PO-${shortId} items have arrived! Arrival charges: Rs. ${total.toLocaleString()}. Please log in and pay to complete.`,
         type: "order",
         link_url: "/pre-order?tab=my",
       });
@@ -524,14 +530,14 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         await supabase.functions.invoke("send-sms", {
           body: {
             phone: profile.phone,
-            message: `NanoCircuit.lk: Your pre-order PO-${shortId} has arrived! Arrival charges: Rs. ${total.toLocaleString()}. Please log in and pay to complete your order.`,
+            message: `NanoCircuit.lk: Your pre-order PO-${shortId} items have arrived! Arrival charges: Rs. ${total.toLocaleString()}. Log in to pay & complete your order. nanocircuit.lk/pre-order`,
             order_id: arrivalTarget.id,
             user_id: arrivalTarget.user_id,
           },
         });
       }
 
-      toast({ title: "Arrival charges saved & user notified" });
+      toast({ title: "Arrival charges saved — order moved to 'Arrived' & user notified" });
       setArrivalDialog(false);
       onRefresh();
     } catch (err: any) {
@@ -576,7 +582,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
             <Input
               className="pl-8 h-8 w-48 text-xs"
-              placeholder="Search by order ID..."
+              placeholder="Search by ID, name, phone..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -687,9 +693,9 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {req.status === "arrived" && (
+                    {(req.status === "sourcing" || req.status === "arrived") && (
                       <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openArrivalCharges(req)}>
-                        <Truck className="w-3 h-3" /> Arrival Charges
+                        <Truck className="w-3 h-3" /> {req.status === "sourcing" ? "Items Arrived?" : "Edit Charges"}
                       </Button>
                     )}
                     {isQuoted && grandTotal > 0 && (
@@ -1086,7 +1092,7 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
           <DialogHeader>
             <DialogTitle>Arrival Charges #{arrivalTarget?.id?.slice(0, 8).toUpperCase()}</DialogTitle>
           </DialogHeader>
-          <p className="text-xs text-muted-foreground">Add shipping & tax charges after item arrival. User will be notified to pay.</p>
+          <p className="text-xs text-muted-foreground">Set shipping & tax charges once items have arrived. This will <strong>move the order to "Arrived"</strong> and notify the user to pay.</p>
           <div className="space-y-3 mt-2">
             <div>
               <Label className="text-sm">Shipping Fee (Rs.)</Label>
