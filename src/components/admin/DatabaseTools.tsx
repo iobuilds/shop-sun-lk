@@ -535,16 +535,20 @@ const DatabaseTools = () => {
       "Restoring images...", "Finalizing...",
     ]);
     try {
-      // Download the ZIP to the browser, then use the shared browser-side extractor.
-      // This avoids all server-side JSZip parsing and its "Corrupted zip" failures.
+      // Get a signed URL then fetch the ZIP directly — avoids Supabase SDK
+      // mangling binary data when it passes through functions.invoke.
       setProgress(p => ({ ...p, step: 1, currentStepLabel: "Downloading backup ZIP..." }));
-      const { data: dlData, error: dlError } = await supabase.functions.invoke("db-restore", {
+      const { data: urlData, error: urlError } = await supabase.functions.invoke("db-restore", {
         body: { action: "download_url", file_name: fileName },
       });
-      if (dlError) throw new Error(dlError.message);
-      const arrayBuffer = dlData instanceof Blob
-        ? await dlData.arrayBuffer()
-        : (dlData as ArrayBuffer);
+      if (urlError) throw new Error(urlError.message);
+      if (!urlData?.url) throw new Error("No signed URL returned");
+
+      const fetchResp = await fetch(urlData.url);
+      if (!fetchResp.ok) throw new Error(`Download failed: HTTP ${fetchResp.status}`);
+      const arrayBuffer = await fetchResp.arrayBuffer();
+      if (arrayBuffer.byteLength === 0) throw new Error("Downloaded 0 bytes — file may be empty");
+
 
       const result = await restoreFromArrayBuffer(arrayBuffer, fileName);
       finishProgress(true);
@@ -591,13 +595,16 @@ const DatabaseTools = () => {
   const downloadBackup = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      // Use supabase.functions.invoke so it works on both Lovable Cloud and self-hosted VPS
-      const { data, error } = await supabase.functions.invoke("db-restore", {
+      // Get a signed URL then fetch directly — avoids SDK binary mangling
+      const { data: urlData, error: urlError } = await supabase.functions.invoke("db-restore", {
         body: { action: "download_url", file_name: fileName },
       });
-      if (error) throw new Error(error.message);
-      // The response is a binary blob (arraybuffer)
-      const blob = data instanceof Blob ? data : new Blob([data]);
+      if (urlError) throw new Error(urlError.message);
+      if (!urlData?.url) throw new Error("No signed URL returned");
+
+      const fetchResp = await fetch(urlData.url);
+      if (!fetchResp.ok) throw new Error(`Download failed: HTTP ${fetchResp.status}`);
+      const blob = await fetchResp.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
