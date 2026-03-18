@@ -754,13 +754,13 @@ Use this to audit changes and investigate any unexpected data modifications.`,
   sudo ln -s /etc/nginx/sites-available/nanocircuit /etc/nginx/sites-enabled/
   sudo nginx -t && sudo systemctl reload nginx`,
         tips: [
-          "The `proxy_buffers 64 16k` setting is critical — without it Kong truncates large backup ZIP responses at ~10 MB.",
+          "The 'proxy_buffers 64 16k' setting is critical — without it Kong truncates large backup ZIP responses at ~10 MB.",
           "client_max_body_size 500m allows uploading large backup ZIPs via the restore panel.",
-          "Auto-renewal: `sudo systemctl enable certbot.timer && sudo systemctl start certbot.timer`",
+          "Auto-renewal: sudo systemctl enable certbot.timer && sudo systemctl start certbot.timer",
         ],
         warnings: [
           "Without increased proxy_buffer_size, backup ZIP downloads will be silently truncated causing 'Corrupted zip' errors.",
-          "Never skip `proxy_set_header Host $http_host` — Supabase Storage uses the Host header to build signed URLs.",
+          "Never skip proxy_set_header Host — Supabase Storage uses the Host header to build signed URLs.",
         ],
       },
       {
@@ -774,7 +774,7 @@ Use this to audit changes and investigate any unexpected data modifications.`,
     PUBLIC_SUPABASE_URL=https://db.nanocircuit.iobuilds.com \\
     SUPABASE_ANON_KEY=<your-anon-key> \\
     SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key> \\
-    SUPABASE_DB_URL="postgresql://postgres:<POSTGRES_PASSWORD>@supabase-db:5432/postgres" \\
+    SUPABASE_DB_URL=postgresql://postgres:<POSTGRES_PASSWORD>@supabase-db:5432/postgres \\
     PAYHERE_MERCHANT_ID=<your-id> \\
     PAYHERE_MERCHANT_SECRET=<your-secret> \\
     STRIPE_SECRET_KEY=<your-stripe-key> \\
@@ -788,9 +788,9 @@ Use this to audit changes and investigate any unexpected data modifications.`,
     MANAGEMENT_API_TOKEN=<supabase-management-token>
 
 **Critical notes:**
-- `SUPABASE_DB_URL` must use `supabase-db` (Docker container name), NOT `localhost`
-- `PUBLIC_SUPABASE_URL` must be the externally-reachable HTTPS URL — used for signed storage URLs in backup downloads
-- `SUPABASE_URL` is used inside Edge Functions to call the API — set to the public HTTPS URL
+- SUPABASE_DB_URL must use supabase-db (Docker container name), NOT localhost
+- PUBLIC_SUPABASE_URL must be the externally-reachable HTTPS URL — used for signed storage URLs in backup downloads
+- SUPABASE_URL is used inside Edge Functions to call the API — set to the public HTTPS URL
 
 **Deploy Edge Functions:**
   supabase functions deploy --project-ref local db-backup
@@ -799,10 +799,10 @@ Use this to audit changes and investigate any unexpected data modifications.`,
   supabase functions deploy --project-ref local`,
         tips: [
           "Test secrets by calling an Edge Function: curl https://db.nanocircuit.iobuilds.com/functions/v1/sms-balance",
-          "Use `docker compose exec supabase-edge-runtime deno info` to verify the runtime is healthy.",
+          "Use 'docker compose exec supabase-edge-runtime deno info' to verify the runtime is healthy.",
         ],
         warnings: [
-          "If SUPABASE_DB_URL uses `localhost` instead of `supabase-db`, scheduled backups and FK-bypass restore will silently fail.",
+          "If SUPABASE_DB_URL uses localhost instead of supabase-db, scheduled backups and FK-bypass restore will silently fail.",
         ],
       },
       {
