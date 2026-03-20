@@ -782,6 +782,74 @@ const Profile = () => {
     }
   };
 
+  const handleConfirmReceived = async (orderId: string) => {
+    setConfirmingReceived(orderId);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "delivered" })
+        .eq("id", orderId);
+      if (error) throw error;
+      await supabase.from("order_status_history" as any).insert({
+        order_id: orderId,
+        status: "delivered",
+        changed_by: session?.user?.id,
+        note: "Confirmed received by customer",
+      });
+      toast.success("Order marked as delivered!");
+      queryClient.invalidateQueries({ queryKey: ["user-orders"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to confirm");
+    } finally {
+      setConfirmingReceived(null);
+    }
+  };
+
+  const handleReturnRequest = async (order: any) => {
+    if (!session?.user) return;
+    setStartingReturn(order.id);
+    try {
+      const subject = `Return Request – Order #${order.id.slice(0, 8).toUpperCase()}`;
+      // Check if a conversation for this order already exists
+      const { data: existing } = await supabase
+        .from("conversations" as any)
+        .select("id")
+        .eq("user_id", session.user.id)
+        .ilike("subject", `Return Request – Order #${order.id.slice(0, 8).toUpperCase()}%`)
+        .maybeSingle();
+
+      let convoId: string;
+      if (existing) {
+        convoId = existing.id;
+      } else {
+        const { data: newConvo, error } = await supabase
+          .from("conversations" as any)
+          .insert({ user_id: session.user.id, subject, status: "open" })
+          .select("id")
+          .single();
+        if (error) throw error;
+        convoId = newConvo.id;
+        // Send an initial message
+        await supabase.from("conversation_messages" as any).insert({
+          conversation_id: convoId,
+          sender_id: session.user.id,
+          sender_type: "user",
+          message: `Hi, I would like to request a return for Order #${order.id.slice(0, 8).toUpperCase()} placed on ${new Date(order.created_at).toLocaleDateString()}. Please assist me with the return process.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["user-conversations"] });
+      }
+
+      // Switch to messages tab and open the conversation
+      setTab("messages" as any);
+      setSelectedConvo(convoId);
+      toast.success("Return request opened in Messages");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start return request");
+    } finally {
+      setStartingReturn(null);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
