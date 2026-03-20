@@ -807,7 +807,6 @@ const Profile = () => {
 
 export default Profile;
 
-                          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                             <div>
                               <p className="text-sm font-medium text-foreground">Order #{order.id.slice(0, 8)}</p>
                               <p className="text-xs text-muted-foreground">{new Date(order.created_at!).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
