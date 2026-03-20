@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, Search, Menu, X, User, Heart, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare } from "lucide-react";
+import { ShoppingCart, Search, Menu, X, User, Heart, Printer, CircuitBoard, ExternalLink, Bell, MessageSquare, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "@/contexts/CartContext";
@@ -427,6 +427,16 @@ const Navbar = () => {
               </Link>
             )}
 
+            {/* My Orders — only for logged-in users */}
+            {session && (
+              <Link
+                to="/profile?tab=orders"
+                className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors relative"
+                title="My Orders"
+              >
+                <Package className="w-5 h-5" />
+              </Link>
+            )}
             <Link to={session ? "/profile" : "/auth"} className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
               <User className="w-5 h-5" />
             </Link>
@@ -587,6 +597,11 @@ const Navbar = () => {
                 <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
                 </Link>
+                {session && (
+                  <Link to="/profile?tab=orders" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2" onClick={() => setMobileOpen(false)}>
+                    <Package className="w-4 h-4" /> My Orders
+                  </Link>
+                )}
                 <Link to="/wishlist" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   Wishlist
                 </Link>
