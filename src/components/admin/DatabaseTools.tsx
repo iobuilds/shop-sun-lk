@@ -1,1267 +1,781 @@
 import { useState, useEffect, useRef } from "react";
-import { format } from "date-fns";
-import JSZip from "jszip";
-
-// ── ZIP raw-scanner helpers ──────────────────────────────────────────────────
-// Reads a ZIP's local file entries sequentially (no central directory needed).
-// This lets us restore even truncated ZIPs where the EOCD at the end is cut off.
-
-async function decompressDeflateRaw(compressed: Uint8Array): Promise<Uint8Array> {
-  const ds = new DecompressionStream("deflate-raw");
-  const writer = ds.writable.getWriter();
-  const reader = ds.readable.getReader();
-  // Copy into a plain ArrayBuffer to satisfy TypeScript's BufferSource constraint
-  const plain = compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength) as ArrayBuffer;
-  writer.write(new Uint8Array(plain));
-  await writer.close();
-  const chunks: Uint8Array[] = [];
-  let r = await reader.read();
-  while (!r.done) { chunks.push(r.value!); r = await reader.read(); }
-  const total = chunks.reduce((s, c) => s + c.length, 0);
-  const out = new Uint8Array(total);
-  let pos = 0;
-  for (const c of chunks) { out.set(c, pos); pos += c.length; }
-  return out;
-}
-
-interface ZipLocalEntry { name: string; data: Uint8Array }
-
-async function scanZipLocalEntries(
-  buffer: ArrayBuffer,
-  filter?: (name: string) => boolean
-): Promise<ZipLocalEntry[]> {
-  const bytes = new Uint8Array(buffer);
-  const view = new DataView(buffer);
-  const entries: ZipLocalEntry[] = [];
-  let offset = 0;
-
-  while (offset + 30 <= bytes.length) {
-    const sig = view.getUint32(offset, true);
-    // Local file header signature
-    if (sig !== 0x04034b50) break;
-
-    const flags        = view.getUint16(offset + 6,  true);
-    const compression  = view.getUint16(offset + 8,  true);
-    let compressedSize = view.getUint32(offset + 18, true);
-    const fileNameLen  = view.getUint16(offset + 26, true);
-    const extraLen     = view.getUint16(offset + 28, true);
-
-    const nameBytes = bytes.slice(offset + 30, offset + 30 + fileNameLen);
-    const name      = new TextDecoder("utf-8").decode(nameBytes);
-    const dataStart = offset + 30 + fileNameLen + extraLen;
-
-    // If data descriptor flag is set and size is 0, find next signature
-    if ((flags & 0x08) && compressedSize === 0) {
-      // Scan for next local file header or data descriptor signature
-      let scanPos = dataStart;
-      while (scanPos + 4 <= bytes.length) {
-        const s = view.getUint32(scanPos, true);
-        if (s === 0x04034b50 || s === 0x02014b50 || s === 0x06054b50) break;
-        if (s === 0x08074b50) { // data descriptor
-          compressedSize = scanPos - dataStart;
-          break;
-        }
-        scanPos++;
-      }
-      if (compressedSize === 0) compressedSize = scanPos - dataStart;
-    }
-
-    const dataEnd = dataStart + compressedSize;
-    if (dataEnd > bytes.length) break; // truncated — stop scanning
-
-    if (!name.endsWith("/") && (!filter || filter(name))) {
-      const compressed = bytes.slice(dataStart, dataEnd);
-      try {
-        const data = compression === 0
-          ? compressed
-          : await decompressDeflateRaw(compressed);
-        entries.push({ name, data });
-      } catch (_) { /* skip undecompressable entry */ }
-    }
-
-    offset = dataEnd;
-    // Skip data descriptor if present
-    if ((flags & 0x08) && view.getUint32(offset, true) === 0x08074b50) offset += 16;
-  }
-  return entries;
-}
-// ────────────────────────────────────────────────────────────────────────────
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import {
-  Database, Upload, Trash2, Loader2, AlertTriangle, Clock, RotateCcw, Lock,
-  ShieldCheck, ArrowDownToLine, ArchiveRestore, Flame, FileArchive, CalendarDays,
-  X, Terminal, ChevronDown, ChevronUp, AlertCircle, CheckCircle2,
+  Database, Upload, Trash2, Loader2, RotateCcw, ArrowDownToLine,
+  FileJson, CheckCircle2, AlertTriangle, FolderOpen, Folder,
+  Image, FileText, File, Plus, RefreshCw, Lock, Eye, Download, ChevronRight, Home,
 } from "lucide-react";
 
-interface BackupLog {
-  id: string;
-  action: string;
-  file_name: string;
-  file_size: number | null;
-  created_by_email: string | null;
-  created_at: string;
-  note?: string | null;
-}
+// ── helpers ──────────────────────────────────────────────────────────────────
+const formatSize = (bytes?: number | null) => {
+  if (!bytes) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+const fileIcon = (name: string) => {
+  const ext = name.split(".").pop()?.toLowerCase();
+  if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(ext || "")) return <Image className="w-4 h-4 text-primary shrink-0" />;
+  if (["json", "txt", "md", "csv"].includes(ext || "")) return <FileText className="w-4 h-4 text-accent-foreground shrink-0" />;
+  return <File className="w-4 h-4 text-muted-foreground shrink-0" />;
+};
+
+const callBackup = async (body: any) => {
+  const res = await supabase.functions.invoke("db-backup", { body });
+  if (res.error) throw new Error(res.error.message);
+  if (res.data?.error) throw new Error(res.data.error);
+  return res.data;
+};
+
+const callRestore = async (body: any) => {
+  const res = await supabase.functions.invoke("db-restore", { body });
+  if (res.error) throw new Error(res.error.message);
+  if (res.data?.error) throw new Error(res.data.error);
+  return res.data;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface BackupFile {
   name: string;
   created_at: string;
-  updated_at: string;
-  metadata: { size?: number; contentLength?: number; mimetype?: string };
+  metadata: { size?: number; contentType?: string };
 }
 
-interface ProgressState {
-  active: boolean;
-  label: string;
-  step: number;
-  totalSteps: number;
-  steps: string[];
-  currentStepLabel: string;
-  isError: boolean;
-  errorMessage?: string;
+interface BucketFile {
+  id?: string;
+  name: string;
+  updated_at?: string;
+  metadata?: { size?: number; mimetype?: string };
 }
 
-interface FnLogEntry {
-  event_message: string;
-  level: string;
-  timestamp: number;
+interface Bucket {
+  id: string;
+  name: string;
+  public: boolean;
+  created_at: string;
 }
 
-const BACKUP_STEPS = [
-  "Authenticating...",
-  "Reading database tables...",
-  "Compressing data...",
-  "Uploading to storage...",
-  "Finalizing...",
-];
-
-const RESTORE_STEPS = [
-  "Authenticating...",
-  "Downloading backup file...",
-  "Clearing existing data...",
-  "Restoring tables...",
-  "Restoring storage files...",
-  "Finalizing...",
-];
-
-const UPLOAD_RESTORE_STEPS = [
-  "Authenticating...",
-  "Getting upload URL...",
-  "Uploading ZIP to storage...",
-  "Clearing existing data...",
-  "Restoring tables...",
-  "Restoring storage files...",
-  "Finalizing...",
-];
-
-const DatabaseTools = () => {
-  const [backups, setBackups] = useState<BackupFile[]>([]);
-  const [logs, setLogs] = useState<BackupLog[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [creatingFull, setCreatingFull] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [cleaning, setCleaning] = useState(false);
-  const [scheduling, setScheduling] = useState(false);
-
-  // Progress state
-  const [progress, setProgress] = useState<ProgressState>({
-    active: false, label: "", step: 0, totalSteps: 1, steps: [], currentStepLabel: "", isError: false,
-  });
-  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Function logs panel
-  const [fnLogs, setFnLogs] = useState<FnLogEntry[]>([]);
-  const [fnLogsOpen, setFnLogsOpen] = useState(false);
-  const [loadingFnLogs, setLoadingFnLogs] = useState(false);
-  const fnLogsRef = useRef<HTMLDivElement>(null);
-
-  // Schedule state
-  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
-  const [scheduleTime, setScheduleTime] = useState("02:00");
-  const [scheduleLabel, setScheduleLabel] = useState("");
-  const [scheduledJobs, setScheduledJobs] = useState<{ jobid: number; jobname: string; schedule: string; active: boolean }[]>([]);
-  const [scheduledLogs, setScheduledLogs] = useState<BackupLog[]>([]);
-
-  // Password confirmation state
-  const [passwordDialog, setPasswordDialog] = useState(false);
-  const [password, setPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [pendingAction, setPendingAction] = useState<{ type: "backup" | "full_backup" | "restore" | "full_restore" | "upload_restore" | "upload_full_restore" | "cleanup" | "schedule_backup"; payload?: any } | null>(null);
+// ── Password gate ─────────────────────────────────────────────────────────────
+const PasswordGate = ({
+  open, onClose, onConfirm, label,
+}: { open: boolean; onClose: () => void; onConfirm: () => void; label: string }) => {
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  // Restore confirm state
+  const verify = async () => {
+    if (!pw.trim()) { setErr("Password is required"); return; }
+    setVerifying(true); setErr("");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user?.email) { setErr("Session expired"); setVerifying(false); return; }
+    const { error } = await supabase.auth.signInWithPassword({ email: user.email, password: pw });
+    setVerifying(false);
+    if (error) { setErr("Incorrect password"); return; }
+    setPw(""); onConfirm();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) { setPw(""); setErr(""); onClose(); } }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Confirm: {label}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Label>Admin Password</Label>
+          <Input type="password" value={pw} onChange={e => { setPw(e.target.value); setErr(""); }}
+            onKeyDown={e => e.key === "Enter" && verify()} placeholder="Enter your password" autoFocus />
+          {err && <p className="text-xs text-destructive">{err}</p>}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { setPw(""); setErr(""); onClose(); }}>Cancel</Button>
+          <Button onClick={verify} disabled={verifying}>
+            {verifying && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />} Confirm
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DB SNAPSHOTS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+const DbSnapshotsTab = () => {
+  const [backups, setBackups] = useState<BackupFile[]>([]);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState("");
+
+  // Gate state
+  const [pwGate, setPwGate] = useState<{ open: boolean; label: string; action: () => void }>({ open: false, label: "", action: () => {} });
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
-  const [confirmFullRestore, setConfirmFullRestore] = useState<string | null>(null);
-  const [confirmUploadRestore, setConfirmUploadRestore] = useState<any>(null);
-  const [confirmUploadFullRestore, setConfirmUploadFullRestore] = useState(false);
-  const [uploadedZipFile, setUploadedZipFile] = useState<File | null>(null);
-  const [confirmCleanup, setConfirmCleanup] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  // ── Progress helpers ──
-  const startProgress = (label: string, steps: string[]) => {
-    setProgress({ active: true, label, step: 0, totalSteps: steps.length, steps, currentStepLabel: steps[0], isError: false });
-    let i = 0;
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    progressIntervalRef.current = setInterval(() => {
-      i++;
-      setProgress(p => {
-        const next = Math.min(i, steps.length - 2); // stop at second-to-last; final step set manually
-        return { ...p, step: next, currentStepLabel: steps[next] };
-      });
-      if (i >= steps.length - 2) clearInterval(progressIntervalRef.current!);
-    }, 1800);
-  };
+  // Upload restore
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploadedData, setUploadedData] = useState<any>(null);
+  const [uploadFileName, setUploadFileName] = useState("");
 
-  const finishProgress = (success: boolean, errorMessage?: string) => {
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    setProgress(p => ({
-      ...p,
-      step: success ? p.totalSteps : p.step,
-      currentStepLabel: success ? "Done!" : (errorMessage || "Failed"),
-      isError: !success,
-      errorMessage,
-    }));
-    if (success) {
-      setTimeout(() => setProgress(pp => ({ ...pp, active: false })), 2000);
-    }
-    // On error, fetch and show function logs automatically
-    if (!success) {
-      fetchFnLogs();
-      setFnLogsOpen(true);
-    }
-  };
+  const gate = (label: string, action: () => void) => setPwGate({ open: true, label, action });
+  const closeGate = () => setPwGate(g => ({ ...g, open: false }));
 
-  const fetchFnLogs = async () => {
-    setLoadingFnLogs(true);
-    // Safety: always clear loading after 15s max
-    const safetyTimer = setTimeout(() => setLoadingFnLogs(false), 15000);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { clearTimeout(safetyTimer); setLoadingFnLogs(false); return; }
-
-      // Primary: try the management API logs (works on Lovable Cloud)
-      let gotLogs = false;
-      try {
-        const res = await supabase.functions.invoke("fetch-logs", {
-          body: { log_type: "edge", hours: 2, limit: 60, search: "db-backup" },
-        });
-        if (res.data?.logs && res.data.logs.length > 0) {
-          setFnLogs(res.data.logs);
-          gotLogs = true;
-        }
-      } catch (_) { /* fall through */ }
-
-      // Fallback 1: ask db-backup function itself for its recent activity logs
-      if (!gotLogs) {
-        try {
-          const res2 = await supabase.functions.invoke("db-backup", {
-            body: { action: "get_logs" },
-          });
-          if (res2.data?.logs && res2.data.logs.length > 0) {
-            setFnLogs(res2.data.logs);
-            gotLogs = true;
-          }
-        } catch (_) { /* fall through */ }
-      }
-
-      // Fallback 2: direct db query
-      if (!gotLogs) {
-        const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-        const { data: backupLogs } = await supabase
-          .from("db_backup_logs")
-          .select("*")
-          .gte("created_at", since)
-          .order("created_at", { ascending: false })
-          .limit(40);
-
-        const combined = (backupLogs || []).map((l: any) => ({
-          event_message: `[${(l.action || "").toUpperCase()}] ${l.file_name}${l.note ? " — " + l.note : ""}${l.file_size ? " (" + formatSize(l.file_size) + ")" : ""}`,
-          level: "info",
-          timestamp: new Date(l.created_at).getTime(),
-        }));
-
-        setFnLogs(combined.length > 0 ? combined : [{
-          event_message: "No recent backup/restore activity found in the last 2 hours.",
-          level: "info",
-          timestamp: Date.now(),
-        }]);
-      }
-    } catch (e) {
-      console.error("Failed to fetch fn logs:", e);
-      setFnLogs([{ event_message: `Failed to load logs: ${(e as Error).message}`, level: "error", timestamp: Date.now() }]);
-    } finally {
-      clearTimeout(safetyTimer);
-      setLoadingFnLogs(false);
-    }
-  };
-
-  useEffect(() => {
-    if (fnLogsOpen && fnLogsRef.current) {
-      fnLogsRef.current.scrollTop = fnLogsRef.current.scrollHeight;
-    }
-  }, [fnLogs, fnLogsOpen]);
-
-  useEffect(() => () => { if (progressIntervalRef.current) clearInterval(progressIntervalRef.current); }, []);
-
-  // ── Core ──
-  const RESTORE_ACTIONS = new Set([
-    "restore", "full_restore", "restore_storage_batch",
-    "log_restore_complete", "get_upload_url", "download_url",
-    "clear_storage_bucket",
-  ]);
-
-  const callBackupFn = async (body: any) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("Not authenticated");
-    // Route restore actions to the dedicated db-restore function
-    const fnName = RESTORE_ACTIONS.has(body.action) ? "db-restore" : "db-backup";
-    const res = await supabase.functions.invoke(fnName, { body });
-    if (res.error) throw new Error(res.error.message);
-    if (res.data?.error) throw new Error(res.data.error);
-    return res.data;
-  };
-
-  const fetchBackups = async () => {
+  const load = async () => {
     setLoading(true);
     try {
-      const data = await callBackupFn({ action: "list" });
-      setBackups(data.files || []);
-      setLogs(data.logs || []);
+      const d = await callBackup({ action: "list" });
+      setBackups(d.files || []);
+      setLogs(d.logs || []);
     } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+      toast({ title: "Error loading backups", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchBackups(); fetchScheduled(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const requestPasswordConfirmation = (actionType: NonNullable<typeof pendingAction>["type"], payload?: any) => {
-    setPendingAction({ type: actionType, payload });
-    setPassword("");
-    setPasswordError("");
-    setPasswordDialog(true);
-  };
-
-  const getPasswordDialogLabel = () => {
-    switch (pendingAction?.type) {
-      case "backup": return "create a backup";
-      case "full_backup": return "create a full ZIP backup";
-      case "cleanup": return "clean the database";
-      case "full_restore": return "restore the full site from ZIP";
-      case "schedule_backup": return "schedule an automatic backup";
-      default: return "restore the database";
-    }
-  };
-
-  const verifyPasswordAndExecute = async () => {
-    if (!password.trim()) { setPasswordError("Please enter your password"); return; }
-    setVerifying(true);
-    setPasswordError("");
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) throw new Error("Unable to verify identity");
-      const { error } = await supabase.auth.signInWithPassword({ email: user.email, password });
-      if (error) { setPasswordError("Incorrect password. Please try again."); setVerifying(false); return; }
-      setPasswordDialog(false);
-      setPassword("");
-
-      if (pendingAction?.type === "backup") await executeCreateBackup();
-      else if (pendingAction?.type === "full_backup") await executeFullBackup();
-      else if (pendingAction?.type === "restore") await executeRestore(pendingAction.payload);
-      else if (pendingAction?.type === "full_restore") await executeFullRestore(pendingAction.payload);
-      else if (pendingAction?.type === "upload_restore") await executeUploadRestore();
-      else if (pendingAction?.type === "upload_full_restore") await executeUploadFullRestore();
-      else if (pendingAction?.type === "cleanup") await executeCleanup();
-      else if (pendingAction?.type === "schedule_backup") await executeScheduleBackup();
-    } catch (e: any) {
-      setPasswordError(e.message);
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const executeCreateBackup = async () => {
+  const createSnapshot = async () => {
     setCreating(true);
-    startProgress("Creating DB Snapshot", BACKUP_STEPS);
+    setProgress(10); setProgressLabel("Reading database tables...");
     try {
-      const data = await callBackupFn({ action: "backup" });
-      finishProgress(true);
-      toast({ title: "Backup created", description: `File: ${data.file_name} (${formatSize(data.size)})` });
-      fetchBackups();
+      setProgress(40); setProgressLabel("Compressing JSON...");
+      const d = await callBackup({ action: "backup" });
+      setProgress(100); setProgressLabel("Done!");
+      toast({ title: "Snapshot created", description: `${d.file_name} (${formatSize(d.size)})` });
+      load();
     } catch (e: any) {
-      finishProgress(false, e.message);
-      toast({ title: "Backup failed", description: e.message, variant: "destructive" });
+      toast({ title: "Snapshot failed", description: e.message, variant: "destructive" });
     } finally {
       setCreating(false);
+      setTimeout(() => { setProgress(0); setProgressLabel(""); }, 1500);
     }
   };
 
-  const executeFullBackup = async () => {
-    setCreatingFull(true);
-    startProgress("Creating Full ZIP Backup", [...BACKUP_STEPS.slice(0, 2), "Downloading all storage files...", "Compressing ZIP...", "Uploading to storage...", "Finalizing..."]);
-    try {
-      const data = await callBackupFn({ action: "full_backup" });
-      finishProgress(true);
-      toast({ title: "Full ZIP backup created", description: `${data.file_name} (${formatSize(data.size)}) — ${data.total_files} files included` });
-      await downloadBackup(data.file_name);
-      fetchBackups();
-    } catch (e: any) {
-      finishProgress(false, e.message);
-      toast({ title: "Full backup failed", description: e.message, variant: "destructive" });
-    } finally {
-      setCreatingFull(false);
-    }
-  };
-
-  // ── Shared browser-side ZIP restore engine ───────────────────────────────
-  // Used by BOTH "restore from saved snapshot" and "restore from uploaded ZIP".
-  // The ZIP is always parsed in the browser — never on the server — so truncated
-  // ZIPs are handled by the raw local-header scanner fallback.
-  const restoreFromArrayBuffer = async (arrayBuffer: ArrayBuffer, displayName: string) => {
-    const STORAGE_BATCH_SIZE = 15;
-    const storageBuckets = ["images"];
-
-    // ── Extract database/tables.json (JSZip first, raw scanner fallback) ──
-    let tablesJson: string;
-    let rawEntries: ZipLocalEntry[] | null = null;
-    let zip: JSZip | null = null;
-
-    try {
-      zip = await JSZip.loadAsync(arrayBuffer);
-      const tablesFile = zip.file("database/tables.json");
-      if (!tablesFile) throw new Error("No database/tables.json found in ZIP");
-      tablesJson = await tablesFile.async("string");
-    } catch (zipErr: any) {
-      const isCorrupt =
-        zipErr.message.includes("End of data") ||
-        zipErr.message.includes("Corrupted zip") ||
-        zipErr.message.includes("database/tables.json");
-      if (!isCorrupt) throw zipErr;
-
-      console.warn("JSZip failed (truncated ZIP), falling back to raw local-header scan:", zipErr.message);
-      rawEntries = await scanZipLocalEntries(arrayBuffer);
-      const tablesEntry = rawEntries.find(e => e.name === "database/tables.json");
-      if (!tablesEntry)
-        throw new Error("Could not find database/tables.json — the ZIP appears too corrupted to recover.");
-      tablesJson = new TextDecoder("utf-8").decode(tablesEntry.data);
-    }
-
-    // ── Phase 1: Restore DB tables via edge function ──
-    setProgress(p => ({ ...p, step: 1, currentStepLabel: "Restoring database tables..." }));
-    const backupData = JSON.parse(tablesJson);
-    const phase1 = await callBackupFn({ action: "restore", data: backupData });
-
-    // ── Phase 2: Restore storage files from browser ──
-    type StorageItem = { storagePath: string; getData: () => Promise<Uint8Array> };
-    const storageItems: StorageItem[] = [];
-
-    if (zip) {
-      for (const bucket of storageBuckets) {
-        const prefix = `storage/${bucket}/`;
-        const files = Object.keys(zip.files).filter(f => f.startsWith(prefix) && !zip!.files[f].dir);
-        for (const zipPath of files) {
-          storageItems.push({
-            storagePath: `${bucket}/${zipPath.substring(prefix.length)}`,
-            getData: async () => { const f = zip!.file(zipPath); return f ? await f.async("uint8array") : new Uint8Array(0); },
-          });
-        }
-      }
-    } else if (rawEntries) {
-      for (const bucket of storageBuckets) {
-        const prefix = `storage/${bucket}/`;
-        for (const entry of rawEntries.filter(e => e.name.startsWith(prefix))) {
-          const storagePath = `${bucket}/${entry.name.substring(prefix.length)}`;
-          storageItems.push({ storagePath, getData: async () => entry.data });
-        }
-      }
-    }
-
-    if (storageItems.length > 0) {
-      for (const bucket of storageBuckets) {
-        await callBackupFn({ action: "clear_storage_bucket", bucket });
-      }
-    }
-
-    let totalRestored = 0;
-    for (let i = 0; i < storageItems.length; i += STORAGE_BATCH_SIZE) {
-      const batch = storageItems.slice(i, i + STORAGE_BATCH_SIZE);
-      setProgress(p => ({
-        ...p, step: 2,
-        currentStepLabel: `Restoring images… ${Math.min(i + STORAGE_BATCH_SIZE, storageItems.length)}/${storageItems.length}`,
-      }));
-      await Promise.all(batch.map(async ({ storagePath, getData }) => {
-        try {
-          const content = await getData();
-          if (content.length === 0) return;
-          const [bucket, ...rest] = storagePath.split("/");
-          const filePath = rest.join("/");
-          const ext = filePath.split(".").pop()?.toLowerCase() || "";
-          const ctMap: Record<string, string> = {
-            jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif",
-            webp: "image/webp", svg: "image/svg+xml", pdf: "application/pdf",
-          };
-          await supabase.storage.from(bucket).upload(filePath, content, {
-            contentType: ctMap[ext] || "application/octet-stream", upsert: true,
-          });
-          totalRestored++;
-        } catch (_) { /* skip individual file errors */ }
-      }));
-    }
-
-    setProgress(p => ({ ...p, step: 3, currentStepLabel: "Finalizing..." }));
-    await callBackupFn({ action: "log_restore_complete", file_name: displayName, restored_files: totalRestored });
-
-    return { rows_restored: phase1.rows_restored ?? 0, restored_files: totalRestored };
-  };
-
-  const executeFullRestore = async (fileName: string) => {
-    setRestoring(true);
-    setConfirmFullRestore(null);
-    startProgress("Restoring Full Site from ZIP", [
-      "Authenticating...", "Downloading backup ZIP...", "Restoring database tables...",
-      "Restoring images...", "Finalizing...",
-    ]);
-    try {
-      // Get a signed URL then fetch the ZIP directly — avoids Supabase SDK
-      // mangling binary data when it passes through functions.invoke.
-      setProgress(p => ({ ...p, step: 1, currentStepLabel: "Downloading backup ZIP..." }));
-      const { data: urlData, error: urlError } = await supabase.functions.invoke("db-restore", {
-        body: { action: "download_url", file_name: fileName },
-      });
-      if (urlError) throw new Error(urlError.message);
-      if (!urlData?.url) throw new Error("No signed URL returned");
-
-      const fetchResp = await fetch(urlData.url);
-      if (!fetchResp.ok) throw new Error(`Download failed: HTTP ${fetchResp.status}`);
-      const arrayBuffer = await fetchResp.arrayBuffer();
-      if (arrayBuffer.byteLength === 0) throw new Error("Downloaded 0 bytes — file may be empty");
-
-
-      const result = await restoreFromArrayBuffer(arrayBuffer, fileName);
-      finishProgress(true);
-      toast({
-        title: "Full site restored",
-        description: `Database (${result.rows_restored} rows) + ${result.restored_files} storage files restored.`,
-      });
-      fetchBackups();
-    } catch (e: any) {
-      finishProgress(false, e.message);
-      toast({ title: "Full restore failed", description: e.message, variant: "destructive" });
-    } finally {
-      setRestoring(false);
-    }
-  };
-
-  const executeUploadFullRestore = async () => {
-    if (!uploadedZipFile) return;
-    setRestoring(true);
-    setConfirmUploadFullRestore(false);
-    startProgress("Restoring from Uploaded ZIP", [
-      "Reading ZIP file...", "Restoring database tables...",
-      "Restoring images...", "Finalizing...",
-    ]);
-    try {
-      setProgress(p => ({ ...p, step: 0, currentStepLabel: "Reading ZIP file..." }));
-      const arrayBuffer = await uploadedZipFile.arrayBuffer();
-      const result = await restoreFromArrayBuffer(arrayBuffer, uploadedZipFile.name);
-      finishProgress(true);
-      toast({
-        title: "Full site restored from uploaded ZIP",
-        description: `Database restored (${result.rows_restored} rows) + ${result.restored_files} storage files.`,
-      });
-      fetchBackups();
-    } catch (e: any) {
-      finishProgress(false, e.message);
-      toast({ title: "Full restore failed", description: e.message, variant: "destructive" });
-    } finally {
-      setRestoring(false);
-      setUploadedZipFile(null);
-    }
-  };
-
-  const downloadBackup = async (fileName: string) => {
+  const downloadSnapshot = async (fileName: string) => {
     setDownloading(fileName);
     try {
-      // Get a signed URL then fetch directly — avoids SDK binary mangling
-      const { data: urlData, error: urlError } = await supabase.functions.invoke("db-restore", {
-        body: { action: "download_url", file_name: fileName },
-      });
-      if (urlError) throw new Error(urlError.message);
-      if (!urlData?.url) throw new Error("No signed URL returned");
-
-      const fetchResp = await fetch(urlData.url);
-      if (!fetchResp.ok) throw new Error(`Download failed: HTTP ${fetchResp.status}`);
-      const blob = await fetchResp.blob();
+      const urlData = await callRestore({ action: "download_url", file_name: fileName });
+      if (!urlData?.url) throw new Error("No URL returned");
+      const resp = await fetch(urlData.url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast({ title: "Download complete", description: fileName });
+      const a = document.createElement("a"); a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      toast({ title: "Downloaded", description: fileName });
     } catch (e: any) {
       toast({ title: "Download failed", description: e.message, variant: "destructive" });
-    } finally {
-      setDownloading(null);
-    }
+    } finally { setDownloading(null); }
   };
 
-  const deleteBackup = async (fileName: string) => {
-    if (!confirm("Delete this backup?")) return;
+  const restoreSnapshot = async (fileName: string) => {
+    setRestoring(fileName); setConfirmRestore(null);
+    setProgress(10); setProgressLabel("Downloading snapshot...");
     try {
-      await callBackupFn({ action: "delete", file_name: fileName });
-      toast({ title: "Backup deleted" });
-      fetchBackups();
+      setProgress(40); setProgressLabel("Restoring tables...");
+      const d = await callRestore({ action: "restore", file_name: fileName });
+      setProgress(100); setProgressLabel("Done!");
+      toast({ title: "Database restored", description: `${d.rows_restored ?? 0} rows restored from ${fileName}` });
+      load();
     } catch (e: any) {
-      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
-    }
-  };
-
-  const executeRestore = async (fileName: string) => {
-    setRestoring(true);
-    setConfirmRestore(null);
-    startProgress("Restoring Database from Snapshot", RESTORE_STEPS.slice(0, 5));
-    try {
-      await callBackupFn({ action: "restore", file_name: fileName });
-      finishProgress(true);
-      toast({ title: "Database restored", description: `Restored from ${fileName}` });
-      fetchBackups();
-    } catch (e: any) {
-      finishProgress(false, e.message);
       toast({ title: "Restore failed", description: e.message, variant: "destructive" });
     } finally {
-      setRestoring(false);
+      setRestoring(null);
+      setTimeout(() => { setProgress(0); setProgressLabel(""); }, 1500);
     }
   };
 
-  const handleUploadRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const deleteSnapshot = async (fileName: string) => {
+    setDeleting(fileName); setConfirmDelete(null);
+    try {
+      await callBackup({ action: "delete", file_name: fileName });
+      toast({ title: "Snapshot deleted" });
+      load();
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally { setDeleting(null); }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file) return;
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      setConfirmUploadRestore(data);
+      setUploadedData(data); setUploadFileName(file.name);
     } catch {
-      toast({ title: "Invalid file", description: "Please upload a valid JSON backup file", variant: "destructive" });
+      toast({ title: "Invalid file", description: "Must be a valid JSON snapshot", variant: "destructive" });
     }
     e.target.value = "";
   };
 
-  const handleUploadZipRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.name.endsWith(".zip")) {
-      toast({ title: "Invalid file", description: "Please upload a .zip backup file", variant: "destructive" });
-      e.target.value = "";
-      return;
-    }
-    setUploadedZipFile(file);
-    setConfirmUploadFullRestore(true);
-    e.target.value = "";
-  };
-
-  const executeUploadRestore = async () => {
-    if (!confirmUploadRestore) return;
-    setRestoring(true);
-    setConfirmUploadRestore(null);
-    startProgress("Restoring from JSON File", RESTORE_STEPS.slice(0, 5));
+  const restoreFromUpload = async () => {
+    if (!uploadedData) return;
+    setRestoring("upload"); setUploadedData(null);
+    setProgress(10); setProgressLabel("Restoring from uploaded file...");
     try {
-      await callBackupFn({ action: "restore", data: confirmUploadRestore });
-      finishProgress(true);
-      toast({ title: "Database restored from uploaded file" });
-      fetchBackups();
+      setProgress(50); setProgressLabel("Inserting rows...");
+      const d = await callRestore({ action: "restore", data: uploadedData });
+      setProgress(100); setProgressLabel("Done!");
+      toast({ title: "Restored from file", description: `${d.rows_restored ?? 0} rows restored` });
+      load();
     } catch (e: any) {
-      finishProgress(false, e.message);
       toast({ title: "Restore failed", description: e.message, variant: "destructive" });
     } finally {
-      setRestoring(false);
+      setRestoring(null);
+      setTimeout(() => { setProgress(0); setProgressLabel(""); }, 1500);
     }
   };
 
-  const executeCleanup = async () => {
-    setCleaning(true);
-    setConfirmCleanup(false);
-    startProgress("Cleaning Database", ["Authenticating...", "Deleting table data...", "Clearing storage files...", "Preserving settings...", "Finalizing..."]);
-    try {
-      const res = await supabase.functions.invoke("db-cleanup", {});
-      if (res.error) throw new Error(res.error.message);
-      const data = res.data;
-      const failed = data.results?.filter((r: any) => r.status === "failed") || [];
-      const storageDeleted = data.storageResults?.reduce((sum: number, r: any) => sum + (r.deleted || 0), 0) || 0;
-      finishProgress(true);
-      if (failed.length > 0) {
-        toast({ title: "Cleanup completed with errors", description: `${data.results.length - failed.length} tables cleared, ${failed.length} failed. ${storageDeleted} storage files deleted.`, variant: "destructive" });
-      } else {
-        toast({ title: "Database & storage cleaned", description: `${data.message}` });
-      }
-      fetchBackups();
-    } catch (e: any) {
-      finishProgress(false, e.message);
-      toast({ title: "Cleanup failed", description: e.message, variant: "destructive" });
-    } finally {
-      setCleaning(false);
-    }
-  };
-
-  const formatSize = (bytes: number | null | undefined) => {
-    if (!bytes) return "—";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const fetchScheduled = async () => {
-    try {
-      const data = await callBackupFn({ action: "list_scheduled" });
-      setScheduledJobs(data.jobs || []);
-      setScheduledLogs(data.logs || []);
-    } catch { /* non-critical */ }
-  };
-
-  const executeScheduleBackup = async () => {
-    if (!scheduleDate || !scheduleTime) return;
-    setScheduling(true);
-    try {
-      const [hh, mm] = scheduleTime.split(":").map(Number);
-      const dt = new Date(scheduleDate);
-      dt.setHours(hh, mm, 0, 0);
-      const data = await callBackupFn({ action: "schedule_backup", scheduled_at: dt.toISOString(), label: scheduleLabel });
-      toast({ title: "Backup scheduled", description: `Will run on ${format(dt, "PPP 'at' HH:mm")}` });
-      setScheduleDate(undefined);
-      setScheduleTime("02:00");
-      setScheduleLabel("");
-      fetchScheduled();
-    } catch (e: any) {
-      toast({ title: "Schedule failed", description: e.message, variant: "destructive" });
-    } finally {
-      setScheduling(false);
-    }
-  };
-
-  const cancelScheduled = async (jobName: string) => {
-    try {
-      await callBackupFn({ action: "cancel_scheduled", job_name: jobName });
-      toast({ title: "Scheduled backup cancelled" });
-      fetchScheduled();
-    } catch (e: any) {
-      toast({ title: "Cancel failed", description: e.message, variant: "destructive" });
-    }
-  };
-
-  const progressPercent = progress.totalSteps > 0
-    ? Math.round((progress.step / progress.totalSteps) * 100)
-    : 0;
-
-  const isBusy = creating || creatingFull || restoring || cleaning || scheduling;
+  const jsonBackups = backups.filter(b => b.name.endsWith(".json"));
 
   return (
     <div className="space-y-6">
-      {/* Info Banner */}
-      <div className="flex items-start gap-3 bg-muted/50 rounded-lg p-4 border border-border">
-        <ShieldCheck className="w-5 h-5 text-secondary shrink-0 mt-0.5" />
-        <div className="text-sm text-muted-foreground">
-          <p className="font-medium text-foreground mb-1">Automatic daily backups enabled</p>
-          <p>A snapshot is automatically created every day at 2:00 AM. All backup and restore actions require password confirmation for security.</p>
+      {/* Progress bar */}
+      {progress > 0 && (
+        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-foreground font-medium">{progressLabel}</span>
+            <span className="text-muted-foreground">{progress}%</span>
+          </div>
+          <Progress value={progress} className="h-2" />
         </div>
-      </div>
-
-      {/* ── Progress Bar Panel ── */}
-      {progress.active && (
-        <Card className={cn(
-          "border-2 transition-all",
-          progress.isError ? "border-destructive/50 bg-destructive/5" : "border-primary/30 bg-primary/5"
-        )}>
-          <CardContent className="pt-4 pb-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {progress.isError
-                  ? <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
-                  : progressPercent === 100
-                    ? <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
-                    : <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />}
-                <span className="text-sm font-semibold">
-                  {progress.isError ? "Operation Failed" : progressPercent === 100 ? progress.label + " — Done!" : progress.label}
-                </span>
-              </div>
-              <span className={cn("text-xs font-mono font-medium", progress.isError ? "text-destructive" : "text-primary")}>
-                {progress.isError ? "ERROR" : `${progressPercent}%`}
-              </span>
-            </div>
-
-            <Progress
-              value={progressPercent}
-              className={cn("h-2", progress.isError && "[&>div]:bg-destructive")}
-            />
-
-            {/* Step breadcrumb */}
-            <div className="flex flex-wrap gap-1.5">
-              {progress.steps.map((step, i) => {
-                const done = i < progress.step;
-                const active = i === progress.step && !progress.isError;
-                const failed = progress.isError && i === progress.step;
-                return (
-                  <span key={i} className={cn(
-                    "text-[11px] px-2 py-0.5 rounded-full border transition-all",
-                    done ? "bg-green-500/10 text-green-600 border-green-500/20" :
-                    failed ? "bg-destructive/10 text-destructive border-destructive/20" :
-                    active ? "bg-primary/10 text-primary border-primary/30 font-medium" :
-                    "bg-muted text-muted-foreground border-border opacity-50"
-                  )}>
-                    {done ? "✓ " : active ? "▶ " : ""}{step}
-                  </span>
-                );
-              })}
-            </div>
-
-            {progress.isError && progress.errorMessage && (
-              <p className="text-xs text-destructive font-mono bg-destructive/10 rounded p-2 break-all">
-                {progress.errorMessage}
-              </p>
-            )}
-
-            {progress.isError && (
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-xs text-muted-foreground">Check function logs below for details</p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => fetchFnLogs()} disabled={loadingFnLogs} className="h-7 text-xs gap-1">
-                    {loadingFnLogs ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                    Refresh Logs
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setProgress(p => ({ ...p, active: false }))} className="h-7 text-xs">
-                    Dismiss
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       )}
 
-      {/* ── Edge Function Logs Panel ── */}
-      <Card className={cn("border transition-all", fnLogsOpen ? "border-border" : "border-border/50")}>
-        <CardHeader className="pb-2 cursor-pointer" onClick={() => {
-          setFnLogsOpen(o => !o);
-          if (!fnLogsOpen && fnLogs.length === 0) fetchFnLogs();
-        }}>
+      {/* Actions row */}
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={() => gate("create a database snapshot", createSnapshot)} disabled={creating}>
+          {creating ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Database className="w-4 h-4 mr-1.5" />}
+          Create Snapshot
+        </Button>
+
+        <Button variant="outline" onClick={() => fileRef.current?.click()} disabled={!!restoring}>
+          <Upload className="w-4 h-4 mr-1.5" /> Upload & Restore JSON
+        </Button>
+        <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileUpload} />
+
+        <Button variant="ghost" size="icon" onClick={load} disabled={loading}>
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        </Button>
+      </div>
+
+      {/* Upload restore confirm */}
+      {uploadedData && (
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Ready to restore: <span className="font-mono">{uploadFileName}</span></p>
+            <p className="text-xs text-muted-foreground mt-0.5">This will overwrite existing database data. This cannot be undone.</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="sm" onClick={() => setUploadedData(null)}>Cancel</Button>
+            <Button size="sm" variant="destructive" onClick={() => gate("restore from uploaded file", restoreFromUpload)}>
+              <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Restore Now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Snapshot list */}
+      <div className="rounded-lg border border-border overflow-hidden">
+        <div className="bg-muted/30 px-4 py-3 flex items-center gap-2 border-b border-border">
+          <FileJson className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Saved Snapshots</span>
+          <Badge variant="secondary" className="ml-auto">{jsonBackups.length}</Badge>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : jsonBackups.length === 0 ? (
+          <div className="text-center py-10 text-sm text-muted-foreground">No snapshots yet. Create one above.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {jsonBackups.map(b => {
+              const isRestoring = restoring === b.name;
+              const isDownloading = downloading === b.name;
+              const isDeleting = deleting === b.name;
+              return (
+                <div key={b.name} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                  <FileJson className="w-5 h-5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate font-mono">{b.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(b.created_at).toLocaleString()} · {formatSize(b.metadata?.size)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button size="sm" variant="ghost" onClick={() => downloadSnapshot(b.name)} disabled={isDownloading || isRestoring}>
+                      {isDownloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setConfirmRestore(b.name)} disabled={isRestoring || !!restoring}>
+                      {isRestoring ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <RotateCcw className="w-3.5 h-3.5 mr-1" />}
+                      Restore
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(b.name)} disabled={isDeleting}>
+                      {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 text-destructive" />}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Recent logs */}
+      {logs.length > 0 && (
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-muted/30 px-4 py-3 border-b border-border">
+            <span className="text-sm font-semibold text-foreground">Recent Activity</span>
+          </div>
+          <div className="divide-y divide-border max-h-48 overflow-y-auto">
+            {logs.slice(0, 20).map((l: any) => (
+              <div key={l.id} className="flex items-start gap-3 px-4 py-2.5 text-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-secondary shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium capitalize text-foreground">{l.action?.replace(/_/g, " ")}</span>
+                  <span className="text-muted-foreground ml-1 font-mono">{l.file_name}</span>
+                  {l.note && <p className="text-muted-foreground mt-0.5">{l.note}</p>}
+                </div>
+                <span className="text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Restore confirm */}
+      <AlertDialog open={!!confirmRestore} onOpenChange={v => !v && setConfirmRestore(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="w-5 h-5" /> Restore Database?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will <strong>overwrite all current data</strong> with the contents of <span className="font-mono">{confirmRestore}</span>. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => gate("restore database", () => restoreSnapshot(confirmRestore!))}>
+              Restore
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete confirm */}
+      <AlertDialog open={!!confirmDelete} onOpenChange={v => !v && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Snapshot?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently delete <span className="font-mono">{confirmDelete}</span>.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => deleteSnapshot(confirmDelete!)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <PasswordGate open={pwGate.open} onClose={closeGate} label={pwGate.label} onConfirm={() => { closeGate(); pwGate.action(); }} />
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STORAGE BUCKETS TAB
+// ─────────────────────────────────────────────────────────────────────────────
+const StorageBucketsTab = () => {
+  const [buckets, setBuckets] = useState<Bucket[]>([]);
+  const [loadingBuckets, setLoadingBuckets] = useState(false);
+  const [selectedBucket, setSelectedBucket] = useState<Bucket | null>(null);
+  const [currentPath, setCurrentPath] = useState("");
+  const [files, setFiles] = useState<BucketFile[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  // Create bucket dialog
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newBucketName, setNewBucketName] = useState("");
+  const [newBucketPublic, setNewBucketPublic] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
+
+  const uploadRef = useRef<HTMLInputElement>(null);
+
+  const loadBuckets = async () => {
+    setLoadingBuckets(true);
+    try {
+      const d = await callBackup({ action: "storage_list_buckets" });
+      setBuckets(d.buckets || []);
+    } catch (e: any) {
+      toast({ title: "Error loading buckets", description: e.message, variant: "destructive" });
+    } finally { setLoadingBuckets(false); }
+  };
+
+  const loadFiles = async (bucket: Bucket, path = "") => {
+    setLoadingFiles(true);
+    try {
+      const d = await callBackup({ action: "storage_list_files", bucket_name: bucket.name, path });
+      setFiles(d.files || []);
+      setCurrentPath(path);
+    } catch (e: any) {
+      toast({ title: "Error loading files", description: e.message, variant: "destructive" });
+    } finally { setLoadingFiles(false); }
+  };
+
+  useEffect(() => { loadBuckets(); }, []);
+
+  const openBucket = (bucket: Bucket) => {
+    setSelectedBucket(bucket);
+    setCurrentPath("");
+    loadFiles(bucket, "");
+  };
+
+  const navigateFolder = (folderName: string) => {
+    if (!selectedBucket) return;
+    const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+    loadFiles(selectedBucket, newPath);
+  };
+
+  const navigateUp = () => {
+    if (!selectedBucket) return;
+    const parts = currentPath.split("/").filter(Boolean);
+    parts.pop();
+    loadFiles(selectedBucket, parts.join("/"));
+  };
+
+  const downloadFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    setDownloading(filePath);
+    try {
+      let url: string;
+      if (selectedBucket.public) {
+        const d = await callBackup({ action: "storage_public_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      } else {
+        const d = await callBackup({ action: "storage_download_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      }
+      const a = document.createElement("a"); a.href = url; a.download = fileName; a.target = "_blank";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast({ title: "Download started", description: fileName });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally { setDownloading(null); }
+  };
+
+  const previewFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    try {
+      let url: string;
+      if (selectedBucket.public) {
+        const d = await callBackup({ action: "storage_public_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      } else {
+        const d = await callBackup({ action: "storage_download_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      }
+      window.open(url, "_blank");
+    } catch (e: any) {
+      toast({ title: "Preview failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const deleteFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    setDeleting(filePath); setConfirmDeleteFile(null);
+    try {
+      await callBackup({ action: "storage_delete_files", bucket_name: selectedBucket.name, file_paths: [filePath] });
+      toast({ title: "File deleted" });
+      loadFiles(selectedBucket, currentPath);
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally { setDeleting(null); }
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file || !selectedBucket) return;
+    setUploading(true);
+    try {
+      const ab = await file.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const b64 = btoa(binary);
+      const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      await callBackup({
+        action: "storage_upload_file",
+        bucket_name: selectedBucket.name,
+        file_path: filePath,
+        content_base64: b64,
+        content_type: file.type || "application/octet-stream",
+      });
+      toast({ title: "File uploaded", description: file.name });
+      loadFiles(selectedBucket, currentPath);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally { setUploading(false); e.target.value = ""; }
+  };
+
+  const createBucket = async () => {
+    if (!newBucketName.trim()) return;
+    setCreating(true);
+    try {
+      await callBackup({ action: "storage_create_bucket", bucket_name: newBucketName.trim().toLowerCase().replace(/\s+/g, "-"), is_public: newBucketPublic });
+      toast({ title: "Bucket created", description: newBucketName });
+      setCreateOpen(false); setNewBucketName(""); setNewBucketPublic(false);
+      loadBuckets();
+    } catch (e: any) {
+      toast({ title: "Create failed", description: e.message, variant: "destructive" });
+    } finally { setCreating(false); }
+  };
+
+  // Path breadcrumb
+  const pathParts = currentPath.split("/").filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {!selectedBucket ? (
+        // ── Bucket list ──
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-muted-foreground" />
-              Function Logs
-              <span className="text-xs text-muted-foreground font-normal">(db-backup · last 1 hour)</span>
-              {fnLogs.some(l => l.level === "error") && (
-                <span className="text-[10px] bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full font-medium">
-                  {fnLogs.filter(l => l.level === "error").length} error{fnLogs.filter(l => l.level === "error").length !== 1 ? "s" : ""}
-                </span>
-              )}
-            </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={(e) => { e.stopPropagation(); fetchFnLogs(); setFnLogsOpen(true); }} disabled={loadingFnLogs}>
-                {loadingFnLogs ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
-                Refresh
+            <span className="text-sm font-semibold text-foreground">Storage Buckets</span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="icon" onClick={loadBuckets} disabled={loadingBuckets}>
+                {loadingBuckets ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               </Button>
-              {fnLogsOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1.5" /> New Bucket
+              </Button>
             </div>
           </div>
-        </CardHeader>
-        {fnLogsOpen && (
-          <CardContent className="pt-0">
-            {loadingFnLogs ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : fnLogs.length === 0 ? (
-              <div className="text-center py-6 text-sm text-muted-foreground">
-                <Terminal className="w-6 h-6 mx-auto mb-2 opacity-30" />
-                No logs in the last hour. Try refreshing after running an operation.
-              </div>
+
+          {loadingBuckets ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : buckets.length === 0 ? (
+            <div className="text-center py-10 text-sm text-muted-foreground">No storage buckets found.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {buckets.map(b => (
+                <button key={b.id} onClick={() => openBucket(b)}
+                  className="flex items-center gap-3 p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-muted/30 transition-all text-left group">
+                  <Folder className="w-8 h-8 text-primary group-hover:scale-110 transition-transform shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{b.name}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Badge variant={b.public ? "secondary" : "outline"} className="text-xs">
+                        {b.public ? "Public" : "Private"}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        // ── File browser ──
+        <div className="space-y-3">
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedBucket(null); setFiles([]); }}>
+              <Home className="w-3.5 h-3.5 mr-1" /> Buckets
+            </Button>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+            <Button variant="ghost" size="sm" onClick={() => loadFiles(selectedBucket, "")}>
+              <Folder className="w-3.5 h-3.5 mr-1 text-primary" /> {selectedBucket.name}
+            </Button>
+            {pathParts.map((part, i) => (
+              <span key={i} className="flex items-center gap-2">
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <Button variant="ghost" size="sm" onClick={() => loadFiles(selectedBucket, pathParts.slice(0, i + 1).join("/"))}>
+                  {part}
+                </Button>
+              </span>
+            ))}
+
+            <div className="ml-auto flex gap-2">
+              {currentPath && (
+                <Button variant="outline" size="sm" onClick={navigateUp}>↑ Up</Button>
+              )}
+              <Button variant="outline" size="sm" onClick={() => uploadRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+                Upload File
+              </Button>
+              <input ref={uploadRef} type="file" className="hidden" onChange={handleUpload} />
+              <Button variant="ghost" size="icon" onClick={() => loadFiles(selectedBucket, currentPath)} disabled={loadingFiles}>
+                {loadingFiles ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Bucket info bar */}
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground">
+            <Folder className="w-3.5 h-3.5 text-primary" />
+            <span className="font-medium text-foreground">{selectedBucket.name}</span>
+            <Badge variant={selectedBucket.public ? "secondary" : "outline"} className="text-xs">
+              {selectedBucket.public ? "Public" : <span className="flex items-center gap-1"><Lock className="w-3 h-3" />Private</span>}
+            </Badge>
+            <span className="ml-auto">{files.length} items</span>
+          </div>
+
+          {/* Files table */}
+          <div className="rounded-lg border border-border overflow-hidden">
+            {loadingFiles ? (
+              <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : files.length === 0 ? (
+              <div className="text-center py-10 text-sm text-muted-foreground">This folder is empty.</div>
             ) : (
-              <div
-                ref={fnLogsRef}
-                className="font-mono text-[11px] bg-background border border-border rounded-lg p-3 max-h-72 overflow-y-auto space-y-0.5"
-              >
-                {fnLogs.map((log, i) => {
-                  const ts = log.timestamp > 1e12 ? new Date(log.timestamp / 1000) : new Date(log.timestamp);
-                  const isErr = log.level === "error" || log.event_message?.toLowerCase().includes("error");
-                  const isWarn = log.level === "warning" || log.event_message?.toLowerCase().includes("failed");
+              <div className="divide-y divide-border">
+                {files.map(f => {
+                  const isFolder = !f.id;
+                  const fullPath = currentPath ? `${currentPath}/${f.name}` : f.name;
+                  const isDeleting_ = deleting === fullPath;
+                  const isDownloading_ = downloading === fullPath;
                   return (
-                    <div key={i} className={cn(
-                      "flex gap-2 leading-5 py-0.5 px-1 rounded",
-                      isErr ? "bg-destructive/10 text-destructive" :
-                      isWarn ? "bg-yellow-500/10 text-yellow-600" :
-                      "text-foreground"
-                    )}>
-                      <span className="text-muted-foreground shrink-0 select-none">
-                        {format(ts, "HH:mm:ss")}
-                      </span>
-                      <span className={cn(
-                        "shrink-0 font-bold uppercase text-[10px] mt-0.5",
-                        isErr ? "text-destructive" : isWarn ? "text-yellow-600" : "text-muted-foreground"
-                      )}>
-                        [{isErr ? "ERR" : isWarn ? "WARN" : "LOG"}]
-                      </span>
-                      <span className="break-all whitespace-pre-wrap">{log.event_message}</span>
+                    <div key={f.name} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                      {isFolder
+                        ? <FolderOpen className="w-4 h-4 text-primary shrink-0" />
+                        : fileIcon(f.name)
+                      }
+                      <div className="flex-1 min-w-0">
+                        <button className={`text-sm font-medium text-left truncate w-full ${isFolder ? "text-primary hover:underline" : "text-foreground"}`}
+                          onClick={() => isFolder ? navigateFolder(f.name) : undefined}>
+                          {f.name}
+                        </button>
+                        <p className="text-xs text-muted-foreground">
+                          {!isFolder && (
+                            <>{formatSize(f.metadata?.size)}{f.updated_at ? ` · ${new Date(f.updated_at).toLocaleString()}` : ""}</>
+                          )}
+                          {isFolder && "Folder"}
+                        </p>
+                      </div>
+                      {!isFolder && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="sm" variant="ghost" title="Preview" onClick={() => previewFile(f.name)}>
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Download" onClick={() => downloadFile(f.name)} disabled={isDownloading_}>
+                            {isDownloading_ ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirmDeleteFile(fullPath)} disabled={isDeleting_}>
+                            {isDeleting_ ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5 text-destructive" />}
+                          </Button>
+                        </div>
+                      )}
+                      {isFolder && (
+                        <Button size="sm" variant="ghost" onClick={() => navigateFolder(f.name)}>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Quick Snapshot Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Button onClick={() => requestPasswordConfirmation("backup")} disabled={isBusy}>
-          {creating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Database className="w-4 h-4 mr-2" />}
-          {creating ? "Creating..." : "DB Snapshot"}
-        </Button>
-        <div className="relative">
-          <Button variant="outline" disabled={isBusy}>
-            <Upload className="w-4 h-4 mr-2" /> Restore JSON
-          </Button>
-          <input type="file" accept=".json" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadRestore} disabled={isBusy} />
+          </div>
         </div>
-        <Button variant="outline" onClick={fetchBackups} disabled={loading}>
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-        </Button>
+      )}
+
+      {/* Create bucket dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Create New Bucket</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Bucket Name</Label>
+              <Input className="mt-1" placeholder="my-bucket" value={newBucketName}
+                onChange={e => setNewBucketName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                onKeyDown={e => e.key === "Enter" && createBucket()} />
+              <p className="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only.</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Public Bucket</Label>
+                <p className="text-xs text-muted-foreground">Files accessible without authentication</p>
+              </div>
+              <Switch checked={newBucketPublic} onCheckedChange={setNewBucketPublic} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={createBucket} disabled={creating || !newBucketName.trim()}>
+              {creating && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />} Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete file confirm */}
+      <AlertDialog open={!!confirmDeleteFile} onOpenChange={v => !v && setConfirmDeleteFile(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete File?</AlertDialogTitle>
+            <AlertDialogDescription>Permanently delete <span className="font-mono">{confirmDeleteFile?.split("/").pop()}</span>? This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90"
+              onClick={() => { const name = confirmDeleteFile!.split("/").pop()!; deleteFile(name); }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
+const DatabaseTools = () => {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Database & Storage</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Manage database snapshots and storage bucket files</p>
       </div>
 
-      {/* Full Site Backup Card */}
-      <Card className="border-primary/30">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-primary">
-            <FileArchive className="w-4 h-4" /> Full Site Backup (ZIP)
-          </CardTitle>
-          <CardDescription>
-            Creates a ZIP file containing <strong>all database data + all uploaded images/files</strong>. Use this to fully restore your site anytime, even on a new server.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button onClick={() => requestPasswordConfirmation("full_backup")} disabled={isBusy} className="gap-2">
-            {creatingFull ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileArchive className="w-4 h-4" />}
-            {creatingFull ? "Creating ZIP..." : "Create & Download Full Backup"}
-          </Button>
-          <div className="relative">
-            <Button variant="outline" disabled={isBusy} className="gap-2">
-              <Upload className="w-4 h-4" /> Restore from ZIP
-            </Button>
-            <input type="file" accept=".zip" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleUploadZipRestore} disabled={isBusy} />
-          </div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="snapshots">
+        <TabsList className="w-full sm:w-auto">
+          <TabsTrigger value="snapshots" className="flex items-center gap-1.5">
+            <Database className="w-4 h-4" /> DB Snapshots
+          </TabsTrigger>
+          <TabsTrigger value="storage" className="flex items-center gap-1.5">
+            <Folder className="w-4 h-4" /> Storage Buckets
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Schedule Backup Card */}
-      <Card className="border-secondary/30">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-secondary">
-            <CalendarDays className="w-4 h-4" /> Schedule a Backup
-          </CardTitle>
-          <CardDescription>
-            Pick a specific date and time to automatically trigger a database backup.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-40 justify-start text-left font-normal", !scheduleDate && "text-muted-foreground")}>
-                    <CalendarDays className="mr-2 h-4 w-4" />
-                    {scheduleDate ? format(scheduleDate, "PP") : "Pick date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={scheduleDate}
-                    onSelect={setScheduleDate}
-                    disabled={(d) => d < new Date()}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Time (24h)</Label>
-              <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="w-32" />
-            </div>
-            <div className="space-y-1.5 flex-1 min-w-36">
-              <Label>Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input value={scheduleLabel} onChange={(e) => setScheduleLabel(e.target.value)} placeholder="e.g. Pre-launch backup" />
-            </div>
-            <Button
-              onClick={() => requestPasswordConfirmation("schedule_backup")}
-              disabled={!scheduleDate || !scheduleTime || isBusy}
-              className="gap-2"
-            >
-              {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : <CalendarDays className="w-4 h-4" />}
-              Schedule
-            </Button>
-          </div>
+        <TabsContent value="snapshots" className="mt-4">
+          <DbSnapshotsTab />
+        </TabsContent>
 
-          {scheduledJobs.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Upcoming Scheduled Backups</p>
-              {scheduledJobs.map((job) => {
-                const log = scheduledLogs.find((l) => l.file_name === job.jobname);
-                const parts = log?.note?.split("|") ?? [];
-                const scheduledAt = parts[0]?.trim();
-                const label = parts[1]?.trim();
-                return (
-                  <div key={job.jobid} className="flex items-center justify-between bg-secondary/5 rounded-lg px-3 py-2 border border-secondary/20">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{label || job.jobname}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {scheduledAt ? format(new Date(scheduledAt), "PPP 'at' HH:mm") : job.schedule} · cron: {job.schedule}
-                      </p>
-                    </div>
-                    <Button variant="ghost" size="icon" onClick={() => cancelScheduled(job.jobname)} className="hover:bg-destructive/10 shrink-0">
-                      <X className="w-4 h-4 text-destructive" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Database Cleanup */}
-      <Card className="border-destructive/30">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2 text-destructive">
-            <Flame className="w-4 h-4" /> Database Cleanup
-          </CardTitle>
-          <CardDescription>
-            Wipe all data (products, orders, categories, deals, coupons, etc.) while keeping user accounts and roles intact. This cannot be undone.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" onClick={() => setConfirmCleanup(true)} disabled={isBusy} className="gap-2">
-            {cleaning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Flame className="w-4 h-4" />}
-            {cleaning ? "Cleaning..." : "Full Database Cleanup"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Backup List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">All Snapshots & Backups</CardTitle>
-          <CardDescription>Available database snapshots and full ZIP backups</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          ) : backups.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No snapshots yet. Create one to get started.</p>
-          ) : (
-            <div className="space-y-2">
-              {backups.filter(b => b.name.endsWith('.json') || b.name.endsWith('.zip')).map((b) => {
-                const log = logs.find(l => l.file_name === b.name && (l.action === "backup" || l.action === "full_backup"));
-                const isAutomatic = b.name.includes("scheduled");
-                const isZip = b.name.endsWith('.zip');
-                return (
-                  <div key={b.name} className="flex items-center justify-between bg-muted/30 rounded-lg p-3 border border-border">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        {isZip ? <FileArchive className="w-4 h-4 text-primary shrink-0" /> : <Database className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
-                        <p className="text-sm font-medium text-foreground truncate">{b.name}</p>
-                        {isAutomatic && <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary/10 text-secondary font-medium">Auto</span>}
-                        {isZip && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Full</span>}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 ml-6">
-                        <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{new Date(b.created_at).toLocaleString()}</span>
-                        <span>{formatSize(log?.file_size ?? b.metadata?.size ?? b.metadata?.contentLength)}</span>
-                        {log?.created_by_email && <span>by {log.created_by_email}</span>}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-3">
-                      <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.name)} title="Download" disabled={downloading === b.name} className="hover:bg-secondary/10 hover:text-secondary">
-                        {downloading === b.name ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowDownToLine className="w-4 h-4" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => {
-                        if (isZip) setConfirmFullRestore(b.name);
-                        else setConfirmRestore(b.name);
-                      }} title="Restore" disabled={restoring} className="hover:bg-accent/10 hover:text-accent-foreground">
-                        <ArchiveRestore className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteBackup(b.name)} title="Delete" className="hover:bg-destructive/10">
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Activity Log */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Activity Log</CardTitle>
-          <CardDescription>Backup, restore, and cleanup history</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No activity yet</p>
-          ) : (
-            <div className="space-y-1.5">
-              {logs.slice(0, 20).map((l) => (
-                <div key={l.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-border last:border-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${
-                    l.action.includes("backup") ? "bg-secondary/10 text-secondary" :
-                    l.action === "cleanup" ? "bg-destructive/10 text-destructive" :
-                    "bg-accent/10 text-accent-foreground"
-                  }`}>
-                    {l.action.replace("_", " ")}
-                  </span>
-                  <span className="text-muted-foreground truncate flex-1">{l.file_name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{l.created_by_email || "system"}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Password Confirmation Dialog */}
-      <Dialog open={passwordDialog} onOpenChange={(open) => { if (!open) { setPasswordDialog(false); setPendingAction(null); setPassword(""); setPasswordError(""); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Confirm Your Identity</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Enter your admin password to {getPasswordDialogLabel()}.</p>
-          <div className="space-y-2">
-            <Label>Password</Label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && verifyPasswordAndExecute()}
-              placeholder="Enter your password"
-              autoFocus
-            />
-            {passwordError && <p className="text-xs text-destructive">{passwordError}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setPasswordDialog(false); setPendingAction(null); setPassword(""); setPasswordError(""); }}>Cancel</Button>
-            <Button onClick={verifyPasswordAndExecute} disabled={verifying} variant={pendingAction?.type === "cleanup" ? "destructive" : "default"}>
-              {verifying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Lock className="w-4 h-4 mr-2" />}
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Restore Dialog (JSON) */}
-      <Dialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" /> Confirm Restore</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Restoring will <strong>overwrite all current data</strong> with the snapshot data. This action cannot be undone.</p>
-          <p className="text-sm font-medium mt-2">File: {confirmRestore}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { if (confirmRestore) { setConfirmRestore(null); requestPasswordConfirmation("restore", confirmRestore); } }}>Continue</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Full Restore Dialog (ZIP) */}
-      <Dialog open={!!confirmFullRestore} onOpenChange={() => setConfirmFullRestore(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" /> Full Site Restore</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">This will <strong>overwrite ALL data and ALL uploaded files</strong> (images, etc.) with the backup. This action cannot be undone.</p>
-          <p className="text-sm font-medium mt-2">File: {confirmFullRestore}</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmFullRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { if (confirmFullRestore) { setConfirmFullRestore(null); requestPasswordConfirmation("full_restore", confirmFullRestore); } }}>Continue</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Upload Restore Dialog (JSON) */}
-      <Dialog open={!!confirmUploadRestore} onOpenChange={() => setConfirmUploadRestore(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" /> Confirm Restore from File</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">Restoring will <strong>overwrite all current data</strong> with the uploaded file data. This action cannot be undone.</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmUploadRestore(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => requestPasswordConfirmation("upload_restore")}>Continue</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Upload Full Restore Dialog (ZIP) */}
-      <Dialog open={confirmUploadFullRestore} onOpenChange={(open) => { if (!open) { setConfirmUploadFullRestore(false); setUploadedZipFile(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" /> Full Site Restore from ZIP</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will <strong>overwrite ALL data and ALL uploaded files</strong> with the contents of:
-          </p>
-          <p className="text-sm font-medium">{uploadedZipFile?.name} ({formatSize(uploadedZipFile?.size)})</p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setConfirmUploadFullRestore(false); setUploadedZipFile(null); }}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { setConfirmUploadFullRestore(false); requestPasswordConfirmation("upload_full_restore"); }}>Continue</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Cleanup Dialog */}
-      <Dialog open={confirmCleanup} onOpenChange={setConfirmCleanup}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Flame className="w-5 h-5 text-destructive" /> Full Database Cleanup</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">This will <strong className="text-destructive">permanently delete ALL data</strong> including:</p>
-            <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-              <li>All products, categories, and combo packs</li>
-              <li>All orders and order history</li>
-              <li>All coupons, deals, and promotions</li>
-              <li>All banners, pages, and site settings</li>
-              <li>All reviews, wishlists, contacts</li>
-              <li>All SMS logs (templates are preserved)</li>
-            </ul>
-            <p className="text-sm font-medium text-foreground">✅ User accounts and roles will be preserved.</p>
-            <div className="bg-destructive/10 text-destructive text-sm rounded-lg p-3 font-medium">⚠️ This action cannot be undone. Create a backup first!</div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmCleanup(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { setConfirmCleanup(false); requestPasswordConfirmation("cleanup"); }}>
-              <Flame className="w-4 h-4 mr-2" /> Proceed with Cleanup
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <TabsContent value="storage" className="mt-4">
+          <StorageBucketsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
