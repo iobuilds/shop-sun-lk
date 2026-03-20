@@ -1732,7 +1732,7 @@ const AdminDashboard = () => {
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Payment</th>
                           <th className="text-left px-4 py-3 font-medium text-muted-foreground">Receipt</th>
-                          <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                          <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
