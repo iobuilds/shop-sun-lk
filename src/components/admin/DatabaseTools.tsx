@@ -405,6 +405,503 @@ const StorageBucketsTab = () => {
   const [files, setFiles] = useState<BucketFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingBucket, setUploadingBucket] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadingBucket, setDownloadingBucket] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deletingBucket, setDeletingBucket] = useState(false);
+
+  // Create bucket dialog
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newBucketName, setNewBucketName] = useState("");
+  const [newBucketPublic, setNewBucketPublic] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const [confirmDeleteFile, setConfirmDeleteFile] = useState<string | null>(null);
+  const [confirmDeleteBucket, setConfirmDeleteBucket] = useState<Bucket | null>(null);
+
+  const uploadRef = useRef<HTMLInputElement>(null);
+  const uploadBucketRef = useRef<HTMLInputElement>(null);
+
+  const loadBuckets = async () => {
+    setLoadingBuckets(true);
+    try {
+      const d = await callBackup({ action: "storage_list_buckets" });
+      setBuckets(d.buckets || []);
+    } catch (e: any) {
+      toast({ title: "Error loading buckets", description: e.message, variant: "destructive" });
+    } finally { setLoadingBuckets(false); }
+  };
+
+  const loadFiles = async (bucket: Bucket, path = "") => {
+    setLoadingFiles(true);
+    try {
+      const d = await callBackup({ action: "storage_list_files", bucket_name: bucket.name, path });
+      setFiles(d.files || []);
+      setCurrentPath(path);
+    } catch (e: any) {
+      toast({ title: "Error loading files", description: e.message, variant: "destructive" });
+    } finally { setLoadingFiles(false); }
+  };
+
+  useEffect(() => { loadBuckets(); }, []);
+
+  const openBucket = (bucket: Bucket) => {
+    setSelectedBucket(bucket);
+    setCurrentPath("");
+    loadFiles(bucket, "");
+  };
+
+  const navigateFolder = (folderName: string) => {
+    if (!selectedBucket) return;
+    const newPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+    loadFiles(selectedBucket, newPath);
+  };
+
+  const navigateUp = () => {
+    if (!selectedBucket) return;
+    const parts = currentPath.split("/").filter(Boolean);
+    parts.pop();
+    loadFiles(selectedBucket, parts.join("/"));
+  };
+
+  const downloadFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    setDownloading(filePath);
+    try {
+      let url: string;
+      if (selectedBucket.public) {
+        const d = await callBackup({ action: "storage_public_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      } else {
+        const d = await callBackup({ action: "storage_download_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      }
+      const a = document.createElement("a"); a.href = url; a.download = fileName; a.target = "_blank";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast({ title: "Download started", description: fileName });
+    } catch (e: any) {
+      toast({ title: "Download failed", description: e.message, variant: "destructive" });
+    } finally { setDownloading(null); }
+  };
+
+  // Download entire bucket as zip (download each file one-by-one via JSZip)
+  const downloadBucket = async (bucket: Bucket) => {
+    setDownloadingBucket(true);
+    toast({ title: "Preparing bucket download…", description: "Fetching file list" });
+    try {
+      const { JSZip } = await import("jszip") as any;
+      const zip = new JSZip();
+
+      // Recursively collect all files
+      const collectFiles = async (path: string): Promise<{ path: string; name: string }[]> => {
+        const d = await callBackup({ action: "storage_list_files", bucket_name: bucket.name, path });
+        const list: { path: string; name: string }[] = [];
+        for (const f of d.files || []) {
+          if (!f.id) { // folder
+            const sub = await collectFiles(path ? `${path}/${f.name}` : f.name);
+            list.push(...sub);
+          } else {
+            list.push({ path: path ? `${path}/${f.name}` : f.name, name: f.name });
+          }
+        }
+        return list;
+      };
+
+      const allFiles = await collectFiles("");
+      if (allFiles.length === 0) { toast({ title: "Bucket is empty" }); setDownloadingBucket(false); return; }
+
+      for (const file of allFiles) {
+        let url: string;
+        if (bucket.public) {
+          const d = await callBackup({ action: "storage_public_url", bucket_name: bucket.name, file_path: file.path });
+          url = d.url;
+        } else {
+          const d = await callBackup({ action: "storage_download_url", bucket_name: bucket.name, file_path: file.path });
+          url = d.url;
+        }
+        const resp = await fetch(url);
+        const blob = await resp.blob();
+        zip.file(file.path, blob);
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(content);
+      a.download = `${bucket.name}-backup.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast({ title: "Bucket downloaded", description: `${allFiles.length} files zipped` });
+    } catch (e: any) {
+      toast({ title: "Bucket download failed", description: e.message, variant: "destructive" });
+    } finally { setDownloadingBucket(false); }
+  };
+
+  // Upload multiple files to current folder
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file || !selectedBucket) return;
+    setUploading(true);
+    try {
+      const ab = await file.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const b64 = btoa(binary);
+      const filePath = currentPath ? `${currentPath}/${file.name}` : file.name;
+      await callBackup({
+        action: "storage_upload_file",
+        bucket_name: selectedBucket.name,
+        file_path: filePath,
+        content_base64: b64,
+        content_type: file.type || "application/octet-stream",
+      });
+      toast({ title: "File uploaded", description: file.name });
+      loadFiles(selectedBucket, currentPath);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally { setUploading(false); e.target.value = ""; }
+  };
+
+  // Upload a zip file and extract into bucket
+  const handleUploadBucket = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; if (!file || !selectedBucket) return;
+    setUploadingBucket(true);
+    toast({ title: "Uploading zip…", description: "Extracting and uploading all files" });
+    try {
+      const { default: JSZip } = await import("jszip");
+      const zip = await JSZip.loadAsync(file);
+      const entries = Object.entries(zip.files).filter(([, f]) => !f.dir);
+      let done = 0;
+      for (const [path, zipFile] of entries) {
+        const ab = await zipFile.async("arraybuffer");
+        const bytes = new Uint8Array(ab);
+        let binary = ""; for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const b64 = btoa(binary);
+        const ext = path.split(".").pop()?.toLowerCase() || "";
+        const mimeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", svg: "image/svg+xml", webp: "image/webp", json: "application/json", pdf: "application/pdf" };
+        await callBackup({
+          action: "storage_upload_file",
+          bucket_name: selectedBucket.name,
+          file_path: path,
+          content_base64: b64,
+          content_type: mimeMap[ext] || "application/octet-stream",
+        });
+        done++;
+      }
+      toast({ title: "Bucket upload complete", description: `${done} files uploaded` });
+      loadFiles(selectedBucket, currentPath);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally { setUploadingBucket(false); e.target.value = ""; }
+  };
+
+  const previewFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    try {
+      let url: string;
+      if (selectedBucket.public) {
+        const d = await callBackup({ action: "storage_public_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      } else {
+        const d = await callBackup({ action: "storage_download_url", bucket_name: selectedBucket.name, file_path: filePath });
+        url = d.url;
+      }
+      window.open(url, "_blank");
+    } catch (e: any) {
+      toast({ title: "Preview failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const deleteFile = async (fileName: string) => {
+    if (!selectedBucket) return;
+    const filePath = currentPath ? `${currentPath}/${fileName}` : fileName;
+    setDeleting(filePath); setConfirmDeleteFile(null);
+    try {
+      await callBackup({ action: "storage_delete_files", bucket_name: selectedBucket.name, file_paths: [filePath] });
+      toast({ title: "File deleted" });
+      loadFiles(selectedBucket, currentPath);
+    } catch (e: any) {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    } finally { setDeleting(null); }
+  };
+
+  const deleteBucket = async () => {
+    if (!confirmDeleteBucket) return;
+    setDeletingBucket(true);
+    setConfirmDeleteBucket(null);
+    try {
+      await callBackup({ action: "storage_delete_bucket", bucket_name: confirmDeleteBucket.name });
+      toast({ title: "Bucket deleted", description: confirmDeleteBucket.name });
+      loadBuckets();
+    } catch (e: any) {
+      toast({ title: "Delete bucket failed", description: e.message, variant: "destructive" });
+    } finally { setDeletingBucket(false); }
+  };
+
+  const createBucket = async () => {
+    if (!newBucketName.trim()) return;
+    setCreating(true);
+    try {
+      await callBackup({ action: "storage_create_bucket", bucket_name: newBucketName.trim().toLowerCase().replace(/\s+/g, "-"), is_public: newBucketPublic });
+      toast({ title: "Bucket created", description: newBucketName });
+      setCreateOpen(false); setNewBucketName(""); setNewBucketPublic(false);
+      loadBuckets();
+    } catch (e: any) {
+      toast({ title: "Create failed", description: e.message, variant: "destructive" });
+    } finally { setCreating(false); }
+  };
+
+  const pathParts = currentPath.split("/").filter(Boolean);
+
+  return (
+    <div className="space-y-4">
+      {!selectedBucket ? (
+        // ── Bucket list ──
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">Storage Buckets</span>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="icon" onClick={loadBuckets} disabled={loadingBuckets}>
+                {loadingBuckets ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </Button>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1.5" /> New Bucket
+              </Button>
+            </div>
+          </div>
+
+          {loadingBuckets ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : buckets.length === 0 ? (
+            <div className="text-center py-10 text-sm text-muted-foreground">No storage buckets found.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {buckets.map(b => (
+                <div key={b.id} className="flex items-center gap-3 p-4 rounded-lg border border-border hover:border-primary/40 hover:bg-muted/20 transition-all group">
+                  <button className="flex items-center gap-3 flex-1 min-w-0 text-left" onClick={() => openBucket(b)}>
+                    <Folder className="w-8 h-8 text-primary group-hover:scale-110 transition-transform shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{b.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <Badge variant={b.public ? "secondary" : "outline"} className="text-xs">
+                          {b.public ? "Public" : "Private"}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{new Date(b.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                  </button>
+                  {/* Bucket-level actions */}
+                  <div className="flex items-center gap-1 border-l border-border pl-2 shrink-0">
+                    <Button size="sm" variant="ghost" title="Download full bucket as ZIP"
+                      onClick={() => downloadBucket(b)} disabled={downloadingBucket}>
+                      {downloadingBucket ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />}
+                    </Button>
+                    <Button size="sm" variant="ghost" title="Delete bucket"
+                      onClick={() => setConfirmDeleteBucket(b)} disabled={deletingBucket}
+                      className="hover:text-destructive hover:bg-destructive/10">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        // ── File browser ──
+        <div className="space-y-3">
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedBucket(null); setFiles([]); }}>
+              <Home className="w-3.5 h-3.5 mr-1" /> Buckets
+            </Button>
+            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+            <Button variant="ghost" size="sm" onClick={() => loadFiles(selectedBucket, "")}>
+              <Folder className="w-3.5 h-3.5 mr-1 text-primary" /> {selectedBucket.name}
+            </Button>
+            {pathParts.map((part, i) => (
+              <span key={i} className="flex items-center gap-2">
+                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                <Button variant="ghost" size="sm" onClick={() => loadFiles(selectedBucket, pathParts.slice(0, i + 1).join("/"))}>
+                  {part}
+                </Button>
+              </span>
+            ))}
+
+            <div className="ml-auto flex gap-2 flex-wrap">
+              {currentPath && (
+                <Button variant="outline" size="sm" onClick={navigateUp}>↑ Up</Button>
+              )}
+              {/* Download full bucket */}
+              <Button variant="outline" size="sm" onClick={() => downloadBucket(selectedBucket)} disabled={downloadingBucket} title="Download entire bucket as ZIP">
+                {downloadingBucket ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" />}
+                Download All
+              </Button>
+              {/* Upload zip as full bucket */}
+              <Button variant="outline" size="sm" onClick={() => uploadBucketRef.current?.click()} disabled={uploadingBucket} title="Upload ZIP to restore/populate bucket">
+                {uploadingBucket ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+                Upload ZIP
+              </Button>
+              <input ref={uploadBucketRef} type="file" accept=".zip" className="hidden" onChange={handleUploadBucket} />
+              {/* Upload single file */}
+              <Button variant="outline" size="sm" onClick={() => uploadRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 mr-1.5" />}
+                Upload File
+              </Button>
+              <input ref={uploadRef} type="file" className="hidden" onChange={handleUpload} />
+              <Button variant="ghost" size="icon" onClick={() => loadFiles(selectedBucket, currentPath)} disabled={loadingFiles}>
+                {loadingFiles ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Bucket info bar */}
+          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground">
+            <Folder className="w-3.5 h-3.5 text-primary" />
+            <span className="font-medium text-foreground">{selectedBucket.name}</span>
+            <Badge variant={selectedBucket.public ? "secondary" : "outline"} className="text-xs">
+              {selectedBucket.public ? "Public" : <span className="flex items-center gap-1"><Lock className="w-3 h-3" />Private</span>}
+            </Badge>
+            <span className="ml-auto">{files.length} items</span>
+            {/* Delete bucket from inside */}
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setConfirmDeleteBucket(selectedBucket)} disabled={deletingBucket}>
+              <Trash2 className="w-3 h-3 mr-1" /> Delete Bucket
+            </Button>
+          </div>
+
+          {/* Files table */}
+          <div className="rounded-lg border border-border overflow-hidden">
+            {loadingFiles ? (
+              <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : files.length === 0 ? (
+              <div className="text-center py-10 text-sm text-muted-foreground">This folder is empty.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {files.map(f => {
+                  const isFolder = !f.id;
+                  const fullPath = currentPath ? `${currentPath}/${f.name}` : f.name;
+                  const isDeleting_ = deleting === fullPath;
+                  const isDownloading_ = downloading === fullPath;
+                  return (
+                    <div key={f.name} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors">
+                      {isFolder
+                        ? <FolderOpen className="w-4 h-4 text-primary shrink-0" />
+                        : fileIcon(f.name)
+                      }
+                      <div className="flex-1 min-w-0">
+                        <button className={`text-sm font-medium text-left truncate w-full ${isFolder ? "text-primary hover:underline" : "text-foreground"}`}
+                          onClick={() => isFolder ? navigateFolder(f.name) : undefined}>
+                          {f.name}
+                        </button>
+                        <p className="text-xs text-muted-foreground">
+                          {!isFolder && (
+                            <>{formatSize(f.metadata?.size)}{f.updated_at ? ` · ${new Date(f.updated_at).toLocaleString()}` : ""}</>
+                          )}
+                          {isFolder && "Folder"}
+                        </p>
+                      </div>
+                      {!isFolder && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="sm" variant="ghost" title="Preview" onClick={() => previewFile(f.name)}>
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Download" onClick={() => downloadFile(f.name)} disabled={isDownloading_}>
+                            {isDownloading_ ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button size="sm" variant="ghost" title="Delete file" onClick={() => setConfirmDeleteFile(fullPath)} disabled={isDeleting_} className="hover:text-destructive hover:bg-destructive/10">
+                            {isDeleting_ ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </Button>
+                        </div>
+                      )}
+                      {isFolder && (
+                        <Button size="sm" variant="ghost" onClick={() => navigateFolder(f.name)}>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Create bucket dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Create New Bucket</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Bucket Name</Label>
+              <Input className="mt-1" placeholder="my-bucket" value={newBucketName}
+                onChange={e => setNewBucketName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                onKeyDown={e => e.key === "Enter" && createBucket()} />
+              <p className="text-xs text-muted-foreground mt-1">Lowercase letters, numbers, and hyphens only.</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Public Bucket</Label>
+                <p className="text-xs text-muted-foreground">Files accessible without authentication</p>
+              </div>
+              <Switch checked={newBucketPublic} onCheckedChange={setNewBucketPublic} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={createBucket} disabled={creating || !newBucketName.trim()}>
+              {creating && <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />} Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete file confirm */}
+      <AlertDialog open={!!confirmDeleteFile} onOpenChange={v => !v && setConfirmDeleteFile(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete File?</AlertDialogTitle>
+            <AlertDialogDescription>Permanently delete <span className="font-mono">{confirmDeleteFile?.split("/").pop()}</span>? This cannot be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90"
+              onClick={() => { const name = confirmDeleteFile!.split("/").pop()!; deleteFile(name); }}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete bucket confirm */}
+      <AlertDialog open={!!confirmDeleteBucket} onOpenChange={v => !v && setConfirmDeleteBucket(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" /> Delete Bucket?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete bucket <span className="font-mono font-semibold text-foreground">{confirmDeleteBucket?.name}</span> and <strong>all its files</strong>? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={deleteBucket}>
+              <Trash2 className="w-4 h-4 mr-1.5" /> Delete Bucket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+};
+  const [currentPath, setCurrentPath] = useState("");
+  const [files, setFiles] = useState<BucketFile[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 

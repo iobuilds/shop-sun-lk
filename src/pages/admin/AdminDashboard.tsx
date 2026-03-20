@@ -139,6 +139,7 @@ const AdminDashboard = () => {
   });
   const [orderStatusHistory, setOrderStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [deleteOrderConfirm, setDeleteOrderConfirm] = useState<string | null>(null);
 
   // User detail dialog
   const [userDetailOpen, setUserDetailOpen] = useState(false);
@@ -1163,7 +1164,7 @@ const AdminDashboard = () => {
   const deleteOrder = async (id: string) => {
     const { error } = await supabase.from("orders").delete().eq("id", id);
     if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
-    else { toast({ title: "Order deleted" }); await logAdminAction("order_deleted", "order", id); setOrderDetailDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
+    else { toast({ title: "Order deleted" }); await logAdminAction("order_deleted", "order", id); setOrderDetailDialog(false); setDeleteOrderConfirm(null); queryClient.invalidateQueries({ queryKey: ["admin-orders"] }); }
   };
   const bulkUpdateOrderStatus = async (status: string) => {
     const ids = Array.from(selectedOrders);
@@ -1803,7 +1804,7 @@ const AdminDashboard = () => {
                                  <button onClick={() => openOrderDetail(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium transition-colors" title="Manage order">
                                    <Truck className="w-3.5 h-3.5" /> Manage
                                  </button>
-                                 <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
+                                 <button onClick={() => setDeleteOrderConfirm(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
                                </div>
                              </td>
                            </tr>
@@ -4654,6 +4655,26 @@ const AdminDashboard = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Delete single order confirm ─────────────────────────────── */}
+      <AlertDialog open={!!deleteOrderConfirm} onOpenChange={(v) => { if (!v) setDeleteOrderConfirm(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="w-5 h-5" /> Delete Order?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Permanently delete order <span className="font-mono font-semibold text-foreground">#{deleteOrderConfirm?.slice(0, 8).toUpperCase()}</span>? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" onClick={() => deleteOrderConfirm && deleteOrder(deleteOrderConfirm)}>
+              <Trash2 className="w-4 h-4 mr-1.5" /> Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
