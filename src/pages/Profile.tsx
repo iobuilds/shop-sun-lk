@@ -786,9 +786,9 @@ const Profile = () => {
               )}
 
 
-              {tab === "orders" && (
+              {tab === "orders" && session?.user?.id && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <h2 className="text-lg font-bold font-display text-foreground mb-5">Order History</h2>
+                  <OrdersSection session={session} orders={orders} uploadingReceipt={uploadingReceipt} handleReceiptUpload={handleReceiptUpload} />
                   {orders && orders.length > 0 ? (
                     <div className="space-y-4">
                       {orders.map((order) => (
