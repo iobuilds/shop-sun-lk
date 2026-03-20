@@ -1753,45 +1753,62 @@ const AdminDashboard = () => {
                             <td className="px-4 py-3 font-mono text-xs text-foreground">{o.id.slice(0, 8)}</td>
                             <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(o.created_at!).toLocaleDateString()}</td>
                             <td className="px-4 py-3 font-medium text-foreground">Rs. {o.total.toLocaleString()}</td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${o.payment_method === "stripe" ? "bg-secondary/10 text-secondary" : "bg-accent/10 text-accent-foreground"}`}>
-                                {o.payment_method === "stripe" ? "Card" : "Bank"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Select value={o.status} onValueChange={(v) => updateOrderStatus(o.id, v)}>
-                                <SelectTrigger className="h-7 text-xs w-32"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"].map((s) => (
-                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s.replace(/_/g, " ")}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="px-4 py-3">
-                              <Select value={o.payment_status} onValueChange={(v) => updatePaymentStatus(o.id, v)}>
-                                <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {["pending", "paid", "failed"].map((s) => (
-                                    <SelectItem key={s} value={s} className="capitalize text-xs">{s}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="px-4 py-3">
-                            {(o as any).receipt_url ? (
-                                <a href={(o as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary underline flex items-center gap-1"><Eye className="w-3 h-3" /> View</a>
-                              ) : <span className="text-xs text-muted-foreground">—</span>}
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-1">
-                                <button onClick={() => openOrderDetail(o)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="View order details"><Eye className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
+                             <td className="px-4 py-3">
+                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                 o.payment_method === "stripe" ? "bg-secondary/10 text-secondary" :
+                                 o.payment_method === "cod" ? "bg-accent/15 text-accent-foreground" :
+                                 "bg-primary/10 text-primary"
+                               }`}>
+                                 {o.payment_method === "stripe" ? "Card" : o.payment_method === "cod" ? "COD" : "Bank"}
+                               </span>
+                             </td>
+                             <td className="px-4 py-3">
+                               {(() => {
+                                 const s = o.status;
+                                 const cls =
+                                   s === "pending"          ? "bg-muted text-muted-foreground border-border" :
+                                   s === "confirmed"        ? "bg-primary/15 text-primary border-primary/30" :
+                                   s === "processing"       ? "bg-accent/20 text-accent-foreground border-accent/40" :
+                                   s === "packed"           ? "bg-chart-4/20 text-chart-4 border-chart-4/30" :
+                                   s === "shipped"          ? "bg-chart-2/20 text-chart-2 border-chart-2/30" :
+                                   s === "out_for_delivery" ? "bg-chart-1/20 text-chart-1 border-chart-1/30" :
+                                   s === "delivered"        ? "bg-secondary/15 text-secondary border-secondary/30" :
+                                   s === "cancelled"        ? "bg-destructive/15 text-destructive border-destructive/30" :
+                                   s === "returned"         ? "bg-destructive/10 text-destructive border-destructive/20" :
+                                   "bg-muted text-muted-foreground border-border";
+                                 return (
+                                   <span className={`text-xs px-2.5 py-1 rounded-full font-semibold border capitalize whitespace-nowrap ${cls}`}>
+                                     {s === "out_for_delivery" ? "Out for Delivery" : s.replace(/_/g, " ")}
+                                   </span>
+                                 );
+                               })()}
+                             </td>
+                             <td className="px-4 py-3">
+                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                 o.payment_status === "paid"     ? "bg-secondary/10 text-secondary" :
+                                 o.payment_status === "rejected" ? "bg-destructive/15 text-destructive" :
+                                 o.payment_status === "failed"   ? "bg-destructive/10 text-destructive" :
+                                 "bg-muted text-muted-foreground"
+                               }`}>
+                                 {o.payment_status}
+                               </span>
+                             </td>
+                             <td className="px-4 py-3">
+                               {(o as any).receipt_url ? (
+                                 <a href={(o as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-secondary underline flex items-center gap-1"><Eye className="w-3 h-3" /> View</a>
+                               ) : <span className="text-xs text-muted-foreground">—</span>}
+                             </td>
+                             <td className="px-4 py-3 text-right">
+                               <div className="flex items-center justify-end gap-1">
+                                 <button onClick={() => openOrderDetail(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium transition-colors" title="Manage order">
+                                   <Truck className="w-3.5 h-3.5" /> Manage
+                                 </button>
+                                 <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
+                               </div>
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
                     </table>
                   </div>
                 </div>
