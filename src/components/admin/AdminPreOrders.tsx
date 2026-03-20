@@ -289,9 +289,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
     }
   };
 
-  const getProfile = (userId: string) =>
-    allProfiles.find((p: any) => p.user_id === userId);
-
   // Check if quote is expired (48hrs)
   const isQuoteExpired = (req: any) => {
     if (req.status !== "quoted" || !req.quoted_at) return false;
