@@ -65,7 +65,7 @@ const HeroBanner = () => {
 
   const innerContent = (
     <div className="relative h-full flex items-center">
-      <div className="container mx-auto px-6 sm:px-12">
+      <div className="container mx-auto px-4 sm:px-8 lg:px-12">
         <div className="max-w-lg">
           {/* Badge - stagger 1 */}
           <motion.span
