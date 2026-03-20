@@ -245,6 +245,9 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
+  const getProfile = (userId: string) =>
+    allProfiles.find((p: any) => p.user_id === userId);
+
   // Filter by status and search by order ID, customer name, or phone
   const filtered = requests.filter(r => {
     const matchStatus = filterStatus === "all" || r.status === filterStatus;
@@ -285,9 +288,6 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
       setSelectedRequests(prev => { const next = new Set(prev); filtered.forEach((r: any) => next.add(r.id)); return next; });
     }
   };
-
-  const getProfile = (userId: string) =>
-    allProfiles.find((p: any) => p.user_id === userId);
 
   // Check if quote is expired (48hrs)
   const isQuoteExpired = (req: any) => {
