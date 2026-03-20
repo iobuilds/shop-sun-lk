@@ -78,17 +78,8 @@ serve(async (req) => {
       );
     }
 
-    // Duplicate-send guard
-    const { data: existingLog } = await supabaseAdmin
-      .from("sms_logs").select("id")
-      .eq("order_id", order_id).eq("template_key", templateKey).eq("status", "sent").limit(1);
-
-    if (existingLog && existingLog.length > 0) {
-      return new Response(
-        JSON.stringify({ success: false, message: "SMS already sent for this status" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
-    }
+    // No duplicate-send guard — admin may legitimately re-send a status update
+    // (e.g. when reverting to a previous step and re-advancing, or resending manually)
 
     // Fetch order + profile
     const { data: order, error: orderError } = await supabaseAdmin
