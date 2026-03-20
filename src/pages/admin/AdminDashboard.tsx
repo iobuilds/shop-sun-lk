@@ -4705,3 +4705,20 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+              const ids = Array.from(selectedProducts);
+              for (const id of ids) { await supabase.from("products").delete().eq("id", id); }
+              setBulkDeleting(false); setConfirmBulkDelete(false); setSelectedProducts(new Set());
+              queryClient.invalidateQueries({ queryKey: ["admin-products"] });
+              toast({ title: `${ids.length} products deleted` });
+            }} disabled={bulkDeleting}>
+              {bulkDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete {selectedProducts.size} Products
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default AdminDashboard;
