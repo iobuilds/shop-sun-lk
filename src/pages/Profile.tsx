@@ -421,6 +421,7 @@ const OrdersSection = ({
                       </div>
                     ))}
                   </div>
+                  <OrderStepper status={order.status} />
                   {order.payment_method === "bank_transfer" && (
                     <div className="mt-4 pt-4 border-t border-border">
                       {(order as any).receipt_url ? (
