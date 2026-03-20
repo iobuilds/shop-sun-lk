@@ -398,6 +398,102 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Storage bucket management ──
+
+  // List all buckets
+  if (action === "storage_list_buckets") {
+    try {
+      const { data: buckets, error } = await adminClient.storage.listBuckets();
+      if (error) throw error;
+      return new Response(JSON.stringify({ buckets: buckets || [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // Create a bucket
+  if (action === "storage_create_bucket") {
+    const { bucket_name, is_public = false } = body;
+    if (!bucket_name) return new Response(JSON.stringify({ error: "bucket_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const { data, error } = await adminClient.storage.createBucket(bucket_name, { public: is_public });
+      if (error) throw error;
+      log("info", "Created bucket", { bucket_name, is_public });
+      return new Response(JSON.stringify({ success: true, bucket: data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // List files in a bucket (with optional path prefix)
+  if (action === "storage_list_files") {
+    const { bucket_name, path = "" } = body;
+    if (!bucket_name) return new Response(JSON.stringify({ error: "bucket_name required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const { data, error } = await adminClient.storage.from(bucket_name).list(path, { limit: 200, sortBy: { column: "created_at", order: "desc" } });
+      if (error) throw error;
+      return new Response(JSON.stringify({ files: data || [], path }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // Get a signed download URL for a file
+  if (action === "storage_download_url") {
+    const { bucket_name, file_path } = body;
+    if (!bucket_name || !file_path) return new Response(JSON.stringify({ error: "bucket_name and file_path required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const { data, error } = await adminClient.storage.from(bucket_name).createSignedUrl(file_path, 300);
+      if (error) throw error;
+      return new Response(JSON.stringify({ url: data?.signedUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // Delete file(s) from a bucket
+  if (action === "storage_delete_files") {
+    const { bucket_name, file_paths } = body;
+    if (!bucket_name || !file_paths?.length) return new Response(JSON.stringify({ error: "bucket_name and file_paths required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const { error } = await adminClient.storage.from(bucket_name).remove(file_paths);
+      if (error) throw error;
+      log("info", "Deleted files", { bucket_name, count: file_paths.length });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // Upload a file to a bucket (base64 encoded body)
+  if (action === "storage_upload_file") {
+    const { bucket_name, file_path, content_base64, content_type = "application/octet-stream" } = body;
+    if (!bucket_name || !file_path || !content_base64) return new Response(JSON.stringify({ error: "bucket_name, file_path, content_base64 required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const binaryStr = atob(content_base64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const { error } = await adminClient.storage.from(bucket_name).upload(file_path, bytes, { contentType: content_type, upsert: true });
+      if (error) throw error;
+      log("info", "Uploaded file", { bucket_name, file_path });
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
+  // Get public URL for a file in a public bucket
+  if (action === "storage_public_url") {
+    const { bucket_name, file_path } = body;
+    if (!bucket_name || !file_path) return new Response(JSON.stringify({ error: "bucket_name and file_path required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    try {
+      const { data } = adminClient.storage.from(bucket_name).getPublicUrl(file_path);
+      return new Response(JSON.stringify({ url: data?.publicUrl }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+  }
+
   log("error", "Invalid action", { action });
   return new Response(JSON.stringify({ error: "Invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
