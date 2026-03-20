@@ -788,8 +788,25 @@ const Profile = () => {
 
               {tab === "orders" && session?.user?.id && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <OrdersSection session={session} orders={orders} uploadingReceipt={uploadingReceipt} handleReceiptUpload={handleReceiptUpload} />
-                  {orders && orders.length > 0 ? (
+                  <OrdersSection
+                    session={session}
+                    orders={orders}
+                    uploadingReceipt={uploadingReceipt}
+                    handleReceiptUpload={handleReceiptUpload}
+                  />
+                </motion.div>
+              )}
+            </main>
+          </div>
+        </div>
+      </div>
+      <Footer />
+    </div>
+  );
+};
+
+export default Profile;
+
                     <div className="space-y-4">
                       {orders.map((order) => (
                         <div key={order.id} className="bg-card rounded-xl border border-border p-5">
