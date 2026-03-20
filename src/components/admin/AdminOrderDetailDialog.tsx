@@ -372,8 +372,11 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
               <Textarea value={deliveryForm.delivery_note} onChange={(e) => setDeliveryForm(f => ({ ...f, delivery_note: e.target.value }))} rows={2} placeholder="Note visible to customer..." />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={saveUpdate}><Save className="w-4 h-4 mr-1.5" /> Save & Update</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+              <Button onClick={handleSaveClick} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
+                {saving ? "Saving..." : "Save & Update"}
+              </Button>
             </div>
           </div>
 
@@ -404,6 +407,55 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
           </div>
         </div>
       </DialogContent>
+
+      {/* Backward status confirmation with admin password */}
+      <AlertDialog open={backwardConfirmOpen} onOpenChange={setBackwardConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" /> Reverse Order Status?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                You are moving the order status <strong>backward</strong> from{" "}
+                <span className="capitalize font-medium text-foreground">{order?.status?.replace(/_/g, " ")}</span>{" "}
+                to{" "}
+                <span className="capitalize font-medium text-foreground">{deliveryForm.status?.replace(/_/g, " ")}</span>.
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                This action will also re-send the SMS/email notification for this status. Enter your admin password to confirm.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 pb-2">
+            <Label htmlFor="admin-pw" className="text-sm font-medium">Admin Password</Label>
+            <Input
+              id="admin-pw"
+              type="password"
+              placeholder="Enter your password"
+              value={pendingAdminPassword}
+              onChange={(e) => { setPendingAdminPassword(e.target.value); setAdminPasswordError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleBackwardConfirm(); }}
+              className="mt-1"
+              autoFocus
+            />
+            {adminPasswordError && (
+              <p className="text-xs text-destructive mt-1">{adminPasswordError}</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setBackwardConfirmOpen(false); setPendingAdminPassword(""); setAdminPasswordError(""); }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleBackwardConfirm(); }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Confirm Reversal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };
