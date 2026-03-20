@@ -807,8 +807,6 @@ const Profile = () => {
 
 export default Profile;
 
-                    <div className="space-y-4">
-                      {orders.map((order) => (
                         <div key={order.id} className="bg-card rounded-xl border border-border p-5">
                           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                             <div>
