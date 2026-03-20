@@ -417,7 +417,7 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
 
           {/* COD: collect payment */}
           {order.payment_method === "cod" && order.payment_status !== "paid" && !isTerminal && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between gap-4">
+            <div className="bg-accent/20 border border-accent/40 rounded-xl p-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">Cash on Delivery</p>
                 <p className="text-xs text-muted-foreground">Confirm once delivery person collected payment</p>
