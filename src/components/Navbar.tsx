@@ -427,6 +427,16 @@ const Navbar = () => {
               </Link>
             )}
 
+            {/* My Orders — only for logged-in users */}
+            {session && (
+              <Link
+                to="/profile?tab=orders"
+                className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors relative"
+                title="My Orders"
+              >
+                <Package className="w-5 h-5" />
+              </Link>
+            )}
             <Link to={session ? "/profile" : "/auth"} className="hidden sm:flex p-2 text-muted-foreground hover:text-foreground transition-colors">
               <User className="w-5 h-5" />
             </Link>
