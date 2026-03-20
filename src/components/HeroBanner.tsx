@@ -65,7 +65,7 @@ const HeroBanner = () => {
 
   const innerContent = (
     <div className="relative h-full flex items-center">
-      <div className="container mx-auto px-6 sm:px-12">
+      <div className="container mx-auto px-4 sm:px-8 lg:px-12">
         <div className="max-w-lg">
           {/* Badge - stagger 1 */}
           <motion.span
@@ -84,7 +84,7 @@ const HeroBanner = () => {
             initial={{ opacity: 0, x: -50, y: 10 }}
             animate={{ opacity: 1, x: 0, y: 0 }}
             transition={{ delay: 0.4, duration: 0.55, ease: [0.25, 0.46, 0.45, 0.94] }}
-            className="text-3xl sm:text-4xl lg:text-5xl font-bold font-display text-primary-foreground mb-4 leading-tight drop-shadow-lg"
+            className="text-2xl sm:text-4xl lg:text-5xl font-bold font-display text-primary-foreground mb-3 sm:mb-4 leading-tight drop-shadow-lg"
           >
             {slide.title}
           </motion.h1>
@@ -96,7 +96,7 @@ const HeroBanner = () => {
               initial={{ opacity: 0, x: -35 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.55, duration: 0.45, ease: "easeOut" }}
-              className="text-primary-foreground/80 text-sm sm:text-base lg:text-lg mb-6 leading-relaxed max-w-md"
+              className="text-primary-foreground/80 text-xs sm:text-base lg:text-lg mb-4 sm:mb-6 leading-relaxed max-w-md hidden sm:block"
             >
               {slide.subtitle}
             </motion.p>
@@ -123,8 +123,8 @@ const HeroBanner = () => {
   );
 
   return (
-    <section className="relative w-full overflow-hidden rounded-2xl">
-      <div className="relative h-[280px] sm:h-[400px] lg:h-[480px]">
+    <section className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl">
+      <div className="relative h-[220px] sm:h-[380px] lg:h-[460px]">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
             key={slide.id}

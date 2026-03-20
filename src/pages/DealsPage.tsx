@@ -75,8 +75,8 @@ const DealsPage = () => {
         description="Shop today's best deals on electronics, components, and more at NanoCircuit.lk. Limited-time offers with countdown timers."
       />
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
-        <div className="container mx-auto px-4 py-8">
+      <main className="pt-[120px] md:pt-[152px]">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
           <div className="flex items-center gap-3 mb-8">
             <Tag className="w-6 h-6 text-destructive" />
             <h1 className="text-3xl font-bold font-display text-foreground">Daily Deals</h1>

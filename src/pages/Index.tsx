@@ -174,8 +174,8 @@ const Index = () => {
         }}
       />
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
-        <div className="container mx-auto px-4 space-y-12 py-6">
+      <main className="pt-[120px] md:pt-[152px]">
+        <div className="container mx-auto px-3 sm:px-4 space-y-8 sm:space-y-12 py-4 sm:py-6">
           {sections.map((section) => {
             if (!section.visible) return null;
             const component = SECTION_COMPONENTS[section.id];

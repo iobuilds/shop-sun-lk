@@ -193,8 +193,8 @@ const CategoryPage = () => {
         }}
       />
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
-        <div className="container mx-auto px-4 py-8">
+      <main className="pt-[120px] md:pt-[152px]">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
           {/* Breadcrumb */}
           <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
             <Link to="/" className="hover:text-secondary transition-colors">Home</Link>
