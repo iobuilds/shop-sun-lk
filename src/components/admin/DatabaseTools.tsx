@@ -898,7 +898,8 @@ const StorageBucketsTab = () => {
     </div>
   );
 };
-  const [currentPath, setCurrentPath] = useState("");
+
+
   const [files, setFiles] = useState<BucketFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [uploading, setUploading] = useState(false);
