@@ -245,6 +245,9 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
   const [arrivalSaving, setArrivalSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
+  const getProfile = (userId: string) =>
+    allProfiles.find((p: any) => p.user_id === userId);
+
   // Filter by status and search by order ID, customer name, or phone
   const filtered = requests.filter(r => {
     const matchStatus = filterStatus === "all" || r.status === filterStatus;
