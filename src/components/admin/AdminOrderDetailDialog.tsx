@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,7 +13,8 @@ import { toast } from "@/hooks/use-toast";
 import { generateAdminInvoice } from "@/lib/generateAdminInvoice";
 import {
   Clock, Truck, Save, StickyNote, CalendarDays, FileDown, Loader2,
-  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag, CheckCircle2
+  User, MapPin, Package, CreditCard, Eye, ExternalLink, Receipt, Tag, CheckCircle2,
+  AlertTriangle, MessageSquare
 } from "lucide-react";
 
 interface Props {
@@ -21,6 +23,8 @@ interface Props {
   order: any;
   companySettings?: any;
 }
+
+const STATUS_ORDER = ["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"];
 
 const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: Props) => {
   const queryClient = useQueryClient();
@@ -33,6 +37,10 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
   const [markingCodPaid, setMarkingCodPaid] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [backwardConfirmOpen, setBackwardConfirmOpen] = useState(false);
+  const [pendingAdminPassword, setPendingAdminPassword] = useState("");
+  const [adminPasswordError, setAdminPasswordError] = useState("");
 
   useEffect(() => {
     if (!order || !open) return;
@@ -70,8 +78,44 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
       });
   }, [order, open]);
 
-  const saveUpdate = async () => {
+  const isBackwardStatus = (prev: string, next: string) => {
+    const prevIdx = STATUS_ORDER.indexOf(prev);
+    const nextIdx = STATUS_ORDER.indexOf(next);
+    // Both must be in the main flow (not -1) and next is earlier
+    return prevIdx !== -1 && nextIdx !== -1 && nextIdx < prevIdx;
+  };
+
+  const handleSaveClick = () => {
     if (!order) return;
+    const prevStatus = order.status;
+    const newStatus = deliveryForm.status;
+    if (isBackwardStatus(prevStatus, newStatus)) {
+      setPendingAdminPassword("");
+      setAdminPasswordError("");
+      setBackwardConfirmOpen(true);
+    } else {
+      doSaveUpdate();
+    }
+  };
+
+  const handleBackwardConfirm = async () => {
+    if (!pendingAdminPassword.trim()) {
+      setAdminPasswordError("Password is required");
+      return;
+    }
+    // Verify admin password by re-authenticating
+    const { data: { session } } = await supabase.auth.getSession();
+    const email = session?.user?.email;
+    if (!email) { setAdminPasswordError("Session expired. Please log in again."); return; }
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password: pendingAdminPassword });
+    if (authErr) { setAdminPasswordError("Incorrect password. Try again."); return; }
+    setBackwardConfirmOpen(false);
+    doSaveUpdate(true);
+  };
+
+  const doSaveUpdate = async (isBackward = false) => {
+    if (!order) return;
+    setSaving(true);
     const prevStatus = order.status;
     const newStatus = deliveryForm.status;
     const { error } = await supabase.from("orders").update({
@@ -82,18 +126,44 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
       expected_delivery: deliveryForm.expected_delivery || null,
       delivery_note: deliveryForm.delivery_note || null,
     } as any).eq("id", order.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) {
+      toast({ title: "Error saving order", description: error.message, variant: "destructive" });
+      setSaving(false);
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from("order_status_history" as any).insert({
-      order_id: order.id, status: newStatus, note: deliveryForm.delivery_note || null,
+      order_id: order.id, status: newStatus,
+      note: deliveryForm.delivery_note || (isBackward ? `⚠️ Status manually reverted from "${prevStatus.replace(/_/g, " ")}" by admin` : null),
       tracking_number: deliveryForm.tracking_number || null, courier_name: deliveryForm.courier_name || null,
       tracking_link: deliveryForm.tracking_link || null, expected_delivery: deliveryForm.expected_delivery || null,
       changed_by: session?.user?.id || null,
     } as any);
+    // Send SMS + email notification (awaited so errors surface)
     if (newStatus !== prevStatus) {
-      supabase.functions.invoke("send-order-sms", { body: { order_id: order.id, status: newStatus, tracking_number: deliveryForm.tracking_number || undefined } });
+      try {
+        const smsRes = await supabase.functions.invoke("send-order-sms", {
+          body: { order_id: order.id, status: newStatus, tracking_code: deliveryForm.tracking_number || undefined },
+        });
+        if (smsRes.error) {
+          console.warn("SMS invoke error:", smsRes.error);
+          toast({ title: "Order saved", description: "⚠️ SMS notification may not have been sent.", variant: "default" });
+        } else {
+          const smsData = smsRes.data;
+          const smsOk = smsData?.sms_status === "sent";
+          const emailOk = smsData?.email_attempted;
+          toast({
+            title: "Order updated successfully",
+            description: `${smsOk ? "✅ SMS sent" : "⚠️ SMS skipped"}${emailOk ? " · ✅ Email sent" : ""}`,
+          });
+        }
+      } catch (e) {
+        toast({ title: "Order saved", description: "⚠️ Notification could not be sent." });
+      }
+    } else {
+      toast({ title: "Order updated successfully" });
     }
-    toast({ title: "Order updated successfully" });
+    setSaving(false);
     onOpenChange(false);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
@@ -302,8 +372,11 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
               <Textarea value={deliveryForm.delivery_note} onChange={(e) => setDeliveryForm(f => ({ ...f, delivery_note: e.target.value }))} rows={2} placeholder="Note visible to customer..." />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={saveUpdate}><Save className="w-4 h-4 mr-1.5" /> Save & Update</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button>
+              <Button onClick={handleSaveClick} disabled={saving}>
+                {saving ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Save className="w-4 h-4 mr-1.5" />}
+                {saving ? "Saving..." : "Save & Update"}
+              </Button>
             </div>
           </div>
 
@@ -334,6 +407,55 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
           </div>
         </div>
       </DialogContent>
+
+      {/* Backward status confirmation with admin password */}
+      <AlertDialog open={backwardConfirmOpen} onOpenChange={setBackwardConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" /> Reverse Order Status?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                You are moving the order status <strong>backward</strong> from{" "}
+                <span className="capitalize font-medium text-foreground">{order?.status?.replace(/_/g, " ")}</span>{" "}
+                to{" "}
+                <span className="capitalize font-medium text-foreground">{deliveryForm.status?.replace(/_/g, " ")}</span>.
+              </span>
+              <span className="block text-sm text-muted-foreground">
+                This action will also re-send the SMS/email notification for this status. Enter your admin password to confirm.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="px-1 pb-2">
+            <Label htmlFor="admin-pw" className="text-sm font-medium">Admin Password</Label>
+            <Input
+              id="admin-pw"
+              type="password"
+              placeholder="Enter your password"
+              value={pendingAdminPassword}
+              onChange={(e) => { setPendingAdminPassword(e.target.value); setAdminPasswordError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleBackwardConfirm(); }}
+              className="mt-1"
+              autoFocus
+            />
+            {adminPasswordError && (
+              <p className="text-xs text-destructive mt-1">{adminPasswordError}</p>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setBackwardConfirmOpen(false); setPendingAdminPassword(""); setAdminPasswordError(""); }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleBackwardConfirm(); }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Confirm Reversal
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };
