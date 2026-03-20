@@ -39,13 +39,13 @@ import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
-import ImageEditor from "@/components/admin/ImageEditor";
+
 import ComponentFamilyManager from "@/components/admin/ComponentFamilyManager";
 import EmailTemplatesManager from "@/components/admin/EmailTemplatesManager";
 import EmailInboxViewer from "@/components/admin/EmailInboxViewer";
 import SystemMetrics from "@/components/admin/SystemMetrics";
 
-type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_inbox" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "image_editor" | "system_metrics";
+type Tab = "products" | "micro_electronics" | "categories" | "orders" | "delivery_updates" | "banners" | "promo_banners" | "deals" | "pages" | "reports" | "contacts" | "coupons" | "referral_codes" | "users" | "reviews" | "combos" | "seo" | "company" | "bank" | "sms_templates" | "sms_logs" | "sms_campaign" | "email_templates" | "email_inbox" | "stock" | "qr_scan" | "sales" | "payment_settings" | "shipping_settings" | "db_tools" | "wallet" | "navbar" | "invoice_template" | "homepage_sections" | "preorders" | "pcb_orders" | "moderator_permissions" | "activity_logs" | "system_logs" | "search_analytics" | "documentation" | "system_metrics";
 
 interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
@@ -701,7 +701,7 @@ const AdminDashboard = () => {
     {
       label: "Content & Site", icon: Globe, defaultOpen: false, adminOnly: true,
       items: [
-        { id: "image_editor" as Tab, label: "Image Editor", icon: Palette, count: 0 },
+        
         { id: "homepage_sections" as Tab, label: "Homepage Sections", icon: LayoutDashboard, count: 0 },
         { id: "navbar" as Tab, label: "Navbar Manager", icon: NavIcon, count: 0 },
         { id: "invoice_template" as Tab, label: "Invoice Template", icon: FileText, count: 0 },
@@ -3854,12 +3854,6 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {/* ═══ Image Editor Tab ═══ */}
-          {tab === "image_editor" && (
-            <div className="animate-in fade-in duration-200 -mx-4 -mt-2 h-[calc(100vh-8rem)]">
-              <ImageEditor />
-            </div>
-          )}
 
           {/* ═══ SMS Campaign Tab ═══ */}
           {tab === "sms_campaign" && (
