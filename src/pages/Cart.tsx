@@ -116,7 +116,7 @@ const Cart = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
       <main className="pt-[120px] md:pt-[152px]">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
           <h1 className="text-2xl font-bold font-display text-foreground mb-6 flex items-center gap-2">
             <ShoppingCart className="w-6 h-6" /> Shopping Cart
             <span className="text-sm font-normal text-muted-foreground">({items.length} items)</span>

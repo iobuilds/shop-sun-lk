@@ -76,7 +76,7 @@ const DealsPage = () => {
       />
       <Navbar />
       <main className="pt-[120px] md:pt-[152px]">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
           <div className="flex items-center gap-3 mb-8">
             <Tag className="w-6 h-6 text-destructive" />
             <h1 className="text-3xl font-bold font-display text-foreground">Daily Deals</h1>
