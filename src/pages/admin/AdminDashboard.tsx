@@ -1331,7 +1331,7 @@ const AdminDashboard = () => {
           <img
             src={companySettings?.logo_url || "/site-logo.svg"}
             alt={companySettings?.store_name || "Logo"}
-            className="h-8 w-auto object-contain max-w-[160px]"
+            className="h-8 w-auto object-contain max-w-[220px]"
           />
           {(companySettings?.navbar_brand_mode === "logo_text" || companySettings?.navbar_brand_mode === "text_only") && (
             <span className="text-lg font-bold font-display text-foreground hidden sm:inline">{companySettings?.store_name || "NanoCircuit.lk"}</span>

@@ -309,7 +309,7 @@ const Navbar = () => {
               return (
                 <>
                   {mode !== "text_only" && logoUrl ? (
-                    <img src={logoUrl} alt={storeName} style={{ height: `${height}px`, width: "auto", maxWidth: "160px" }} className="object-contain" />
+                    <img src={logoUrl} alt={storeName} style={{ height: `${height}px`, width: "auto", maxWidth: "220px" }} className="object-contain" />
                   ) : mode !== "text_only" ? (
                     <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
                       <span className="text-secondary-foreground font-bold text-lg font-display">{storeName?.charAt(0) || "N"}</span>
