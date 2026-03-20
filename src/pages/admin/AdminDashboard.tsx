@@ -1804,7 +1804,7 @@ const AdminDashboard = () => {
                                  <button onClick={() => openOrderDetail(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-medium transition-colors" title="Manage order">
                                    <Truck className="w-3.5 h-3.5" /> Manage
                                  </button>
-                                 <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
+                                 <button onClick={() => setDeleteOrderConfirm(o.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete order"><Trash2 className="w-3.5 h-3.5" /></button>
                                </div>
                              </td>
                            </tr>
