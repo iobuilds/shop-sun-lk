@@ -39,7 +39,7 @@ import SystemLogs from "@/components/admin/SystemLogs";
 import ReferralCodesManager from "@/components/admin/ReferralCodesManager";
 import AdminDocumentation from "@/components/admin/AdminDocumentation";
 import SearchAnalytics from "@/components/admin/SearchAnalytics";
-import ImageEditor from "@/components/admin/ImageEditor";
+
 import ComponentFamilyManager from "@/components/admin/ComponentFamilyManager";
 import EmailTemplatesManager from "@/components/admin/EmailTemplatesManager";
 import EmailInboxViewer from "@/components/admin/EmailInboxViewer";
