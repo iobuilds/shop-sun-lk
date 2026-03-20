@@ -106,7 +106,7 @@ const ProductDetail = () => {
       <div className="min-h-screen bg-background">
         <Navbar />
         <main className="pt-[120px] md:pt-[152px]">
-          <div className="container mx-auto px-4 py-8">
+          <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="aspect-square bg-muted rounded-xl animate-pulse" />
               <div className="space-y-4">
@@ -228,7 +228,7 @@ const ProductDetail = () => {
       />
       <Navbar />
       <main className="pt-[120px] md:pt-[152px]">
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
           {/* Breadcrumb */}
           <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2">
             <a href="/" className="hover:text-secondary transition-colors">Home</a>
@@ -477,7 +477,7 @@ const ProductDetail = () => {
 
         {/* International Links */}
         {externalLinks && externalLinks.length > 0 && (
-          <div className="container mx-auto px-4 py-8 border-t border-border">
+          <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 border-t border-border">
             <h2 className="text-lg font-bold font-display text-foreground mb-4 flex items-center gap-2">
               <ExternalLink className="w-5 h-5 text-secondary" /> International Links
             </h2>
@@ -503,7 +503,7 @@ const ProductDetail = () => {
 
         {/* Similar / Alternative Products */}
         {similarProducts && similarProducts.length > 0 && (
-          <div className="container mx-auto px-4 py-8 border-t border-border">
+          <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 border-t border-border">
             <h2 className="text-lg font-bold font-display text-foreground mb-4 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-secondary" /> Similar Items / Alternatives
             </h2>
