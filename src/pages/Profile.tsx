@@ -422,6 +422,85 @@ const OrdersSection = ({
                     ))}
                   </div>
                   <OrderStepper status={order.status} />
+
+                  {/* Shipping details – shown when shipped or out for delivery */}
+                  {["shipped", "out_for_delivery", "delivered"].includes(order.status) && (order.courier_name || order.tracking_number || order.expected_delivery) && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Truck className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Shipping Details</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {order.courier_name && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <Package className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Courier</p>
+                              <p className="text-sm font-semibold text-foreground">{order.courier_name}</p>
+                            </div>
+                          </div>
+                        )}
+                        {order.tracking_number && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <MapPinIcon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Tracking No.</p>
+                              <p className="text-sm font-mono font-semibold text-foreground">{order.tracking_number}</p>
+                            </div>
+                          </div>
+                        )}
+                        {order.expected_delivery && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Est. Delivery</p>
+                              <p className="text-sm font-semibold text-foreground">{order.expected_delivery}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {order.tracking_link && (
+                        <a href={order.tracking_link} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-3 text-xs text-primary hover:underline font-medium">
+                          <ExternalLink className="w-3.5 h-3.5" /> Track on courier website
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action buttons: Confirm Received + Return Request */}
+                  {["shipped", "out_for_delivery"].includes(order.status) && (
+                    <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
+                      <Button size="sm" className="gap-1.5 bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+                        disabled={confirmingReceived === order.id}
+                        onClick={() => handleConfirmReceived(order.id)}>
+                        {confirmingReceived === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <CheckCircle className="w-3.5 h-3.5" />}
+                        Confirm Received
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        disabled={startingReturn === order.id}
+                        onClick={() => handleReturnRequest(order)}>
+                        {startingReturn === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RotateCcw className="w-3.5 h-3.5" />}
+                        Request Return
+                      </Button>
+                    </div>
+                  )}
+                  {order.status === "delivered" && (
+                    <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        disabled={startingReturn === order.id}
+                        onClick={() => handleReturnRequest(order)}>
+                        {startingReturn === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RotateCcw className="w-3.5 h-3.5" />}
+                        Request Return
+                      </Button>
+                    </div>
+                  )}
                   {order.payment_method === "bank_transfer" && (
                     <div className="mt-4 pt-4 border-t border-border">
                       {(order as any).receipt_url ? (
