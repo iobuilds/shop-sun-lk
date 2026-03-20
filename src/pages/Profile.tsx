@@ -1293,6 +1293,10 @@ const Profile = () => {
                     orders={orders}
                     uploadingReceipt={uploadingReceipt}
                     handleReceiptUpload={handleReceiptUpload}
+                    confirmingReceived={confirmingReceived}
+                    handleConfirmReceived={handleConfirmReceived}
+                    startingReturn={startingReturn}
+                    handleReturnRequest={handleReturnRequest}
                   />
                 </motion.div>
               )}
