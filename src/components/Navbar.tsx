@@ -7,6 +7,7 @@ import { useCart } from "@/contexts/CartContext";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranding } from "@/hooks/useBranding";
+import BrandText from "@/components/BrandText";
 
 interface CustomLink {
   id: string;
@@ -315,7 +316,7 @@ const Navbar = () => {
                     </div>
                   ) : null}
                   {mode !== "logo_only" && (
-                    <span className="text-xl font-bold font-display text-foreground">{storeName}</span>
+                    <BrandText storeName={storeName} showTagline={mode === "text_only"} size="md" />
                   )}
                 </>
               );

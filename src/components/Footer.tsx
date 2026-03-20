@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Facebook, Instagram, Youtube, Mail, Phone, MapPin, ArrowRight } from "lucide-react";
 import { useBranding } from "@/hooks/useBranding";
+import BrandText from "@/components/BrandText";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -61,16 +62,18 @@ const Footer = () => {
           {/* Brand */}
           <div className="lg:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-              {logoUrl ? (
+              {company?.navbar_brand_mode === "text_only" ? (
+                <BrandText storeName={storeName} showTagline size="md" />
+              ) : logoUrl ? (
                 <img src={logoUrl} alt={storeName} className="h-10 w-auto object-contain max-w-[180px]" style={{ filter: "brightness(0) invert(1)" }} />
               ) : (
                 <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
                   <span className="text-secondary-foreground font-bold text-lg font-display">{storeName.charAt(0)}</span>
                 </div>
               )}
-              {company?.navbar_brand_mode === "logo_text" || company?.navbar_brand_mode === "text_only" ? (
-                <span className="text-xl font-bold font-display">{storeName}</span>
-              ) : null}
+              {company?.navbar_brand_mode === "logo_text" && (
+                <BrandText storeName={storeName} size="md" />
+              )}
             </div>
             <p className="text-primary-foreground/55 text-sm mb-5 leading-relaxed">{description}</p>
             <div className="flex gap-2">
