@@ -139,6 +139,7 @@ const AdminDashboard = () => {
   });
   const [orderStatusHistory, setOrderStatusHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [deleteOrderConfirm, setDeleteOrderConfirm] = useState<string | null>(null);
 
   // User detail dialog
   const [userDetailOpen, setUserDetailOpen] = useState(false);
