@@ -96,7 +96,7 @@ const HeroBanner = () => {
               initial={{ opacity: 0, x: -35 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.55, duration: 0.45, ease: "easeOut" }}
-              className="text-primary-foreground/80 text-sm sm:text-base lg:text-lg mb-6 leading-relaxed max-w-md"
+              className="text-primary-foreground/80 text-xs sm:text-base lg:text-lg mb-4 sm:mb-6 leading-relaxed max-w-md hidden sm:block"
             >
               {slide.subtitle}
             </motion.p>
