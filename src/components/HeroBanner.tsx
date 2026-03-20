@@ -123,7 +123,7 @@ const HeroBanner = () => {
   );
 
   return (
-    <section className="relative w-full overflow-hidden rounded-2xl">
+    <section className="relative w-full overflow-hidden rounded-xl sm:rounded-2xl">
       <div className="relative h-[280px] sm:h-[400px] lg:h-[480px]">
         <AnimatePresence initial={false} custom={direction} mode="wait">
           <motion.div
