@@ -282,6 +282,71 @@ const OrdersSection = ({
     return "bg-muted text-muted-foreground";
   };
 
+  const ORDER_STEPS = [
+    { key: "pending",           label: "Pending" },
+    { key: "confirmed",         label: "Verified" },
+    { key: "processing",        label: "Processing" },
+    { key: "packed",            label: "Packed" },
+    { key: "shipped",           label: "Shipped" },
+    { key: "out_for_delivery",  label: "Out" },
+    { key: "delivered",         label: "Delivered" },
+  ] as const;
+
+  const OrderStepper = ({ status }: { status: string }) => {
+    if (["cancelled", "returned"].includes(status)) {
+      return (
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+            status === "cancelled" ? "bg-destructive/10 text-destructive" : "bg-accent/20 text-accent-foreground"
+          }`}>
+            <span className="w-1.5 h-1.5 rounded-full bg-current" />
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </div>
+        </div>
+      );
+    }
+    const currentIdx = ORDER_STEPS.findIndex(s => s.key === status);
+    return (
+      <div className="mt-4 pt-4 border-t border-border">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+          <Clock className="w-3 h-3" /> Order Status
+        </p>
+        <div className="flex items-center gap-0">
+          {ORDER_STEPS.map((step, i) => {
+            const done = i < currentIdx;
+            const active = i === currentIdx;
+            const future = i > currentIdx;
+            return (
+              <div key={step.key} className="flex items-center flex-1 min-w-0">
+                <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all ${
+                    done    ? "bg-secondary border-secondary text-secondary-foreground" :
+                    active  ? "bg-primary border-primary text-primary-foreground ring-2 ring-primary/30" :
+                              "bg-background border-border text-muted-foreground"
+                  }`}>
+                    {done ? (
+                      <CheckCircle className="w-3.5 h-3.5" />
+                    ) : (
+                      <span className="text-[10px] font-bold">{i + 1}</span>
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-medium leading-tight text-center max-w-[44px] truncate ${
+                    active ? "text-primary" : done ? "text-secondary" : "text-muted-foreground"
+                  }`}>{step.label}</span>
+                </div>
+                {i < ORDER_STEPS.length - 1 && (
+                  <div className={`h-0.5 flex-1 mx-0.5 mb-4 rounded-full transition-all ${
+                    done ? "bg-secondary" : "bg-border"
+                  }`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const tabs = [
     { id: "regular" as const, label: "Regular Orders", count: orders?.length ?? 0 },
     { id: "preorders" as const, label: "Pre-Orders", count: preorders?.length ?? 0 },
@@ -356,6 +421,7 @@ const OrdersSection = ({
                       </div>
                     ))}
                   </div>
+                  <OrderStepper status={order.status} />
                   {order.payment_method === "bank_transfer" && (
                     <div className="mt-4 pt-4 border-t border-border">
                       {(order as any).receipt_url ? (
