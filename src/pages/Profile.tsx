@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck, Paperclip, FileText, X, Image as ImageIcon } from "lucide-react";
+import { User, Package, MapPin, LogOut, Loader2, Upload, CheckCircle, Clock, Download, MessageSquare, Send, ChevronLeft, Wallet, ArrowUpCircle, ArrowDownCircle, Tag, Percent, BadgeCheck, Paperclip, FileText, X, Image as ImageIcon, Truck, RotateCcw, ExternalLink, MapPinIcon } from "lucide-react";
 import { generateInvoice } from "@/lib/generateInvoice";
 import type { Session } from "@supabase/supabase-js";
 
@@ -239,11 +239,19 @@ const OrdersSection = ({
   orders,
   uploadingReceipt,
   handleReceiptUpload,
+  confirmingReceived,
+  handleConfirmReceived,
+  startingReturn,
+  handleReturnRequest,
 }: {
   session: any;
   orders: any[] | undefined;
   uploadingReceipt: string | null;
   handleReceiptUpload: (orderId: string, file: File) => void;
+  confirmingReceived: string | null;
+  handleConfirmReceived: (orderId: string) => void;
+  startingReturn: string | null;
+  handleReturnRequest: (order: any) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<"regular" | "preorders" | "pcb">("regular");
 
@@ -422,6 +430,85 @@ const OrdersSection = ({
                     ))}
                   </div>
                   <OrderStepper status={order.status} />
+
+                  {/* Shipping details – shown when shipped or out for delivery */}
+                  {["shipped", "out_for_delivery", "delivered"].includes(order.status) && (order.courier_name || order.tracking_number || order.expected_delivery) && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Truck className="w-4 h-4 text-primary" />
+                        <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Shipping Details</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {order.courier_name && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <Package className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Courier</p>
+                              <p className="text-sm font-semibold text-foreground">{order.courier_name}</p>
+                            </div>
+                          </div>
+                        )}
+                        {order.tracking_number && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <MapPinIcon className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Tracking No.</p>
+                              <p className="text-sm font-mono font-semibold text-foreground">{order.tracking_number}</p>
+                            </div>
+                          </div>
+                        )}
+                        {order.expected_delivery && (
+                          <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/40 border border-border">
+                            <Clock className="w-3.5 h-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Est. Delivery</p>
+                              <p className="text-sm font-semibold text-foreground">{order.expected_delivery}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      {order.tracking_link && (
+                        <a href={order.tracking_link} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 mt-3 text-xs text-primary hover:underline font-medium">
+                          <ExternalLink className="w-3.5 h-3.5" /> Track on courier website
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action buttons: Confirm Received + Return Request */}
+                  {["shipped", "out_for_delivery"].includes(order.status) && (
+                    <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
+                      <Button size="sm" className="gap-1.5 bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+                        disabled={confirmingReceived === order.id}
+                        onClick={() => handleConfirmReceived(order.id)}>
+                        {confirmingReceived === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <CheckCircle className="w-3.5 h-3.5" />}
+                        Confirm Received
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        disabled={startingReturn === order.id}
+                        onClick={() => handleReturnRequest(order)}>
+                        {startingReturn === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RotateCcw className="w-3.5 h-3.5" />}
+                        Request Return
+                      </Button>
+                    </div>
+                  )}
+                  {order.status === "delivered" && (
+                    <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+                        disabled={startingReturn === order.id}
+                        onClick={() => handleReturnRequest(order)}>
+                        {startingReturn === order.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RotateCcw className="w-3.5 h-3.5" />}
+                        Request Return
+                      </Button>
+                    </div>
+                  )}
                   {order.payment_method === "bank_transfer" && (
                     <div className="mt-4 pt-4 border-t border-border">
                       {(order as any).receipt_url ? (
@@ -585,6 +672,8 @@ const Profile = () => {
   const [tab, setTab] = useState<ProfileTab>((searchParams.get("tab") as ProfileTab) || "details");
   const [saving, setSaving] = useState(false);
   const [uploadingReceipt, setUploadingReceipt] = useState<string | null>(null);
+  const [confirmingReceived, setConfirmingReceived] = useState<string | null>(null);
+  const [startingReturn, setStartingReturn] = useState<string | null>(null);
   const [selectedConvo, setSelectedConvo] = useState<string | null>(searchParams.get("convo") || null);
   const [newMessage, setNewMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -777,6 +866,74 @@ const Profile = () => {
       toast.error(err.message || "Failed to upload receipt");
     } finally {
       setUploadingReceipt(null);
+    }
+  };
+
+  const handleConfirmReceived = async (orderId: string) => {
+    setConfirmingReceived(orderId);
+    try {
+      const { error } = await supabase
+        .from("orders")
+        .update({ status: "delivered" })
+        .eq("id", orderId);
+      if (error) throw error;
+      await supabase.from("order_status_history" as any).insert({
+        order_id: orderId,
+        status: "delivered",
+        changed_by: session?.user?.id,
+        note: "Confirmed received by customer",
+      });
+      toast.success("Order marked as delivered!");
+      queryClient.invalidateQueries({ queryKey: ["user-orders"] });
+    } catch (err: any) {
+      toast.error(err.message || "Failed to confirm");
+    } finally {
+      setConfirmingReceived(null);
+    }
+  };
+
+  const handleReturnRequest = async (order: any) => {
+    if (!session?.user) return;
+    setStartingReturn(order.id);
+    try {
+      const subject = `Return Request – Order #${order.id.slice(0, 8).toUpperCase()}`;
+      // Check if a conversation for this order already exists
+      const { data: existing } = await supabase
+        .from("conversations" as any)
+        .select("id")
+        .eq("user_id", session.user.id)
+        .ilike("subject", `Return Request – Order #${order.id.slice(0, 8).toUpperCase()}%`)
+        .maybeSingle();
+
+      let convoId: string;
+      if (existing) {
+        convoId = (existing as any).id;
+      } else {
+        const { data: newConvo, error } = await supabase
+          .from("conversations" as any)
+          .insert({ user_id: session.user.id, subject, status: "open" })
+          .select("id")
+          .single();
+        if (error) throw error;
+        convoId = (newConvo as any).id;
+        // Send an initial message
+        await supabase.from("conversation_messages" as any).insert({
+          conversation_id: convoId,
+          sender_id: session.user.id,
+          sender_type: "user",
+          message: `Hi, I would like to request a return for Order #${order.id.slice(0, 8).toUpperCase()} placed on ${new Date(order.created_at).toLocaleDateString()}. Please assist me with the return process.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["user-conversations"] });
+      }
+
+      // Switch to messages tab and open the conversation
+      setTab("messages" as any);
+      setSelectedConvo(convoId);
+      toast.success("Return request opened in Messages");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start return request");
+    } finally {
+      setStartingReturn(null);
     }
   };
 
@@ -1136,6 +1293,10 @@ const Profile = () => {
                     orders={orders}
                     uploadingReceipt={uploadingReceipt}
                     handleReceiptUpload={handleReceiptUpload}
+                    confirmingReceived={confirmingReceived}
+                    handleConfirmReceived={handleConfirmReceived}
+                    startingReturn={startingReturn}
+                    handleReturnRequest={handleReturnRequest}
                   />
                 </motion.div>
               )}
