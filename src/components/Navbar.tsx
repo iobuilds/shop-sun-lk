@@ -597,6 +597,11 @@ const Navbar = () => {
                 <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
                 </Link>
+                {session && (
+                  <Link to="/profile?tab=orders" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors flex items-center gap-2" onClick={() => setMobileOpen(false)}>
+                    <Package className="w-4 h-4" /> My Orders
+                  </Link>
+                )}
                 <Link to="/wishlist" className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   Wishlist
                 </Link>
