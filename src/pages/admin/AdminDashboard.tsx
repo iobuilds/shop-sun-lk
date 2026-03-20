@@ -3854,12 +3854,6 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {/* ═══ Image Editor Tab ═══ */}
-          {tab === "image_editor" && (
-            <div className="animate-in fade-in duration-200 -mx-4 -mt-2 h-[calc(100vh-8rem)]">
-              <ImageEditor />
-            </div>
-          )}
 
           {/* ═══ SMS Campaign Tab ═══ */}
           {tab === "sms_campaign" && (
