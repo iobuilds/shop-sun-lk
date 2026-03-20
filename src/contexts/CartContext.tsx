@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface CartItem {
   id: string;
@@ -50,6 +51,74 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  // ── Validate cart against live DB on mount ──────────────────────────────────
+  useEffect(() => {
+    const syncCart = async () => {
+      const current = readCart();
+      if (!current.length) return;
+
+      const ids = current.map((i) => i.id);
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, price, images, slug, is_active")
+        .in("id", ids);
+
+      if (error || !data) return;
+
+      const liveMap = new Map(data.map((p) => [p.id, p]));
+
+      let removed = 0;
+      let updated = 0;
+
+      const synced = current
+        .filter((item) => {
+          const live = liveMap.get(item.id);
+          if (!live || live.is_active === false) {
+            removed++;
+            return false;
+          }
+          return true;
+        })
+        .map((item) => {
+          const live = liveMap.get(item.id)!;
+          const newPrice = Number(live.price);
+          const newName = live.name;
+          const newImage = live.images?.[0] || item.image;
+          const newSlug = live.slug;
+          if (
+            newPrice !== item.price ||
+            newName !== item.name ||
+            newImage !== item.image ||
+            newSlug !== item.slug
+          ) {
+            updated++;
+            return { ...item, price: newPrice, name: newName, image: newImage, slug: newSlug };
+          }
+          return item;
+        });
+
+      if (removed > 0 || updated > 0) {
+        setItems(synced);
+        if (removed > 0) {
+          toast({
+            title: `${removed} item${removed > 1 ? "s" : ""} removed from cart`,
+            description: "Some products are no longer available.",
+            variant: "destructive",
+          });
+        }
+        if (updated > 0) {
+          toast({
+            title: "Cart updated",
+            description: `${updated} item${updated > 1 ? "s" : ""} refreshed with the latest price/details.`,
+          });
+        }
+      }
+    };
+
+    syncCart();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addItem = (item: Omit<CartItem, "quantity">, quantity = 1) => {
