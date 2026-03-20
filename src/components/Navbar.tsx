@@ -595,6 +595,13 @@ const Navbar = () => {
                 </a>
               ))}
               <div className="border-t border-border mt-2 pt-2 flex flex-col gap-1">
+                <Link
+                  to="/pre-order"
+                  className="px-3 py-2.5 text-sm font-semibold text-secondary-foreground bg-secondary rounded-md transition-colors flex items-center gap-2"
+                  onClick={() => setMobileOpen(false)}
+                >
+                  📦 Pre-Order
+                </Link>
                 <Link to={session ? "/profile" : "/auth"} className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors" onClick={() => setMobileOpen(false)}>
                   My Account
                 </Link>
