@@ -316,7 +316,7 @@ const Navbar = () => {
                     </div>
                   ) : null}
                   {mode !== "logo_only" && (
-                    <span className="text-xl font-bold font-display text-foreground">{storeName}</span>
+                    <BrandText storeName={storeName} showTagline={mode === "text_only"} size="md" />
                   )}
                 </>
               );
