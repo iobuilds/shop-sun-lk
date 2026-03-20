@@ -820,7 +820,7 @@ const Profile = () => {
 
       let convoId: string;
       if (existing) {
-        convoId = existing.id;
+        convoId = (existing as any).id;
       } else {
         const { data: newConvo, error } = await supabase
           .from("conversations" as any)
@@ -828,7 +828,7 @@ const Profile = () => {
           .select("id")
           .single();
         if (error) throw error;
-        convoId = newConvo.id;
+        convoId = (newConvo as any).id;
         // Send an initial message
         await supabase.from("conversation_messages" as any).insert({
           conversation_id: convoId,
