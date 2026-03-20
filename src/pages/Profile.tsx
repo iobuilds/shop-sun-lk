@@ -233,6 +233,283 @@ const MyCouponsSection = ({ userId, userPhone }: { userId: string; userPhone: st
   );
 };
 
+// ── Orders Section (Regular + Pre-Orders + PCB Orders) ───────────────────────
+const OrdersSection = ({
+  session,
+  orders,
+  uploadingReceipt,
+  handleReceiptUpload,
+}: {
+  session: any;
+  orders: any[] | undefined;
+  uploadingReceipt: string | null;
+  handleReceiptUpload: (orderId: string, file: File) => void;
+}) => {
+  const [activeTab, setActiveTab] = useState<"regular" | "preorders" | "pcb">("regular");
+
+  const { data: preorders } = useQuery({
+    queryKey: ["user-preorders", session?.user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("preorder_requests" as any)
+        .select("*, preorder_items(*)")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!session?.user?.id,
+  });
+
+  const { data: pcbOrders } = useQuery({
+    queryKey: ["user-pcb-orders", session?.user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pcb_order_requests" as any)
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!session?.user?.id,
+  });
+
+  const statusColor = (status: string) => {
+    if (["completed", "delivered", "shipped"].includes(status)) return "bg-secondary/10 text-secondary";
+    if (["pending", "quote_pending", "quoted"].includes(status)) return "bg-accent text-accent-foreground";
+    if (["cancelled", "rejected"].includes(status)) return "bg-destructive/10 text-destructive";
+    return "bg-muted text-muted-foreground";
+  };
+
+  const tabs = [
+    { id: "regular" as const, label: "Regular Orders", count: orders?.length ?? 0 },
+    { id: "preorders" as const, label: "Pre-Orders", count: preorders?.length ?? 0 },
+    { id: "pcb" as const, label: "PCB Orders", count: pcbOrders?.length ?? 0 },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* Sub-tabs */}
+      <div className="flex items-center gap-1 bg-muted/40 rounded-xl p-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === t.id
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                activeTab === t.id ? "bg-secondary/10 text-secondary" : "bg-muted text-muted-foreground"
+              }`}>{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Regular Orders */}
+      {activeTab === "regular" && (
+        <div>
+          {orders && orders.length > 0 ? (
+            <div className="space-y-4">
+              {orders.map((order) => (
+                <div key={order.id} className="bg-card rounded-xl border border-border p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Order #{order.id.slice(0, 8)}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => generateInvoice({
+                          ...order,
+                          order_items: (order.order_items as any[])?.map((item: any) => ({
+                            quantity: item.quantity, unit_price: item.unit_price,
+                            total_price: item.total_price, products: item.products,
+                          })) || [],
+                        })}
+                        className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Download Invoice"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusColor(order.status)}`}>{order.status}</span>
+                      <span className="text-sm font-bold text-foreground">Rs. {order.total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {(order.order_items as any[])?.map((item: any) => (
+                      <div key={item.id} className="flex items-center gap-3">
+                        <img src={item.products?.images?.[0] || "/placeholder.svg"} alt="" className="w-12 h-12 rounded-lg object-cover border border-border" />
+                        <div className="flex-1 min-w-0">
+                          <Link to={`/product/${item.products?.slug || ""}`} className="text-sm font-medium text-foreground hover:text-secondary transition-colors line-clamp-1">
+                            {item.products?.name || "Product"}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">Qty: {item.quantity} × Rs. {item.unit_price.toLocaleString()}</p>
+                        </div>
+                        <p className="text-sm font-medium text-foreground">Rs. {item.total_price.toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {order.payment_method === "bank_transfer" && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      {(order as any).receipt_url ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <CheckCircle className="w-4 h-4 text-secondary" />
+                          <span className="text-sm text-secondary font-medium">Receipt uploaded</span>
+                          <div className="flex items-center gap-2 ml-auto">
+                            <a href={(order as any).receipt_url} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground underline hover:text-foreground">View receipt</a>
+                            <label>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium cursor-pointer hover:bg-muted transition-colors text-muted-foreground">
+                                <Upload className="w-3 h-3" />{uploadingReceipt === order.id ? "Uploading..." : "Re-upload"}
+                              </span>
+                              <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingReceipt === order.id}
+                                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleReceiptUpload(order.id, f); e.target.value = ""; }} />
+                            </label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <Clock className="w-4 h-4 text-accent" />
+                          <span className="text-sm text-muted-foreground">Upload payment receipt</span>
+                          <label className="ml-auto">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium cursor-pointer hover:opacity-90 transition-opacity">
+                              <Upload className="w-3.5 h-3.5" />{uploadingReceipt === order.id ? "Uploading..." : "Upload"}
+                            </span>
+                            <input type="file" accept="image/*,.pdf" className="hidden" disabled={uploadingReceipt === order.id}
+                              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleReceiptUpload(order.id, f); e.target.value = ""; }} />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border p-12 text-center">
+              <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+              <p className="text-muted-foreground mb-4">No orders yet</p>
+              <Link to="/"><Button variant="outline" size="sm">Start Shopping</Button></Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pre-Orders */}
+      {activeTab === "preorders" && (
+        <div>
+          {preorders && preorders.length > 0 ? (
+            <div className="space-y-4">
+              {preorders.map((po: any) => (
+                <div key={po.id} className="bg-card rounded-xl border border-border p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Pre-Order #{po.id.slice(0, 8)}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(po.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusColor(po.status)}`}>{po.status?.replace(/_/g, " ")}</span>
+                      {po.grand_total && <span className="text-sm font-bold text-foreground">Rs. {Number(po.grand_total).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  {po.preorder_items?.length > 0 && (
+                    <div className="space-y-1.5 mb-3">
+                      {po.preorder_items.map((item: any) => (
+                        <div key={item.id} className="flex items-center gap-2 text-sm">
+                          <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-foreground flex-1 truncate">{item.product_name}</span>
+                          <span className="text-muted-foreground text-xs">×{item.quantity}</span>
+                          {item.unit_price && <span className="text-xs font-medium text-foreground">Rs. {Number(item.unit_price).toLocaleString()}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      po.payment_status === "paid" ? "bg-secondary/10 text-secondary" : "bg-accent/10 text-accent-foreground"
+                    }`}>Payment: {po.payment_status}</span>
+                    <Link to="/pre-order">
+                      <Button variant="ghost" size="sm" className="text-xs h-7">View Details →</Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border p-12 text-center">
+              <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+              <p className="text-muted-foreground mb-4">No pre-orders yet</p>
+              <Link to="/pre-order"><Button variant="outline" size="sm">Browse Pre-Orders</Button></Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PCB Orders */}
+      {activeTab === "pcb" && (
+        <div>
+          {pcbOrders && pcbOrders.length > 0 ? (
+            <div className="space-y-4">
+              {pcbOrders.map((pcb: any) => (
+                <div key={pcb.id} className="bg-card rounded-xl border border-border p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">PCB Order #{pcb.id.slice(0, 8)}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(pcb.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${statusColor(pcb.status)}`}>{pcb.status?.replace(/_/g, " ")}</span>
+                      {pcb.grand_total && <span className="text-sm font-bold text-foreground">Rs. {Number(pcb.grand_total).toLocaleString()}</span>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div className="bg-muted/40 rounded-lg p-2.5">
+                      <p className="text-[10px] text-muted-foreground">Layers</p>
+                      <p className="text-sm font-semibold text-foreground">{pcb.layer_count}</p>
+                    </div>
+                    <div className="bg-muted/40 rounded-lg p-2.5">
+                      <p className="text-[10px] text-muted-foreground">Color</p>
+                      <p className="text-sm font-semibold text-foreground capitalize">{pcb.pcb_color}</p>
+                    </div>
+                    <div className="bg-muted/40 rounded-lg p-2.5">
+                      <p className="text-[10px] text-muted-foreground">Quantity</p>
+                      <p className="text-sm font-semibold text-foreground">{pcb.quantity}</p>
+                    </div>
+                    <div className="bg-muted/40 rounded-lg p-2.5">
+                      <p className="text-[10px] text-muted-foreground">Thickness</p>
+                      <p className="text-sm font-semibold text-foreground">{pcb.board_thickness}mm</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between pt-2 border-t border-border">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      pcb.payment_status === "paid" ? "bg-secondary/10 text-secondary" : "bg-accent/10 text-accent-foreground"
+                    }`}>Payment: {pcb.payment_status}</span>
+                    <Link to="/pcb-order">
+                      <Button variant="ghost" size="sm" className="text-xs h-7">View Details →</Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-card rounded-xl border border-border p-12 text-center">
+              <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
+              <p className="text-muted-foreground mb-4">No PCB orders yet</p>
+              <Link to="/pcb-order"><Button variant="outline" size="sm">Order PCBs</Button></Link>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Profile = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
