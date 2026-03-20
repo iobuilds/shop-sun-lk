@@ -422,7 +422,7 @@ const Checkout = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
+      <main className="pt-[120px] md:pt-[152px]">
         <div className="container mx-auto px-4 py-8">
           <button onClick={() => navigate("/cart")} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
             <ArrowLeft className="w-4 h-4" /> Back to Cart

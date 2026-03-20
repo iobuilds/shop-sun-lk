@@ -115,7 +115,7 @@ const Cart = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
+      <main className="pt-[120px] md:pt-[152px]">
         <div className="container mx-auto px-4 py-8">
           <h1 className="text-2xl font-bold font-display text-foreground mb-6 flex items-center gap-2">
             <ShoppingCart className="w-6 h-6" /> Shopping Cart

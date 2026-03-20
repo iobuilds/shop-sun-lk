@@ -105,7 +105,7 @@ const ProductDetail = () => {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="pt-[136px] md:pt-[160px]">
+        <main className="pt-[120px] md:pt-[152px]">
           <div className="container mx-auto px-4 py-8">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="aspect-square bg-muted rounded-xl animate-pulse" />
@@ -126,7 +126,7 @@ const ProductDetail = () => {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="pt-[136px] md:pt-[160px] flex items-center justify-center">
+        <main className="pt-[120px] md:pt-[152px] flex items-center justify-center">
           <div className="text-center">
             <h1 className="text-2xl font-bold font-display text-foreground mb-2">Product Not Found</h1>
             <p className="text-muted-foreground">The product you're looking for doesn't exist.</p>
@@ -227,7 +227,7 @@ const ProductDetail = () => {
         }}
       />
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
+      <main className="pt-[120px] md:pt-[152px]">
         <div className="container mx-auto px-4 py-8">
           {/* Breadcrumb */}
           <nav className="text-sm text-muted-foreground mb-6 flex items-center gap-2">

@@ -119,7 +119,7 @@ const OrderSuccess = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <main className="pt-[136px] md:pt-[160px]">
+      <main className="pt-[120px] md:pt-[152px]">
         <div className="container mx-auto px-4 py-16">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
