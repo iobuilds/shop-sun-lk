@@ -239,11 +239,19 @@ const OrdersSection = ({
   orders,
   uploadingReceipt,
   handleReceiptUpload,
+  confirmingReceived,
+  handleConfirmReceived,
+  startingReturn,
+  handleReturnRequest,
 }: {
   session: any;
   orders: any[] | undefined;
   uploadingReceipt: string | null;
   handleReceiptUpload: (orderId: string, file: File) => void;
+  confirmingReceived: string | null;
+  handleConfirmReceived: (orderId: string) => void;
+  startingReturn: string | null;
+  handleReturnRequest: (order: any) => void;
 }) => {
   const [activeTab, setActiveTab] = useState<"regular" | "preorders" | "pcb">("regular");
 
