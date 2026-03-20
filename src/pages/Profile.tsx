@@ -807,7 +807,6 @@ const Profile = () => {
 
 export default Profile;
 
-                        <div key={order.id} className="bg-card rounded-xl border border-border p-5">
                           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                             <div>
                               <p className="text-sm font-medium text-foreground">Order #{order.id.slice(0, 8)}</p>
