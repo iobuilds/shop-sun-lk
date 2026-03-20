@@ -78,8 +78,44 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
       });
   }, [order, open]);
 
-  const saveUpdate = async () => {
+  const isBackwardStatus = (prev: string, next: string) => {
+    const prevIdx = STATUS_ORDER.indexOf(prev);
+    const nextIdx = STATUS_ORDER.indexOf(next);
+    // Both must be in the main flow (not -1) and next is earlier
+    return prevIdx !== -1 && nextIdx !== -1 && nextIdx < prevIdx;
+  };
+
+  const handleSaveClick = () => {
     if (!order) return;
+    const prevStatus = order.status;
+    const newStatus = deliveryForm.status;
+    if (isBackwardStatus(prevStatus, newStatus)) {
+      setPendingAdminPassword("");
+      setAdminPasswordError("");
+      setBackwardConfirmOpen(true);
+    } else {
+      doSaveUpdate();
+    }
+  };
+
+  const handleBackwardConfirm = async () => {
+    if (!pendingAdminPassword.trim()) {
+      setAdminPasswordError("Password is required");
+      return;
+    }
+    // Verify admin password by re-authenticating
+    const { data: { session } } = await supabase.auth.getSession();
+    const email = session?.user?.email;
+    if (!email) { setAdminPasswordError("Session expired. Please log in again."); return; }
+    const { error: authErr } = await supabase.auth.signInWithPassword({ email, password: pendingAdminPassword });
+    if (authErr) { setAdminPasswordError("Incorrect password. Try again."); return; }
+    setBackwardConfirmOpen(false);
+    doSaveUpdate(true);
+  };
+
+  const doSaveUpdate = async (isBackward = false) => {
+    if (!order) return;
+    setSaving(true);
     const prevStatus = order.status;
     const newStatus = deliveryForm.status;
     const { error } = await supabase.from("orders").update({
@@ -90,18 +126,44 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
       expected_delivery: deliveryForm.expected_delivery || null,
       delivery_note: deliveryForm.delivery_note || null,
     } as any).eq("id", order.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) {
+      toast({ title: "Error saving order", description: error.message, variant: "destructive" });
+      setSaving(false);
+      return;
+    }
     const { data: { session } } = await supabase.auth.getSession();
     await supabase.from("order_status_history" as any).insert({
-      order_id: order.id, status: newStatus, note: deliveryForm.delivery_note || null,
+      order_id: order.id, status: newStatus,
+      note: deliveryForm.delivery_note || (isBackward ? `⚠️ Status manually reverted from "${prevStatus.replace(/_/g, " ")}" by admin` : null),
       tracking_number: deliveryForm.tracking_number || null, courier_name: deliveryForm.courier_name || null,
       tracking_link: deliveryForm.tracking_link || null, expected_delivery: deliveryForm.expected_delivery || null,
       changed_by: session?.user?.id || null,
     } as any);
+    // Send SMS + email notification (awaited so errors surface)
     if (newStatus !== prevStatus) {
-      supabase.functions.invoke("send-order-sms", { body: { order_id: order.id, status: newStatus, tracking_number: deliveryForm.tracking_number || undefined } });
+      try {
+        const smsRes = await supabase.functions.invoke("send-order-sms", {
+          body: { order_id: order.id, status: newStatus, tracking_code: deliveryForm.tracking_number || undefined },
+        });
+        if (smsRes.error) {
+          console.warn("SMS invoke error:", smsRes.error);
+          toast({ title: "Order saved", description: "⚠️ SMS notification may not have been sent.", variant: "default" });
+        } else {
+          const smsData = smsRes.data;
+          const smsOk = smsData?.sms_status === "sent";
+          const emailOk = smsData?.email_attempted;
+          toast({
+            title: "Order updated successfully",
+            description: `${smsOk ? "✅ SMS sent" : "⚠️ SMS skipped"}${emailOk ? " · ✅ Email sent" : ""}`,
+          });
+        }
+      } catch (e) {
+        toast({ title: "Order saved", description: "⚠️ Notification could not be sent." });
+      }
+    } else {
+      toast({ title: "Order updated successfully" });
     }
-    toast({ title: "Order updated successfully" });
+    setSaving(false);
     onOpenChange(false);
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
   };
