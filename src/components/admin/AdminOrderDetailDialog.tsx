@@ -24,6 +24,8 @@ interface Props {
   companySettings?: any;
 }
 
+const STATUS_ORDER = ["pending", "confirmed", "paid", "processing", "packed", "shipped", "out_for_delivery", "delivered", "cancelled", "returned"];
+
 const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: Props) => {
   const queryClient = useQueryClient();
   const [deliveryForm, setDeliveryForm] = useState({
@@ -35,6 +37,10 @@ const AdminOrderDetailDialog = ({ open, onOpenChange, order, companySettings }: 
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [referralUsage, setReferralUsage] = useState<{ code: string; discount_applied: number; code_purpose: string } | null>(null);
   const [markingCodPaid, setMarkingCodPaid] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [backwardConfirmOpen, setBackwardConfirmOpen] = useState(false);
+  const [pendingAdminPassword, setPendingAdminPassword] = useState("");
+  const [adminPasswordError, setAdminPasswordError] = useState("");
 
   useEffect(() => {
     if (!order || !open) return;
