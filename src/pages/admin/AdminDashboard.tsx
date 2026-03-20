@@ -4679,29 +4679,4 @@ const AdminDashboard = () => {
   );
 };
 
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5" /> Delete {selectedProducts.size} products?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">This will permanently delete <strong>{selectedProducts.size} products</strong>. Products linked to active orders may fail to delete.</p>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={async () => {
-              setBulkDeleting(true);
-              const ids = Array.from(selectedProducts);
-              for (const id of ids) { await supabase.from("products").delete().eq("id", id); }
-              setBulkDeleting(false); setConfirmBulkDelete(false); setSelectedProducts(new Set());
-              queryClient.invalidateQueries({ queryKey: ["admin-products"] });
-              toast({ title: `${ids.length} products deleted` });
-            }} disabled={bulkDeleting}>
-              {bulkDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-              Delete {selectedProducts.size} Products
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
 export default AdminDashboard;
