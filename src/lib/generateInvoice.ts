@@ -70,25 +70,19 @@ async function loadImage(url: string): Promise<string> {
   const isSvg =
     url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
-  const response = await fetch(url);
-  const blobUrl = isSvg
-    ? (() => {
-        // will be handled below
-        return "";
-      })()
-    : URL.createObjectURL(await response.clone().blob());
-
+  // Fetch as blob to avoid canvas CORS taint issues with cross-origin images
+  const res = await fetch(url);
   let objectUrl: string;
 
   if (isSvg) {
-    const svgText = await response.text();
+    const svgText = await res.text();
     const sized = svgText.replace(/<svg([^>]*)>/i, (_m, attrs) => {
       const extra = `${!/width\s*=/i.test(attrs) ? ' width="400"' : ""}${!/height\s*=/i.test(attrs) ? ' height="160"' : ""}`;
       return `<svg${attrs}${extra}>`;
     });
     objectUrl = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
   } else {
-    objectUrl = URL.createObjectURL(await (await fetch(url)).blob());
+    objectUrl = URL.createObjectURL(await res.blob());
   }
 
   return new Promise<string>((resolve, reject) => {
