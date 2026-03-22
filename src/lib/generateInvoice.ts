@@ -66,7 +66,7 @@ async function loadCompany(): Promise<any> {
   }
 }
 
-async function loadImage(url: string): Promise<string> {
+async function loadImage(url: string): Promise<{ dataUrl: string; w: number; h: number }> {
   const isSvg =
     url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
@@ -85,7 +85,7 @@ async function loadImage(url: string): Promise<string> {
     objectUrl = URL.createObjectURL(await res.blob());
   }
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<{ dataUrl: string; w: number; h: number }>((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const W = img.width || 400;
@@ -95,7 +95,7 @@ async function loadImage(url: string): Promise<string> {
       canvas.height = H;
       canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
       URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/png"));
+      resolve({ dataUrl: canvas.toDataURL("image/png"), w: W, h: H });
     };
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
@@ -103,6 +103,13 @@ async function loadImage(url: string): Promise<string> {
     };
     img.src = objectUrl;
   });
+}
+
+/** Returns [pdfW, pdfH] in mm, preserving aspect ratio with a max width */
+function logoPdfSize(w: number, h: number, maxW = 60): [number, number] {
+  const ratio = h / w;
+  const pdfW = Math.min(maxW, 60);
+  return [pdfW, pdfW * ratio];
 }
 
 export const generateInvoice = async (order: InvoiceOrder) => {
