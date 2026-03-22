@@ -66,51 +66,49 @@ async function loadCompany(): Promise<any> {
   }
 }
 
-function loadImage(url: string): Promise<string> {
+async function loadImage(url: string): Promise<string> {
   const isSvg =
     url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
-  return fetch(url)
-    .then((r) => (isSvg ? r.text() : r.blob()))
-    .then(
-      (data) =>
-        new Promise<string>((resolve, reject) => {
-          let blobUrl: string;
+  const response = await fetch(url);
+  const blobUrl = isSvg
+    ? (() => {
+        // will be handled below
+        return "";
+      })()
+    : URL.createObjectURL(await response.clone().blob());
 
-          if (isSvg) {
-            // Inject explicit dimensions so canvas renders correctly
-            const sized = (data as string).replace(
-              /<svg([^>]*)>/i,
-              (_m, attrs) => {
-                const extra = `${!/width\s*=/i.test(attrs) ? ' width="400"' : ""}${!/height\s*=/i.test(attrs) ? ' height="160"' : ""}`;
-                return `<svg${attrs}${extra}>`;
-              }
-            );
-            blobUrl = URL.createObjectURL(
-              new Blob([sized], { type: "image/svg+xml" })
-            );
-          } else {
-            blobUrl = URL.createObjectURL(data as Blob);
-          }
+  let objectUrl: string;
 
-          const img = new Image();
-          img.onload = () => {
-            const W = img.width || 400;
-            const H = img.height || 160;
-            const canvas = document.createElement("canvas");
-            canvas.width = W;
-            canvas.height = H;
-            canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
-            URL.revokeObjectURL(blobUrl);
-            resolve(canvas.toDataURL("image/png"));
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-            reject(new Error("Image render failed"));
-          };
-          img.src = blobUrl;
-        })
-    );
+  if (isSvg) {
+    const svgText = await response.text();
+    const sized = svgText.replace(/<svg([^>]*)>/i, (_m, attrs) => {
+      const extra = `${!/width\s*=/i.test(attrs) ? ' width="400"' : ""}${!/height\s*=/i.test(attrs) ? ' height="160"' : ""}`;
+      return `<svg${attrs}${extra}>`;
+    });
+    objectUrl = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
+  } else {
+    objectUrl = URL.createObjectURL(await (await fetch(url)).blob());
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = img.width || 400;
+      const H = img.height || 160;
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image render failed"));
+    };
+    img.src = objectUrl;
+  });
 }
 
 export const generateInvoice = async (order: InvoiceOrder) => {
