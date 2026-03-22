@@ -399,7 +399,7 @@ const OrdersSection = ({
                     </div>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => generateInvoice({
+                        onClick={async () => generateInvoice({
                           ...order,
                           order_items: (order.order_items as any[])?.map((item: any) => ({
                             quantity: item.quantity, unit_price: item.unit_price,
