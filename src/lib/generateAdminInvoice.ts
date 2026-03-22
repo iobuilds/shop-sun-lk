@@ -79,9 +79,10 @@ export const generateAdminInvoice = async (order: InvoiceOrder, company?: Compan
   let headerY = 25;
   if (logoUrl) {
     try {
-      const img = await loadImage(logoUrl);
-      doc.addImage(img, "PNG", 20, 12, 40, 16);
-      headerY = 32;
+      const { dataUrl, w, h } = await loadImage(logoUrl);
+      const [pdfW, pdfH] = logoPdfSize(w, h);
+      doc.addImage(dataUrl, "PNG", 20, 12, pdfW, pdfH);
+      headerY = 12 + pdfH + 4;
     } catch {
       doc.setFontSize(22);
       doc.setFont(fontFamily, "bold");
