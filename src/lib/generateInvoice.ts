@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { supabase } from "@/integrations/supabase/client";
 
 interface InvoiceOrder {
   id: string;
@@ -22,51 +23,196 @@ interface InvoiceOrder {
   }[];
 }
 
-export const generateInvoice = (order: InvoiceOrder) => {
-  const doc = new jsPDF();
+interface SavedTemplate {
+  blocks?: any[];
+  primaryColor?: string;
+  accentColor?: string;
+  fontFamily?: string;
+  logoUrl?: string;
+  paperSize?: "a4" | "letter";
+  currencySymbol?: string;
+}
+
+function hexToRgb(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16) || 0;
+  const g = parseInt(hex.slice(3, 5), 16) || 0;
+  const b = parseInt(hex.slice(5, 7), 16) || 0;
+  return { r, g, b };
+}
+
+async function loadTemplate(): Promise<SavedTemplate> {
+  try {
+    const { data } = await (supabase as any)
+      .from("site_settings")
+      .select("value")
+      .eq("key", "invoice_template")
+      .maybeSingle();
+    return (data as any)?.value || {};
+  } catch {
+    return {};
+  }
+}
+
+async function loadCompany(): Promise<any> {
+  try {
+    const { data } = await (supabase as any)
+      .from("site_settings")
+      .select("value")
+      .eq("key", "company")
+      .maybeSingle();
+    return (data as any)?.value || {};
+  } catch {
+    return {};
+  }
+}
+
+function loadImage(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const isSvg =
+      url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
+
+    if (isSvg) {
+      fetch(url)
+        .then((r) => r.text())
+        .then((svgText) => {
+          const sized = svgText.replace(/<svg([^>]*)>/i, (match, attrs) => {
+            const hasW = /width\s*=/i.test(attrs);
+            const hasH = /height\s*=/i.test(attrs);
+            const extra = `${!hasW ? ' width="400"' : ""}${!hasH ? ' height="160"' : ""}`;
+            return `<svg${attrs}${extra}>`;
+          });
+          const blob = new Blob([sized], { type: "image/svg+xml" });
+          const blobUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            const W = img.width || 400;
+            const H = img.height || 160;
+            const canvas = document.createElement("canvas");
+            canvas.width = W;
+            canvas.height = H;
+            canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+            URL.revokeObjectURL(blobUrl);
+            resolve(canvas.toDataURL("image/png"));
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(blobUrl);
+            reject(new Error("SVG render failed"));
+          };
+          img.src = blobUrl;
+        })
+        .catch(reject);
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const W = img.width || 400;
+      const H = img.height || 160;
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+export const generateInvoice = async (order: InvoiceOrder) => {
+  const [tpl, company] = await Promise.all([loadTemplate(), loadCompany()]);
+
+  const primaryColor = tpl.primaryColor || "#323232";
+  const accentColor = tpl.accentColor || "#dddddd";
+  const fontFamily = tpl.fontFamily || "helvetica";
+  const paperSize = tpl.paperSize || "a4";
+  const currencySymbol = tpl.currencySymbol || "Rs.";
+  const logoUrl = tpl.logoUrl || company?.logo_url || "";
+  const storeName = company?.store_name || "NanoCircuit.lk";
+
+  const primRgb = hexToRgb(primaryColor);
+  const accRgb = hexToRgb(accentColor);
+
+  const doc = new jsPDF({ format: paperSize });
   const addr = order.shipping_address || {};
 
-  // Header
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.text("NanoCircuit.lk", 20, 25);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  // Header – logo or store name text
+  let headerY = 25;
+  if (logoUrl) {
+    try {
+      const img = await loadImage(logoUrl);
+      doc.addImage(img, "PNG", 20, 12, 40, 16);
+      headerY = 32;
+    } catch {
+      doc.setFontSize(22);
+      doc.setFont(fontFamily, "bold");
+      doc.text(storeName, 20, 25);
+    }
+  } else {
+    doc.setFontSize(22);
+    doc.setFont(fontFamily, "bold");
+    doc.text(storeName, 20, 25);
+  }
+
+  // Company details
+  doc.setFontSize(8);
+  doc.setFont(fontFamily, "normal");
   doc.setTextColor(120, 120, 120);
-  doc.text("Electronics & Components Store | Sri Lanka", 20, 32);
+  let compY = headerY + 5;
+  if (company?.address) { doc.text(company.address, 20, compY); compY += 4; }
+  if (company?.phone) { doc.text(`Tel: ${company.phone}`, 20, compY); compY += 4; }
+  if (company?.email) { doc.text(company.email, 20, compY); compY += 4; }
 
   // Invoice title
   doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("INVOICE", 150, 25);
 
-  // Invoice details
+  // Invoice meta
   doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setTextColor(80, 80, 80);
   doc.text(`Invoice #: INV-${order.id.slice(0, 8).toUpperCase()}`, 150, 33);
-  doc.text(`Date: ${new Date(order.created_at).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`, 150, 39);
-  doc.text(`Payment: ${order.payment_method === "stripe" ? "Card (Stripe)" : "Bank Transfer"}`, 150, 45);
+  doc.text(
+    `Date: ${new Date(order.created_at).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}`,
+    150,
+    39
+  );
+  const payLabel =
+    order.payment_method === "stripe"
+      ? "Card (Stripe)"
+      : order.payment_method === "free"
+      ? "Wallet/Coupon"
+      : "Bank Transfer";
+  doc.text(`Payment: ${payLabel}`, 150, 45);
   doc.text(`Status: ${order.payment_status.toUpperCase()}`, 150, 51);
 
   // Divider
-  doc.setDrawColor(220, 220, 220);
+  doc.setDrawColor(accRgb.r, accRgb.g, accRgb.b);
   doc.line(20, 58, 190, 58);
 
   // Ship to
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Ship To:", 20, 67);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
   let y = 73;
   if (addr.full_name) { doc.text(addr.full_name, 20, y); y += 5; }
   if (addr.address_line1) { doc.text(addr.address_line1, 20, y); y += 5; }
   if (addr.address_line2) { doc.text(addr.address_line2, 20, y); y += 5; }
-  if (addr.city || addr.postal_code) { doc.text(`${addr.city || ""} ${addr.postal_code || ""}`.trim(), 20, y); y += 5; }
+  if (addr.city || addr.postal_code) {
+    doc.text(`${addr.city || ""} ${addr.postal_code || ""}`.trim(), 20, y);
+    y += 5;
+  }
   if (addr.phone) { doc.text(`Phone: ${addr.phone}`, 20, y); y += 5; }
 
   // Items table
@@ -74,8 +220,8 @@ export const generateInvoice = (order: InvoiceOrder) => {
     String(i + 1),
     item.products?.name || "Product",
     String(item.quantity),
-    `Rs. ${item.unit_price.toLocaleString()}`,
-    `Rs. ${item.total_price.toLocaleString()}`,
+    `${currencySymbol} ${item.unit_price.toLocaleString()}`,
+    `${currencySymbol} ${item.total_price.toLocaleString()}`,
   ]);
 
   autoTable(doc, {
@@ -83,8 +229,13 @@ export const generateInvoice = (order: InvoiceOrder) => {
     head: [["#", "Product", "Qty", "Unit Price", "Total"]],
     body: tableData,
     theme: "grid",
-    headStyles: { fillColor: [50, 50, 50], textColor: 255, fontSize: 9 },
-    bodyStyles: { fontSize: 9, textColor: [60, 60, 60] },
+    headStyles: {
+      fillColor: [primRgb.r, primRgb.g, primRgb.b],
+      textColor: 255,
+      fontSize: 9,
+      font: fontFamily,
+    },
+    bodyStyles: { fontSize: 9, textColor: [60, 60, 60], font: fontFamily },
     columnStyles: {
       0: { cellWidth: 12, halign: "center" },
       1: { cellWidth: 80 },
@@ -103,15 +254,28 @@ export const generateInvoice = (order: InvoiceOrder) => {
 
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.text("Subtotal:", xLabel, summaryY);
-  doc.text(`Rs. ${order.subtotal.toLocaleString()}`, xValue, summaryY, { align: "right" });
+  doc.text(
+    `${currencySymbol} ${order.subtotal.toLocaleString()}`,
+    xValue,
+    summaryY,
+    { align: "right" }
+  );
   summaryY += 6;
 
   if (order.discount_amount > 0) {
-    doc.text("Discount:", xLabel, summaryY);
+    const couponLabel = order.coupon_code
+      ? `Discount (${order.coupon_code}):`
+      : "Discount:";
+    doc.text(couponLabel, xLabel, summaryY);
     doc.setTextColor(0, 150, 0);
-    doc.text(`-Rs. ${order.discount_amount.toLocaleString()}`, xValue, summaryY, { align: "right" });
+    doc.text(
+      `-${currencySymbol} ${order.discount_amount.toLocaleString()}`,
+      xValue,
+      summaryY,
+      { align: "right" }
+    );
     doc.setTextColor(80, 80, 80);
     summaryY += 6;
   }
@@ -119,7 +283,12 @@ export const generateInvoice = (order: InvoiceOrder) => {
   if (order.referral_code && (order.referral_discount ?? 0) > 0) {
     doc.text(`Referral (${order.referral_code}):`, xLabel, summaryY);
     doc.setTextColor(0, 150, 0);
-    doc.text(`-Rs. ${(order.referral_discount ?? 0).toLocaleString()}`, xValue, summaryY, { align: "right" });
+    doc.text(
+      `-${currencySymbol} ${(order.referral_discount ?? 0).toLocaleString()}`,
+      xValue,
+      summaryY,
+      { align: "right" }
+    );
     doc.setTextColor(80, 80, 80);
     summaryY += 6;
   } else if (order.referral_code) {
@@ -130,8 +299,19 @@ export const generateInvoice = (order: InvoiceOrder) => {
     summaryY += 6;
   }
 
-  doc.text("Shipping:", xLabel, summaryY);
-  doc.text(order.shipping_fee > 0 ? `Rs. ${order.shipping_fee.toLocaleString()}` : "Free", xValue, summaryY, { align: "right" });
+  doc.text(
+    "Shipping:",
+    xLabel,
+    summaryY
+  );
+  doc.text(
+    order.shipping_fee > 0
+      ? `${currencySymbol} ${order.shipping_fee.toLocaleString()}`
+      : "Free",
+    xValue,
+    summaryY,
+    { align: "right" }
+  );
   summaryY += 8;
 
   doc.setDrawColor(200, 200, 200);
@@ -139,15 +319,30 @@ export const generateInvoice = (order: InvoiceOrder) => {
 
   doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
-  doc.setFont("helvetica", "bold");
+  doc.setFont(fontFamily, "bold");
   doc.text("Total:", xLabel, summaryY + 2);
-  doc.text(`Rs. ${order.total.toLocaleString()}`, xValue, summaryY + 2, { align: "right" });
+  doc.text(
+    `${currencySymbol} ${order.total.toLocaleString()}`,
+    xValue,
+    summaryY + 2,
+    { align: "right" }
+  );
 
-  // Footer
+  // Footer – use template footer block if available
+  const footerY = paperSize === "letter" ? 265 : 280;
+  const footerBlock = tpl.blocks?.find(
+    (b: any) => b.type === "footer" && b.visible !== false
+  );
+  const footerText = footerBlock?.content
+    ? footerBlock.content
+    : company?.website
+    ? `Thank you for shopping with ${storeName}! | ${company.website}`
+    : `Thank you for shopping with ${storeName}!`;
+
   doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
+  doc.setFont(fontFamily, "normal");
   doc.setTextColor(150, 150, 150);
-  doc.text("Thank you for shopping with NanoCircuit.lk! | www.nanocircuit.lk", 105, 280, { align: "center" });
+  doc.text(footerText, 105, footerY, { align: "center" });
 
-  doc.save(`NanoCircuit-Invoice-${order.id.slice(0, 8).toUpperCase()}.pdf`);
+  doc.save(`Invoice-${order.id.slice(0, 8).toUpperCase()}.pdf`);
 };
