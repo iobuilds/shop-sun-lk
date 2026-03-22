@@ -503,8 +503,9 @@ const InvoiceTemplateBuilder = () => {
         case "logo":
           if (template.logoUrl) {
             try {
-              const imgData = await loadImageData(template.logoUrl);
-              doc.addImage(imgData, "PNG", 20, yPos - 5, 30, 15); yPos += 15;
+              const { dataUrl, w, h } = await loadImageData(template.logoUrl);
+              const [pdfW, pdfH] = logoPdfSize(w, h);
+              doc.addImage(dataUrl, "PNG", 20, yPos - 5, pdfW, pdfH); yPos += pdfH + 2;
             } catch {}
           }
           break;
