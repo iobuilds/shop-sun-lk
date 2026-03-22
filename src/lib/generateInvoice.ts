@@ -67,22 +67,32 @@ async function loadCompany(): Promise<any> {
 }
 
 function loadImage(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const isSvg =
-      url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
+  const isSvg =
+    url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
-    if (isSvg) {
-      fetch(url)
-        .then((r) => r.text())
-        .then((svgText) => {
-          const sized = svgText.replace(/<svg([^>]*)>/i, (match, attrs) => {
-            const hasW = /width\s*=/i.test(attrs);
-            const hasH = /height\s*=/i.test(attrs);
-            const extra = `${!hasW ? ' width="400"' : ""}${!hasH ? ' height="160"' : ""}`;
-            return `<svg${attrs}${extra}>`;
-          });
-          const blob = new Blob([sized], { type: "image/svg+xml" });
-          const blobUrl = URL.createObjectURL(blob);
+  return fetch(url)
+    .then((r) => (isSvg ? r.text() : r.blob()))
+    .then(
+      (data) =>
+        new Promise<string>((resolve, reject) => {
+          let blobUrl: string;
+
+          if (isSvg) {
+            // Inject explicit dimensions so canvas renders correctly
+            const sized = (data as string).replace(
+              /<svg([^>]*)>/i,
+              (_m, attrs) => {
+                const extra = `${!/width\s*=/i.test(attrs) ? ' width="400"' : ""}${!/height\s*=/i.test(attrs) ? ' height="160"' : ""}`;
+                return `<svg${attrs}${extra}>`;
+              }
+            );
+            blobUrl = URL.createObjectURL(
+              new Blob([sized], { type: "image/svg+xml" })
+            );
+          } else {
+            blobUrl = URL.createObjectURL(data as Blob);
+          }
+
           const img = new Image();
           img.onload = () => {
             const W = img.width || 400;
@@ -96,28 +106,11 @@ function loadImage(url: string): Promise<string> {
           };
           img.onerror = () => {
             URL.revokeObjectURL(blobUrl);
-            reject(new Error("SVG render failed"));
+            reject(new Error("Image render failed"));
           };
           img.src = blobUrl;
         })
-        .catch(reject);
-      return;
-    }
-
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      const W = img.width || 400;
-      const H = img.height || 160;
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
-      resolve(canvas.toDataURL("image/png"));
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
+    );
 }
 
 export const generateInvoice = async (order: InvoiceOrder) => {
