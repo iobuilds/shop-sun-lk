@@ -365,13 +365,14 @@ export default function AdminPreOrders({ requests, onRefresh, allProfiles, onOpe
         + (shippingVal > 0 ? shippingVal : 0)
         + (taxVal > 0 ? taxVal : 0);
 
-      // grand_total is a GENERATED column (auto-computed by DB) — never include it in update payload
       const updatePayload: any = {
         status: editForm.status,
         admin_notes: editForm.admin_notes || null,
         shipping_fee: shippingVal,
         tax_amount: taxVal,
         unit_cost_total: unitCostTotal,
+        grand_total: grandTotal,
+        ...(editForm.status === "quoted" ? { quoted_at: new Date().toISOString() } : {}),
       };
 
       const { error } = await supabase.from("preorder_requests").update(updatePayload).eq("id", editTarget.id);
