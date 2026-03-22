@@ -980,7 +980,7 @@ const InvoiceTemplateBuilder = () => {
 
 // ─── Image loader helper ──────────────────────────────────────────────────────
 
-async function loadImageData(url: string): Promise<string> {
+async function loadImageData(url: string): Promise<{ dataUrl: string; w: number; h: number }> {
   const isSvg = url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
   // Fetch as blob to avoid canvas CORS taint issues with cross-origin images
@@ -998,7 +998,7 @@ async function loadImageData(url: string): Promise<string> {
     objectUrl = URL.createObjectURL(await res.blob());
   }
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<{ dataUrl: string; w: number; h: number }>((resolve, reject) => {
     const img = new window.Image();
     img.onload = () => {
       const W = img.width || 400;
@@ -1008,7 +1008,7 @@ async function loadImageData(url: string): Promise<string> {
       canvas.height = H;
       canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
       URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/png"));
+      resolve({ dataUrl: canvas.toDataURL("image/png"), w: W, h: H });
     };
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
@@ -1016,6 +1016,11 @@ async function loadImageData(url: string): Promise<string> {
     };
     img.src = objectUrl;
   });
+}
+
+function logoPdfSize(w: number, h: number, maxW = 60): [number, number] {
+  const pdfW = Math.min(maxW, 60);
+  return [pdfW, pdfW * (h / w)];
 }
 
 // ─── Preview Block Component ──────────────────────────────────────────────────
