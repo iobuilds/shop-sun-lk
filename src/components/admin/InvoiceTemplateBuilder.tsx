@@ -374,9 +374,10 @@ const InvoiceTemplateBuilder = () => {
     let headerY = 25;
     if (template.logoUrl) {
       try {
-        const img = await loadImageData(template.logoUrl);
-        doc.addImage(img, "PNG", 20, 12, 40, 16);
-        headerY = 32;
+        const { dataUrl, w, h } = await loadImageData(template.logoUrl);
+        const [pdfW, pdfH] = logoPdfSize(w, h);
+        doc.addImage(dataUrl, "PNG", 20, 12, pdfW, pdfH);
+        headerY = 12 + pdfH + 4;
       } catch {
         doc.setFontSize(22); doc.setFont(template.fontFamily, "bold");
         doc.text(storeName, 20, 25);
