@@ -228,14 +228,52 @@ export const generateAdminInvoice = async (order: InvoiceOrder, company?: Compan
 
 function loadImage(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    const isSvg = url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
+
+    if (isSvg) {
+      // For SVG: fetch the raw text and convert to a data URL with explicit viewport
+      fetch(url)
+        .then((r) => r.text())
+        .then((svgText) => {
+          // Inject width/height if missing so canvas renders correctly
+          const sized = svgText.replace(
+            /<svg([^>]*)>/i,
+            (match, attrs) => {
+              const hasW = /width\s*=/i.test(attrs);
+              const hasH = /height\s*=/i.test(attrs);
+              const extra = `${!hasW ? ' width="400"' : ""}${!hasH ? ' height="160"' : ""}`;
+              return `<svg${attrs}${extra}>`;
+            }
+          );
+          const blob = new Blob([sized], { type: "image/svg+xml" });
+          const blobUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            const W = img.width || 400;
+            const H = img.height || 160;
+            const canvas = document.createElement("canvas");
+            canvas.width = W;
+            canvas.height = H;
+            canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+            URL.revokeObjectURL(blobUrl);
+            resolve(canvas.toDataURL("image/png"));
+          };
+          img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error("SVG render failed")); };
+          img.src = blobUrl;
+        })
+        .catch(reject);
+      return;
+    }
+
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      const W = img.width || 400;
+      const H = img.height || 160;
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx?.drawImage(img, 0, 0);
+      canvas.width = W;
+      canvas.height = H;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
       resolve(canvas.toDataURL("image/png"));
     };
     img.onerror = reject;
