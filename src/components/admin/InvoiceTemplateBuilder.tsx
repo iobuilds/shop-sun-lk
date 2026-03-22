@@ -421,13 +421,12 @@ const InvoiceTemplateBuilder = () => {
         case "logo":
           if (template.logoUrl) {
             try {
-              const imgData = await loadImageData(template.logoUrl);
-              doc.addImage(imgData, "PNG", 20, yPos - 5, 30, 15); yPos += 15;
+              const { dataUrl, w, h } = await loadImageData(template.logoUrl);
+              const [pdfW, pdfH] = logoPdfSize(w, h);
+              doc.addImage(dataUrl, "PNG", 20, yPos - 5, pdfW, pdfH); yPos += pdfH + 2;
             } catch {}
           }
           break;
-        case "company_name": doc.text(company.store_name || "Your Store Name", xPos, yPos, { align: halign }); yPos += fs * 0.45; break;
-        case "company_address": doc.text(company.address || "Colombo, Sri Lanka", xPos, yPos, { align: halign }); yPos += fs * 0.45; break;
         case "company_contact":
           if (company.phone || company.email) { doc.text([company.phone, company.email].filter(Boolean).join("  |  "), xPos, yPos, { align: halign }); yPos += fs * 0.45; }
           break;
