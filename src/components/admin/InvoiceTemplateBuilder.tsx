@@ -969,13 +969,40 @@ const InvoiceTemplateBuilder = () => {
 
 function loadImageData(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    const isSvg = url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
+    if (isSvg) {
+      fetch(url)
+        .then(r => r.text())
+        .then(svgText => {
+          const sized = svgText.replace(/<svg([^>]*)>/i, (_m, attrs) => {
+            const hasW = /width\s*=/i.test(attrs);
+            const hasH = /height\s*=/i.test(attrs);
+            return `<svg${attrs}${!hasW ? ' width="400"' : ""}${!hasH ? ' height="160"' : ""}>`;
+          });
+          const blob = new Blob([sized], { type: "image/svg+xml" });
+          const blobUrl = URL.createObjectURL(blob);
+          const img = new window.Image();
+          img.onload = () => {
+            const W = img.width || 400; const H = img.height || 160;
+            const canvas = document.createElement("canvas");
+            canvas.width = W; canvas.height = H;
+            canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+            URL.revokeObjectURL(blobUrl);
+            resolve(canvas.toDataURL("image/png"));
+          };
+          img.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error("SVG render failed")); };
+          img.src = blobUrl;
+        })
+        .catch(reject);
+      return;
+    }
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      const W = img.width || 400; const H = img.height || 160;
       const canvas = document.createElement("canvas");
-      canvas.width = img.width; canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx?.drawImage(img, 0, 0);
+      canvas.width = W; canvas.height = H;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
       resolve(canvas.toDataURL("image/png"));
     };
     img.onerror = reject;
