@@ -66,46 +66,27 @@ async function loadCompany(): Promise<any> {
   }
 }
 
-function loadImage(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const isSvg =
-      url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
+async function loadImage(url: string): Promise<string> {
+  const isSvg =
+    url.toLowerCase().includes(".svg") || url.startsWith("data:image/svg");
 
-    if (isSvg) {
-      fetch(url)
-        .then((r) => r.text())
-        .then((svgText) => {
-          const sized = svgText.replace(/<svg([^>]*)>/i, (match, attrs) => {
-            const hasW = /width\s*=/i.test(attrs);
-            const hasH = /height\s*=/i.test(attrs);
-            const extra = `${!hasW ? ' width="400"' : ""}${!hasH ? ' height="160"' : ""}`;
-            return `<svg${attrs}${extra}>`;
-          });
-          const blob = new Blob([sized], { type: "image/svg+xml" });
-          const blobUrl = URL.createObjectURL(blob);
-          const img = new Image();
-          img.onload = () => {
-            const W = img.width || 400;
-            const H = img.height || 160;
-            const canvas = document.createElement("canvas");
-            canvas.width = W;
-            canvas.height = H;
-            canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
-            URL.revokeObjectURL(blobUrl);
-            resolve(canvas.toDataURL("image/png"));
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(blobUrl);
-            reject(new Error("SVG render failed"));
-          };
-          img.src = blobUrl;
-        })
-        .catch(reject);
-      return;
-    }
+  // Fetch as blob to avoid canvas CORS taint issues with cross-origin images
+  const res = await fetch(url);
+  let objectUrl: string;
 
+  if (isSvg) {
+    const svgText = await res.text();
+    const sized = svgText.replace(/<svg([^>]*)>/i, (_m, attrs) => {
+      const extra = `${!/width\s*=/i.test(attrs) ? ' width="400"' : ""}${!/height\s*=/i.test(attrs) ? ' height="160"' : ""}`;
+      return `<svg${attrs}${extra}>`;
+    });
+    objectUrl = URL.createObjectURL(new Blob([sized], { type: "image/svg+xml" }));
+  } else {
+    objectUrl = URL.createObjectURL(await res.blob());
+  }
+
+  return new Promise<string>((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
       const W = img.width || 400;
       const H = img.height || 160;
@@ -113,10 +94,14 @@ function loadImage(url: string): Promise<string> {
       canvas.width = W;
       canvas.height = H;
       canvas.getContext("2d")?.drawImage(img, 0, 0, W, H);
+      URL.revokeObjectURL(objectUrl);
       resolve(canvas.toDataURL("image/png"));
     };
-    img.onerror = reject;
-    img.src = url;
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Image render failed"));
+    };
+    img.src = objectUrl;
   });
 }
 
