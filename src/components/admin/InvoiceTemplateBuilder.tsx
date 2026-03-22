@@ -419,7 +419,10 @@ const InvoiceTemplateBuilder = () => {
       switch (block.type) {
         case "logo":
           if (template.logoUrl) {
-            try { doc.addImage(template.logoUrl, "JPEG", 20, yPos - 5, 30, 15); yPos += 15; } catch {}
+            try {
+              const imgData = await loadImageData(template.logoUrl);
+              doc.addImage(imgData, "PNG", 20, yPos - 5, 30, 15); yPos += 15;
+            } catch {}
           }
           break;
         case "company_name": doc.text(company.store_name || "Your Store Name", xPos, yPos, { align: halign }); yPos += fs * 0.45; break;
