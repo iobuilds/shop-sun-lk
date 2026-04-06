@@ -51,7 +51,7 @@ interface ProductForm {
   name: string; slug: string; description: string; price: string; discount_price: string; cost_price: string;
   sku: string; stock_quantity: string; category_id: string; images: string; is_active: boolean; is_featured: boolean;
   video_url: string; datasheet_url: string;
-  shipping_type: string; ships_from: string; delivery_eta: string;
+  shipping_source: string; ships_from: string; delivery_eta: string;
 }
 interface CategoryForm {
   name: string; slug: string; description: string; image_url: string; sort_order: string; is_active: boolean;
@@ -75,16 +75,16 @@ interface CouponForm {
 interface ComboForm {
   name: string; slug: string; description: string; combo_price: string; original_price: string;
   images: string; is_active: boolean; is_featured: boolean; items: { product_id: string; quantity: string }[];
-  shipping_type: string; ships_from: string; delivery_eta: string;
+  shipping_source: string; ships_from: string; delivery_eta: string;
 }
 
-const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", cost_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "", shipping_type: "local", ships_from: "", delivery_eta: "" };
+const emptyProduct: ProductForm = { name: "", slug: "", description: "", price: "", discount_price: "", cost_price: "", sku: "", stock_quantity: "", category_id: "", images: "", is_active: true, is_featured: false, video_url: "", datasheet_url: "", shipping_source: "local", ships_from: "", delivery_eta: "" };
 const emptyCategory: CategoryForm = { name: "", slug: "", description: "", image_url: "", sort_order: "0", is_active: true };
 const emptyBanner: BannerForm = { title: "", subtitle: "", image_url: "", link_url: "", sort_order: "0", is_active: true };
 const emptyDeal: DealForm = { product_id: "", discount_percent: "", deal_price: "", starts_at: "", ends_at: "", is_active: true };
 const emptyPage: PageForm = { title: "", slug: "", content: "", is_published: true };
 const emptyCoupon: CouponForm = { code: "", name: "", description: "", discount_type: "percentage", discount_value: "", min_order_amount: "", max_uses: "", is_active: true, expires_at: "", coupon_type: "public", max_discount_cap: "", per_user_limit: "", starts_at: "", category_scope: "all", valid_category_ids: [], assigned_phones: "" };
-const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_type: "local", ships_from: "", delivery_eta: "" };
+const emptyCombo: ComboForm = { name: "", slug: "", description: "", combo_price: "", original_price: "", images: "", is_active: true, is_featured: false, items: [{ product_id: "", quantity: "1" }], shipping_source: "local", ships_from: "", delivery_eta: "" };
 
 const AdminDashboard = () => {
   const { isAdmin, isModerator, userRole, moderatorPermissions, loading } = useAdminAuth();
@@ -948,7 +948,7 @@ const AdminDashboard = () => {
   const openAddMicroProduct = () => { setEditingProductId(null); setProductForm({ ...emptyProduct, category_id: microElectronicsCategory?.id || "" }); setProductImagePreviews([]); setLcscPartNumber(""); setLcscFailed(false); setProductDialog(true); };
   const openEditProduct = (p: any) => {
     setEditingProductId(p.id);
-    setProductForm({ name: p.name, slug: p.slug, description: p.description || "", price: String(p.price), discount_price: String(p.discount_price || ""), cost_price: String((p as any).cost_price || ""), sku: p.sku || "", stock_quantity: String(p.stock_quantity || ""), category_id: p.category_id || "", images: (p.images || []).join(","), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false, video_url: (p as any).video_url || "", datasheet_url: p.datasheet_url || "", shipping_type: (p as any).shipping_type || "local", ships_from: (p as any).ships_from || "", delivery_eta: (p as any).delivery_eta || "" });
+    setProductForm({ name: p.name, slug: p.slug, description: p.description || "", price: String(p.price), discount_price: String(p.discount_price || ""), cost_price: String((p as any).cost_price || ""), sku: p.sku || "", stock_quantity: String(p.stock_quantity || ""), category_id: p.category_id || "", images: (p.images || []).join(","), is_active: p.is_active ?? true, is_featured: p.is_featured ?? false, video_url: (p as any).video_url || "", datasheet_url: p.datasheet_url || "", shipping_source: (p as any).shipping_source || "local", ships_from: (p as any).ships_from || "", delivery_eta: (p as any).delivery_eta || "" });
     setProductImagePreviews(p.images || []);
     setLcscPartNumber("");
     setLcscFailed(false);
@@ -989,7 +989,7 @@ const AdminDashboard = () => {
 
   const saveProduct = async () => {
     if (!productForm.name.trim() || !productForm.slug.trim()) return toast({ title: "Name and slug required", variant: "destructive" });
-    const payload: any = { name: productForm.name, slug: productForm.slug, description: productForm.description || null, price: Number(productForm.price) || 0, discount_price: productForm.discount_price ? Number(productForm.discount_price) : null, cost_price: productForm.cost_price ? Number(productForm.cost_price) : null, sku: productForm.sku || null, stock_quantity: productForm.stock_quantity ? Number(productForm.stock_quantity) : 0, category_id: productForm.category_id || null, images: productForm.images ? productForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: productForm.is_active, is_featured: productForm.is_featured, video_url: productForm.video_url || null, datasheet_url: productForm.datasheet_url || null, shipping_type: productForm.shipping_type || null, ships_from: productForm.ships_from || null, delivery_eta: productForm.delivery_eta || null };
+    const payload: any = { name: productForm.name, slug: productForm.slug, description: productForm.description || null, price: Number(productForm.price) || 0, discount_price: productForm.discount_price ? Number(productForm.discount_price) : null, cost_price: productForm.cost_price ? Number(productForm.cost_price) : null, sku: productForm.sku || null, stock_quantity: productForm.stock_quantity ? Number(productForm.stock_quantity) : 0, category_id: productForm.category_id || null, images: productForm.images ? productForm.images.split(",").map(s => s.trim()).filter(Boolean) : [], is_active: productForm.is_active, is_featured: productForm.is_featured, video_url: productForm.video_url || null, datasheet_url: productForm.datasheet_url || null, shipping_source: productForm.shipping_source || null, ships_from: productForm.ships_from || null, delivery_eta: productForm.delivery_eta || null };
     const { error } = editingProductId ? await supabase.from("products").update(payload).eq("id", editingProductId) : await supabase.from("products").insert(payload);
     if (error) toast({ title: "Error saving", description: error.message, variant: "destructive" });
     else { toast({ title: editingProductId ? "Product updated" : "Product created" }); await logAdminAction(editingProductId ? "product_updated" : "product_created", "product", editingProductId ?? undefined, { name: payload.name }); setProductDialog(false); queryClient.invalidateQueries({ queryKey: ["admin-products"] }); }
@@ -1070,7 +1070,7 @@ const AdminDashboard = () => {
   const openAddCombo = () => { setEditingComboId(null); setComboForm(emptyCombo); setComboImagePreviews([]); setComboDialog(true); };
   const openEditCombo = (c: any) => {
     setEditingComboId(c.id);
-    setComboForm({ name: c.name, slug: c.slug, description: c.description || "", combo_price: String(c.combo_price), original_price: String(c.original_price), images: (c.images || []).join(","), is_active: c.is_active ?? true, is_featured: c.is_featured ?? false, items: (c.combo_pack_items || []).map((i: any) => ({ product_id: i.product_id, quantity: String(i.quantity) })), shipping_type: (c as any).shipping_type || "local", ships_from: (c as any).ships_from || "", delivery_eta: (c as any).delivery_eta || "" });
+    setComboForm({ name: c.name, slug: c.slug, description: c.description || "", combo_price: String(c.combo_price), original_price: String(c.original_price), images: (c.images || []).join(","), is_active: c.is_active ?? true, is_featured: c.is_featured ?? false, items: (c.combo_pack_items || []).map((i: any) => ({ product_id: i.product_id, quantity: String(i.quantity) })), shipping_source: "local", ships_from: "", delivery_eta: "" });
     setComboImagePreviews(c.images || []);
     setComboDialog(true);
   };
@@ -4156,7 +4156,7 @@ const AdminDashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <Label className="text-xs font-semibold mb-1.5 block">Shipping Source</Label>
-                  <Select value={productForm.shipping_type} onValueChange={(v) => setProductForm({ ...productForm, shipping_type: v })}>
+                  <Select value={productForm.shipping_source} onValueChange={(v) => setProductForm({ ...productForm, shipping_source: v })}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="local">🇱🇰 Local</SelectItem>
@@ -4480,7 +4480,7 @@ const AdminDashboard = () => {
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">Shipping / ප්‍රවාහනය</h4>
               <div>
                 <Label>Shipping Source</Label>
-                <Select value={comboForm.shipping_type} onValueChange={(v) => setComboForm({ ...comboForm, shipping_type: v })}>
+                <Select value={comboForm.shipping_source} onValueChange={(v) => setComboForm({ ...comboForm, shipping_source: v })}>
                   <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="local">🇱🇰 Local</SelectItem>

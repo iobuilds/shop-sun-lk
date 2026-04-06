@@ -58,8 +58,7 @@ export const useShippingCalculation = (items: CartItem[], subtotal: number): Shi
 
   // Check if any item is overseas
   const hasOverseas = (productSpecs || []).some((p: any) => {
-    const specs = p.specifications || {};
-    return specs._shipping_type === "overseas";
+    return p.shipping_source === "overseas" || (p.specifications || {})._shipping_type === "overseas";
   });
 
   let shipping: number;
