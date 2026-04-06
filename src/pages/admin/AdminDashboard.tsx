@@ -4156,7 +4156,7 @@ const AdminDashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <Label className="text-xs font-semibold mb-1.5 block">Shipping Source</Label>
-                  <Select value={productForm.shipping_type} onValueChange={(v) => setProductForm({ ...productForm, shipping_type: v })}>
+                  <Select value={productForm.shipping_source} onValueChange={(v) => setProductForm({ ...productForm, shipping_source: v })}>
                     <SelectTrigger className="h-10"><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="local">🇱🇰 Local</SelectItem>
@@ -4480,7 +4480,7 @@ const AdminDashboard = () => {
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">Shipping / ප්‍රවාහනය</h4>
               <div>
                 <Label>Shipping Source</Label>
-                <Select value={comboForm.shipping_type} onValueChange={(v) => setComboForm({ ...comboForm, shipping_type: v })}>
+                <Select value={comboForm.shipping_source} onValueChange={(v) => setComboForm({ ...comboForm, shipping_source: v })}>
                   <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="local">🇱🇰 Local</SelectItem>
