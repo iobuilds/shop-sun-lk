@@ -1261,6 +1261,7 @@ export type Database = {
           cost_price: number | null
           created_at: string | null
           datasheet_url: string | null
+          delivery_eta: string | null
           description: string | null
           discount_price: number | null
           id: string
@@ -1271,6 +1272,8 @@ export type Database = {
           price: number
           rating: number | null
           review_count: number | null
+          shipping_source: string | null
+          ships_from: string | null
           sku: string | null
           slug: string
           specifications: Json | null
@@ -1284,6 +1287,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           datasheet_url?: string | null
+          delivery_eta?: string | null
           description?: string | null
           discount_price?: number | null
           id?: string
@@ -1294,6 +1298,8 @@ export type Database = {
           price?: number
           rating?: number | null
           review_count?: number | null
+          shipping_source?: string | null
+          ships_from?: string | null
           sku?: string | null
           slug: string
           specifications?: Json | null
@@ -1307,6 +1313,7 @@ export type Database = {
           cost_price?: number | null
           created_at?: string | null
           datasheet_url?: string | null
+          delivery_eta?: string | null
           description?: string | null
           discount_price?: number | null
           id?: string
@@ -1317,6 +1324,8 @@ export type Database = {
           price?: number
           rating?: number | null
           review_count?: number | null
+          shipping_source?: string | null
+          ships_from?: string | null
           sku?: string | null
           slug?: string
           specifications?: Json | null
