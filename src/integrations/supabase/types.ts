@@ -173,6 +173,7 @@ export type Database = {
         Row: {
           combo_price: number
           created_at: string | null
+          delivery_eta: string | null
           description: string | null
           id: string
           images: string[] | null
@@ -180,12 +181,16 @@ export type Database = {
           is_featured: boolean | null
           name: string
           original_price: number
+          shipping_source: string | null
+          shipping_type: string | null
+          ships_from: string | null
           slug: string
           updated_at: string | null
         }
         Insert: {
           combo_price?: number
           created_at?: string | null
+          delivery_eta?: string | null
           description?: string | null
           id?: string
           images?: string[] | null
@@ -193,12 +198,16 @@ export type Database = {
           is_featured?: boolean | null
           name: string
           original_price?: number
+          shipping_source?: string | null
+          shipping_type?: string | null
+          ships_from?: string | null
           slug: string
           updated_at?: string | null
         }
         Update: {
           combo_price?: number
           created_at?: string | null
+          delivery_eta?: string | null
           description?: string | null
           id?: string
           images?: string[] | null
@@ -206,6 +215,9 @@ export type Database = {
           is_featured?: boolean | null
           name?: string
           original_price?: number
+          shipping_source?: string | null
+          shipping_type?: string | null
+          ships_from?: string | null
           slug?: string
           updated_at?: string | null
         }
@@ -1273,6 +1285,7 @@ export type Database = {
           rating: number | null
           review_count: number | null
           shipping_source: string | null
+          shipping_type: string | null
           ships_from: string | null
           sku: string | null
           slug: string
@@ -1299,6 +1312,7 @@ export type Database = {
           rating?: number | null
           review_count?: number | null
           shipping_source?: string | null
+          shipping_type?: string | null
           ships_from?: string | null
           sku?: string | null
           slug: string
@@ -1325,6 +1339,7 @@ export type Database = {
           rating?: number | null
           review_count?: number | null
           shipping_source?: string | null
+          shipping_type?: string | null
           ships_from?: string | null
           sku?: string | null
           slug?: string
