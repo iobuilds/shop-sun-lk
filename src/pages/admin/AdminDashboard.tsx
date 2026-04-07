@@ -2184,7 +2184,7 @@ const AdminDashboard = () => {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
                                 <button onClick={() => openEditCoupon(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => deleteCoupon(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => setGenericDeleteConfirm({ label: `coupon "${c.code}"`, onConfirm: () => deleteCoupon(c.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
                             </td>
                           </tr>
