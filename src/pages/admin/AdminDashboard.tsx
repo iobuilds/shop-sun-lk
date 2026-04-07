@@ -1573,7 +1573,7 @@ const AdminDashboard = () => {
                             <div className="flex items-center gap-1">
                               <button onClick={() => openEditProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                               <button onClick={() => duplicateProduct(p)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Duplicate"><Copy className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setGenericDeleteConfirm({ label: `product "${p.name}"`, onConfirm: () => deleteProduct(p.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                             </div>
                           </td>
                         </tr>
@@ -1645,7 +1645,7 @@ const AdminDashboard = () => {
                       </div>
                       <div className="flex gap-1">
                         <button onClick={() => openEditCategory(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => deleteCategory(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => setGenericDeleteConfirm({ label: `category "${c.name}"`, onConfirm: () => deleteCategory(c.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 mt-3">
@@ -1911,7 +1911,7 @@ const AdminDashboard = () => {
                         </div>
                         <div className="flex gap-1">
                           <button onClick={() => openEditBanner(b)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => deleteBanner(b.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setGenericDeleteConfirm({ label: `banner "${b.title}"`, onConfirm: () => deleteBanner(b.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
@@ -1978,7 +1978,7 @@ const AdminDashboard = () => {
                         </Button>
                       )}
                       <Button variant="ghost" size="sm" onClick={() => openEditPromo(p)}><Pencil className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deletePromo(p.id)}><Trash2 className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setGenericDeleteConfirm({ label: `promo banner "${p.title}"`, onConfirm: () => deletePromo(p.id) })}><Trash2 className="w-4 h-4" /></Button>
                     </div>
                   </div>
                 ))}
@@ -2038,7 +2038,7 @@ const AdminDashboard = () => {
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-1">
                                 <button onClick={() => openEditDeal(d)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                                <button onClick={() => deleteDeal(d.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => setGenericDeleteConfirm({ label: "this deal", onConfirm: () => deleteDeal(d.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
                             </td>
                           </tr>
@@ -2080,7 +2080,7 @@ const AdminDashboard = () => {
                           </div>
                           <div className="flex gap-1">
                             <button onClick={() => openEditCombo(c)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => deleteCombo(c.id)} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setGenericDeleteConfirm({ label: `combo "${c.name}"`, onConfirm: () => deleteCombo(c.id) })} className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 mt-2">
