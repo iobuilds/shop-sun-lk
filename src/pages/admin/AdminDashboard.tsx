@@ -1703,7 +1703,7 @@ const AdminDashboard = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={bulkDeleteOrders}>
+                    <Button size="sm" variant="destructive" className="h-7 text-xs gap-1.5" onClick={() => setGenericDeleteConfirm({ label: `${selectedOrders.size} selected order(s)`, onConfirm: bulkDeleteOrders })}>
                       <Trash2 className="w-3.5 h-3.5" /> Delete
                     </Button>
                     <button onClick={() => setSelectedOrders(new Set())} className="text-xs text-muted-foreground hover:text-foreground underline">Clear</button>
