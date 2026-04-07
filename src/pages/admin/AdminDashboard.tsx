@@ -141,6 +141,9 @@ const AdminDashboard = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [deleteOrderConfirm, setDeleteOrderConfirm] = useState<string | null>(null);
 
+  // Generic delete confirmation
+  const [genericDeleteConfirm, setGenericDeleteConfirm] = useState<{ label: string; onConfirm: () => void } | null>(null);
+
   // User detail dialog
   const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
