@@ -309,14 +309,14 @@ const InvoiceTemplateBuilder = () => {
 
   const uploadLogo = async (file: File) => {
     setUploading(true);
-    const ext = file.name.split(".").pop();
-    const fileName = `logos/invoice-logo-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("images").upload(fileName, file, { upsert: true });
-    if (error) { toast({ title: "Upload failed", description: error.message, variant: "destructive" }); setUploading(false); return; }
-    const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-    setTemplate(t => ({ ...t, logoUrl: data.publicUrl }));
-    setUploading(false);
-    toast({ title: "Logo uploaded" });
+    try {
+      const { uploadToStorage } = await import("@/lib/storageUpload");
+      const url = await uploadToStorage(file, "logos");
+      if (url) setTemplate(t => ({ ...t, logoUrl: url }));
+      toast({ title: "Logo uploaded" });
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally { setUploading(false); }
   };
 
   // Drag and drop
