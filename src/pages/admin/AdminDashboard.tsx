@@ -287,12 +287,13 @@ const AdminDashboard = () => {
   const [promoForm, setPromoForm] = useState({ title: "", subtitle: "", description: "", badge_text: "", image_url: "", link_url: "", gradient_from: "primary", sort_order: "0", is_active: true });
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
-    const ext = file.name.split(".").pop();
-    const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await supabase.storage.from("images").upload(fileName, file);
-    if (error) { toast({ title: "Upload failed", description: error.message, variant: "destructive" }); return null; }
-    const { data } = supabase.storage.from("images").getPublicUrl(fileName);
-    return data.publicUrl;
+    try {
+      const { uploadToStorage } = await import("@/lib/storageUpload");
+      return await uploadToStorage(file, folder);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message || "Unknown error", variant: "destructive" });
+      return null;
+    }
   };
 
   // ── Queries ──
