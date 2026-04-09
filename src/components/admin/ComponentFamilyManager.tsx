@@ -35,12 +35,9 @@ const ImageUploader = ({
   const uploadFile = async (file: File) => {
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop();
-      const path = `components/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from("images").upload(path, file, { upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from("images").getPublicUrl(path);
-      onChange([...images, data.publicUrl]);
+      const { uploadToStorage } = await import("@/lib/storageUpload");
+      const url = await uploadToStorage(file, "components");
+      if (url) onChange([...images, url]);
     } catch (e: any) {
       toast({ title: "Upload failed", description: e.message, variant: "destructive" });
     } finally { setUploading(false); }
