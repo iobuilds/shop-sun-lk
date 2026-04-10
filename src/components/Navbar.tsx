@@ -464,7 +464,7 @@ const Navbar = () => {
           <nav className="flex items-center justify-between h-10">
             <div className="flex items-center gap-0">
               {/* Mega Menu trigger */}
-              <CategoryMegaMenu hiddenSlugs={config.hidden_category_slugs} />
+              <CategoryMegaMenu />
 
               {/* Separator */}
               <div className="h-5 w-px bg-border mx-1" />
