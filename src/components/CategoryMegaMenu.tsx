@@ -31,17 +31,14 @@ const CATEGORY_META: Record<string, { icon: any; color: string; bg: string }> = 
 };
 const DEFAULT_META = { icon: Box, color: "text-secondary", bg: "bg-secondary/10" };
 
-interface Props {
-  hiddenSlugs?: string[];
-}
-
-const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
+const CategoryMegaMenu = () => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Fetch ALL active categories — no hidden filter applied here
   const { data: categories } = useQuery({
-    queryKey: ["mega-menu-categories"],
+    queryKey: ["mega-menu-all-categories"],
     queryFn: async () => {
       const [{ data: cats, error }, { data: counts }, { data: microCount }] = await Promise.all([
         supabase.from("categories").select("*").eq("is_active", true).order("sort_order"),
@@ -55,14 +52,12 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
         if (p.category_id) countMap[p.category_id] = (countMap[p.category_id] || 0) + 1;
       });
 
-      return (cats || [])
-        .filter((c) => !hiddenSlugs.includes(c.slug))
-        .map((cat) => ({
-          ...cat,
-          productCount: cat.slug === "micro-electronics"
-            ? (microCount as any) || 0
-            : (countMap[cat.id] || 0),
-        }));
+      return (cats || []).map((cat) => ({
+        ...cat,
+        productCount: cat.slug === "micro-electronics"
+          ? (microCount as any) || 0
+          : (countMap[cat.id] || 0),
+      }));
     },
     staleTime: 60000,
   });
@@ -76,7 +71,6 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
     timeoutRef.current = setTimeout(() => setOpen(false), 200);
   };
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -87,6 +81,9 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // Dynamic column count based on category count
+  const colCount = categories && categories.length > 12 ? 3 : categories && categories.length > 6 ? 2 : 1;
+
   return (
     <div
       ref={containerRef}
@@ -94,7 +91,6 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Trigger */}
       <button
         onClick={() => setOpen(!open)}
         className="px-3 h-10 flex items-center gap-1.5 text-[13px] font-semibold text-foreground hover:text-secondary hover:bg-secondary/5 transition-all duration-150 whitespace-nowrap"
@@ -104,17 +100,17 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
         <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {/* Mega Menu Dropdown */}
       <AnimatePresence>
-        {open && categories && (
+        {open && categories && categories.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full mt-0 bg-card border border-border rounded-xl shadow-xl z-50 p-4 min-w-[600px] max-w-[720px]"
+            className="absolute left-0 top-full mt-0 bg-card border border-border rounded-xl shadow-xl z-50 p-4"
+            style={{ minWidth: colCount === 3 ? 660 : colCount === 2 ? 440 : 240 }}
           >
-            <div className="grid grid-cols-3 gap-1">
+            <div className={`grid gap-1 ${colCount === 3 ? "grid-cols-3" : colCount === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
               {categories.map((cat) => {
                 const meta = CATEGORY_META[cat.slug] || DEFAULT_META;
                 const Icon = meta.icon;
@@ -126,7 +122,7 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted transition-colors group"
                   >
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${meta.bg} shrink-0 group-hover:scale-110 transition-transform`}>
-                      <Icon className={`w-4.5 h-4.5 ${meta.color}`} />
+                      <Icon className={`w-4 h-4 ${meta.color}`} />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground group-hover:text-secondary transition-colors truncate">
@@ -141,18 +137,10 @@ const CategoryMegaMenu = ({ hiddenSlugs = [] }: Props) => {
               })}
             </div>
 
-            {/* Bottom link */}
-            <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
+            <div className="mt-3 pt-3 border-t border-border text-center">
               <span className="text-xs text-muted-foreground">
                 {categories.length} categories available
               </span>
-              <Link
-                to="/category/micro-electronics"
-                onClick={() => setOpen(false)}
-                className="text-xs font-medium text-secondary hover:underline flex items-center gap-1"
-              >
-                Browse Micro Electronics <ChevronRight className="w-3 h-3" />
-              </Link>
             </div>
           </motion.div>
         )}
