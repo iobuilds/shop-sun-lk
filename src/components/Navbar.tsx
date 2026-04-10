@@ -46,6 +46,7 @@ const Navbar = () => {
   const [showResults, setShowResults] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [mobileCatsOpen, setMobileCatsOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const mobileSearchRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
