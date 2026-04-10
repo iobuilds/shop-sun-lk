@@ -567,17 +567,42 @@ const Navbar = () => {
             exit={{ height: 0, opacity: 0 }}
             className="md:hidden border-t border-border overflow-hidden bg-card"
           >
-            <nav className="container mx-auto px-4 py-4 flex flex-col gap-1">
-              {navCategories.map((cat) => (
-                <Link
-                  key={cat.slug}
-                  to={`/category/${cat.slug}`}
-                  className="px-3 py-2.5 text-sm text-foreground hover:bg-muted rounded-md transition-colors"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {cat.name}
-                </Link>
-              ))}
+            <nav className="container mx-auto px-4 py-4 flex flex-col gap-1 max-h-[70vh] overflow-y-auto">
+              {/* Expandable All Categories */}
+              <button
+                onClick={() => setMobileCatsOpen(!mobileCatsOpen)}
+                className="px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-muted rounded-md transition-colors flex items-center justify-between"
+              >
+                <span className="flex items-center gap-2">
+                  <Grid3X3 className="w-4 h-4" /> All Categories
+                </span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${mobileCatsOpen ? "rotate-180" : ""}`} />
+              </button>
+              <AnimatePresence>
+                {mobileCatsOpen && categories && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="pl-4 flex flex-col gap-0.5">
+                      {categories
+                        .filter((c) => !config.hidden_category_slugs.includes(c.slug))
+                        .map((cat) => (
+                          <Link
+                            key={cat.slug}
+                            to={`/category/${cat.slug}`}
+                            className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+                            onClick={() => setMobileOpen(false)}
+                          >
+                            {cat.name}
+                          </Link>
+                        ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               {config.show_daily_deals && (
                 <Link
                   to="/deals"
