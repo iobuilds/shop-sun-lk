@@ -95,13 +95,10 @@ const Auth = () => {
     try {
       const formattedPhone = formatPhone(phone);
 
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("user_id, is_suspended")
-        .eq("phone", formattedPhone)
-        .maybeSingle();
-      if (existingProfile) {
-        if (existingProfile.is_suspended) {
+      const { data: phoneCheck } = await (supabase as any).rpc("phone_exists", { _phone: formattedPhone });
+      const existing = Array.isArray(phoneCheck) ? phoneCheck[0] : phoneCheck;
+      if (existing?.found) {
+        if (existing.is_suspended) {
           toast.error("This phone number is associated with a suspended account. Please contact support.");
         } else {
           toast.error("This phone number is already registered. Please log in instead.");
