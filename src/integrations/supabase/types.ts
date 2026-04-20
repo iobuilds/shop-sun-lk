@@ -1978,6 +1978,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      phone_exists: {
+        Args: { _phone: string }
+        Returns: {
+          found: boolean
+          is_suspended: boolean
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
